@@ -45,7 +45,7 @@ Installation steps:
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/steventsao/okrapdf-desktop.git
 cd okrapdf-desktop
 
 # Install dependencies
