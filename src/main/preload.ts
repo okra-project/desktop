@@ -11,6 +11,7 @@ export type Channels =
   | 'auth:set-token'
   | 'auth:get-token'
   | 'auth:clear-token'
+  | 'auth:oauth-popup'
   | 'library:fetch'
   | 'library:result'
   | 'workspace:bootstrap'

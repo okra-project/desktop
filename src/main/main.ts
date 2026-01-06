@@ -23,14 +23,65 @@ import { resolveHtmlPath } from './util';
 // Initialize API configuration (BYOA mode - no bundled key)
 initializeAPIConfig();
 
-// Register custom protocol for OAuth callbacks
-if (process.defaultApp) {
-  if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('okrapdf', process.execPath, [path.resolve(process.argv[1])]);
-  }
-} else {
-  app.setAsDefaultProtocolClient('okrapdf');
-}
+// OAuth popup window reference
+let authWindow: BrowserWindow | null = null;
+
+// Handle OAuth popup login
+ipcMain.handle('auth:oauth-popup', async () => {
+  return new Promise((resolve, reject) => {
+    // Create popup window for OAuth
+    authWindow = new BrowserWindow({
+      width: 500,
+      height: 700,
+      show: true,
+      modal: true,
+      parent: mainWindow!,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    });
+
+    // Load Clerk sign-in page
+    authWindow.loadURL('https://accounts.okrapdf.com/sign-in');
+
+    // Monitor for successful authentication
+    const checkAuth = async () => {
+      try {
+        // Check if we're on the app page (signed in)
+        const currentUrl = authWindow?.webContents.getURL() || '';
+
+        if (currentUrl.includes('app.okrapdf.com') && !currentUrl.includes('sign-in')) {
+          // User is signed in, get the session token from cookies
+          const cookies = await authWindow?.webContents.session.cookies.get({
+            domain: '.okrapdf.com'
+          });
+
+          const sessionCookie = cookies?.find(c => c.name === '__session');
+
+          if (sessionCookie) {
+            authWindow?.close();
+            authWindow = null;
+            resolve({ success: true, token: sessionCookie.value });
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Auth check error:', err);
+      }
+    };
+
+    // Check auth state on navigation
+    authWindow.webContents.on('did-navigate', checkAuth);
+    authWindow.webContents.on('did-navigate-in-page', checkAuth);
+
+    // Handle window close
+    authWindow.on('closed', () => {
+      authWindow = null;
+      resolve({ success: false, error: 'Authentication cancelled' });
+    });
+  });
+});
 
 // Persistent store for auth tokens and settings (like Jan, OpenHands, Dyad)
 const store = new Store({

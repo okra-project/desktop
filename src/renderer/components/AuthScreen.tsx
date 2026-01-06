@@ -13,42 +13,29 @@ function AuthScreen({ onAuthenticated }: AuthScreenProps) {
     setError(null);
 
     try {
-      // Open OkraPDF in default browser for authentication
-      const authUrl = 'https://app.okrapdf.com/sign-in?redirect_url=/settings/desktop';
-      window.open(authUrl, '_blank');
+      // Open OAuth popup window
+      const result = await window.electron.ipcRenderer.invoke('auth:oauth-popup');
 
-      // Show instructions to user
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to open browser');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      if (result.success && result.token) {
+        // Save the token
+        await window.electron.ipcRenderer.invoke('auth:set-token', result.token);
 
-  const [token, setToken] = useState('');
-  const [showTokenInput, setShowTokenInput] = useState(false);
+        // Verify token works by fetching library
+        const libraryResult = await window.electron.ipcRenderer.invoke('library:fetch');
 
-  const handleSubmitToken = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token.trim()) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      await window.electron.ipcRenderer.invoke('auth:set-token', token.trim());
-      const result = await window.electron.ipcRenderer.invoke('library:fetch');
-
-      if (result.success) {
-        onAuthenticated();
-      } else {
-        setError(result.error || 'Invalid token. Please try again.');
-        await window.electron.ipcRenderer.invoke('auth:clear-token');
+        if (libraryResult.success) {
+          onAuthenticated();
+        } else {
+          setError('Failed to verify session. Please try again.');
+          await window.electron.ipcRenderer.invoke('auth:clear-token');
+        }
+      } else if (result.error) {
+        if (result.error !== 'Authentication cancelled') {
+          setError(result.error);
+        }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-      await window.electron.ipcRenderer.invoke('auth:clear-token');
+      setError(err instanceof Error ? err.message : 'Authentication failed');
     } finally {
       setIsLoading(false);
     }
@@ -58,7 +45,7 @@ function AuthScreen({ onAuthenticated }: AuthScreenProps) {
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-emerald-50 to-teal-100 p-8">
       <div className="w-full max-w-md">
         {/* Logo/Header */}
-        <div className="text-center mb-6">
+        <div className="text-center mb-8">
           <div className="text-6xl mb-4">🥬</div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">OkraPDF Desktop</h1>
           <p className="text-gray-600">
@@ -69,76 +56,33 @@ function AuthScreen({ onAuthenticated }: AuthScreenProps) {
         {/* Auth Card */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-red-700 text-sm">{error}</p>
             </div>
           )}
 
-          {!showTokenInput ? (
-            <>
-              {/* Primary: Sign in with browser */}
-              <button
-                onClick={handleSignIn}
-                disabled={isLoading}
-                className="w-full py-3 px-4 rounded-lg font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors mb-4"
-              >
-                Sign in with OkraPDF
-              </button>
+          <button
+            onClick={handleSignIn}
+            disabled={isLoading}
+            className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all ${
+              isLoading
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg hover:shadow-xl'
+            }`}
+          >
+            {isLoading ? (
+              <span className="flex items-center justify-center gap-3">
+                <span className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full" />
+                Signing in...
+              </span>
+            ) : (
+              'Sign in with OkraPDF'
+            )}
+          </button>
 
-              <div className="text-center text-sm text-gray-500 mb-4">
-                Opens in your browser for secure authentication
-              </div>
-
-              <div className="border-t pt-4">
-                <button
-                  onClick={() => setShowTokenInput(true)}
-                  className="w-full text-sm text-gray-600 hover:text-gray-800"
-                >
-                  Already have a token? Enter it manually →
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <h3 className="font-medium text-blue-800 mb-2">Get your token:</h3>
-                <ol className="text-sm text-blue-700 list-decimal list-inside space-y-1">
-                  <li>Sign in at app.okrapdf.com</li>
-                  <li>Go to Settings → Desktop App</li>
-                  <li>Click "Generate Token" and paste below</li>
-                </ol>
-              </div>
-
-              <form onSubmit={handleSubmitToken}>
-                <textarea
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  placeholder="Paste your token here..."
-                  rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-none font-mono text-sm mb-4"
-                />
-
-                <button
-                  type="submit"
-                  disabled={isLoading || !token.trim()}
-                  className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
-                    isLoading || !token.trim()
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-emerald-600 text-white hover:bg-emerald-700'
-                  }`}
-                >
-                  {isLoading ? 'Connecting...' : 'Connect'}
-                </button>
-              </form>
-
-              <button
-                onClick={() => setShowTokenInput(false)}
-                className="w-full mt-4 text-sm text-gray-600 hover:text-gray-800"
-              >
-                ← Back
-              </button>
-            </>
-          )}
+          <p className="text-center text-sm text-gray-500 mt-4">
+            Sign in with Google, email, or your existing account
+          </p>
         </div>
 
         {/* Benefits */}
@@ -160,14 +104,14 @@ function AuthScreen({ onAuthenticated }: AuthScreenProps) {
         {/* Sign up link */}
         <p className="text-center text-sm text-gray-500 mt-6">
           Don't have an account?{' '}
-          <a
-            href="https://app.okrapdf.com/sign-up"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => {
+              window.open('https://app.okrapdf.com/sign-up', '_blank');
+            }}
             className="text-emerald-600 hover:text-emerald-700 font-medium"
           >
             Sign up free
-          </a>
+          </button>
         </p>
       </div>
     </div>
