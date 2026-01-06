@@ -1,21 +1,25 @@
 /**
  * OkraPDF API Configuration
- * This file contains the pre-configured API key for OkraPDF Desktop
- * Users do not need to provide their own API key
+ *
+ * This app uses "Bring Your Own Agent" (BYOA) - users use their own Claude Code CLI
+ * authentication or provide their own API key. No bundled API key.
  */
 
 export const API_CONFIG = {
-  // Pre-configured Anthropic API key - users don't need their own
-  ANTHROPIC_API_KEY: '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',
-
   // Application info
   APP_NAME: 'OkraPDF Desktop',
   APP_VERSION: '1.0.0',
+
+  // OkraPDF API base URL
+  OKRAPDF_API_BASE: process.env.OKRAPDF_API_URL || 'https://app.okrapdf.com',
 };
 
-// Initialize API key in environment
+// Initialize configuration - no API key bundled (BYOA model)
 export function initializeAPIConfig(): void {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    process.env.ANTHROPIC_API_KEY = API_CONFIG.ANTHROPIC_API_KEY;
-  }
+  // BYOA: We do NOT set ANTHROPIC_API_KEY here
+  // The Claude Agent SDK will use:
+  // 1. User's Claude Code CLI authentication (if installed)
+  // 2. User-provided API key (via settings)
+  // 3. Environment variable ANTHROPIC_API_KEY (if set by user)
+  console.log('[config] BYOA mode - using user\'s own Claude subscription');
 }

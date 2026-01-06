@@ -12,24 +12,42 @@ import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
+import Store from 'electron-store';
 import fs from 'fs';
 import path from 'path';
 import { execSync, spawn } from 'child_process';
-import { initializeAPIConfig } from '../config/api-config';
+import { initializeAPIConfig, API_CONFIG } from '../config/api-config';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 
-// Initialize API configuration with pre-bundled key
+// Initialize API configuration (BYOA mode - no bundled key)
 initializeAPIConfig();
 
-// OkraPDF API configuration
-const OKRAPDF_API_BASE = process.env.OKRAPDF_API_URL || 'https://app.okrapdf.com';
+// Persistent store for auth tokens and settings (like Jan, OpenHands, Dyad)
+const store = new Store({
+  name: 'okrapdf-settings',
+  defaults: {
+    okrapdfToken: null as string | null,
+    anthropicApiKey: null as string | null, // BYOK support
+    lastWorkspacePath: null as string | null,
+  },
+});
 
-// Store auth token in memory (for now - could use electron-store for persistence)
-let authToken: string | null = null;
+// OkraPDF API configuration
+const OKRAPDF_API_BASE = API_CONFIG.OKRAPDF_API_BASE;
+
+// Load persisted auth token
+let authToken: string | null = store.get('okrapdfToken') as string | null;
 
 // Current workspace path (set when bootstrapping from OkraPDF)
-let currentWorkspacePath: string | null = null;
+let currentWorkspacePath: string | null = store.get('lastWorkspacePath') as string | null;
+
+// Load user's API key if previously saved (BYOK)
+const savedApiKey = store.get('anthropicApiKey') as string | null;
+if (savedApiKey) {
+  process.env.ANTHROPIC_API_KEY = savedApiKey;
+  console.log('[config] Loaded saved API key from electron-store');
+}
 
 class AppUpdater {
   constructor() {
@@ -102,10 +120,11 @@ ipcMain.handle('open-output-directory', async () => {
 // OkraPDF Integration: Auth & Workspace
 // ============================================
 
-// Auth token management
+// Auth token management (persisted with electron-store)
 ipcMain.handle('auth:set-token', async (_event, token: string) => {
   authToken = token;
-  console.log('[auth] Token set');
+  store.set('okrapdfToken', token);
+  console.log('[auth] Token set and persisted');
   return { success: true };
 });
 
@@ -115,8 +134,76 @@ ipcMain.handle('auth:get-token', async () => {
 
 ipcMain.handle('auth:clear-token', async () => {
   authToken = null;
+  store.delete('okrapdfToken');
   console.log('[auth] Token cleared');
   return { success: true };
+});
+
+// BYOK: Set user's own Anthropic API key
+ipcMain.handle('settings:set-api-key', async (_event, apiKey: string) => {
+  store.set('anthropicApiKey', apiKey);
+  process.env.ANTHROPIC_API_KEY = apiKey;
+  console.log('[settings] User API key set');
+  return { success: true };
+});
+
+ipcMain.handle('settings:get-api-key', async () => {
+  const apiKey = store.get('anthropicApiKey') as string | null;
+  return { apiKey: apiKey ? '***' + apiKey.slice(-4) : null }; // Masked for security
+});
+
+ipcMain.handle('settings:clear-api-key', async () => {
+  store.delete('anthropicApiKey');
+  delete process.env.ANTHROPIC_API_KEY;
+  console.log('[settings] User API key cleared');
+  return { success: true };
+});
+
+// Check if Claude Code CLI is installed and authenticated
+ipcMain.handle('claude:check-status', async () => {
+  try {
+    // Check if Claude Code CLI is installed
+    const claudeConfigPath = path.join(app.getPath('home'), '.claude.json');
+    const claudeInstalled = fs.existsSync(claudeConfigPath);
+
+    // Check if user has set their own API key (BYOK)
+    const userApiKey = store.get('anthropicApiKey') as string | null;
+    const hasUserApiKey = !!userApiKey;
+
+    // Check environment variable
+    const hasEnvApiKey = !!process.env.ANTHROPIC_API_KEY;
+
+    // Try to check if Claude CLI is authenticated by reading config
+    let claudeAuthenticated = false;
+    if (claudeInstalled) {
+      try {
+        const configContent = fs.readFileSync(claudeConfigPath, 'utf-8');
+        const config = JSON.parse(configContent);
+        // If numStartups > 0, user has used Claude Code
+        claudeAuthenticated = config.numStartups > 0;
+      } catch {
+        claudeAuthenticated = false;
+      }
+    }
+
+    return {
+      claudeInstalled,
+      claudeAuthenticated,
+      hasUserApiKey,
+      hasEnvApiKey,
+      ready: claudeAuthenticated || hasUserApiKey || hasEnvApiKey,
+    };
+  } catch (error) {
+    console.error('[claude:check-status] Error:', error);
+    return {
+      claudeInstalled: false,
+      claudeAuthenticated: false,
+      hasUserApiKey: false,
+      hasEnvApiKey: false,
+      ready: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
 });
 
 // Fetch library from OkraPDF
@@ -214,6 +301,7 @@ ipcMain.handle(
       fs.unlinkSync(zipPath);
 
       currentWorkspacePath = workspaceDir;
+      store.set('lastWorkspacePath', workspaceDir);
       console.log(`[workspace] Ready at ${workspaceDir}`);
 
       return {

@@ -15,7 +15,12 @@ export type Channels =
   | 'library:result'
   | 'workspace:bootstrap'
   | 'workspace:ready'
-  | 'workspace:error';
+  | 'workspace:error'
+  | 'workspace:get-current'
+  | 'settings:set-api-key'
+  | 'settings:get-api-key'
+  | 'settings:clear-api-key'
+  | 'claude:check-status';
 
 const electronHandler = {
   ipcRenderer: {

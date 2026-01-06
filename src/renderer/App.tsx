@@ -2,23 +2,44 @@ import { useState, useEffect, useCallback } from 'react';
 import ChatInterface from './components/ChatInterface';
 import AuthScreen from './components/AuthScreen';
 import DocumentBrowser from './components/DocumentBrowser';
+import ClaudeSetupScreen from './components/ClaudeSetupScreen';
 import './App.css';
 
-type AppScreen = 'loading' | 'auth' | 'browser' | 'chat';
+type AppScreen = 'loading' | 'claude-setup' | 'auth' | 'browser' | 'chat';
 
 interface SelectedDocument {
   uuid: string;
   file_name: string;
 }
 
+interface ClaudeStatus {
+  claudeInstalled: boolean;
+  claudeAuthenticated: boolean;
+  hasUserApiKey: boolean;
+  hasEnvApiKey: boolean;
+  ready: boolean;
+}
+
 export default function App() {
   const [screen, setScreen] = useState<AppScreen>('loading');
   const [selectedDocument, setSelectedDocument] = useState<SelectedDocument | null>(null);
+  const [claudeStatus, setClaudeStatus] = useState<ClaudeStatus | null>(null);
 
-  // Check for existing auth on startup
+  // Check for Claude status and existing auth on startup
   useEffect(() => {
-    const checkAuth = async () => {
+    const checkStartup = async () => {
       try {
+        // First check if Claude/API key is ready (BYOA)
+        const status = await window.electron.ipcRenderer.invoke('claude:check-status') as ClaudeStatus;
+        setClaudeStatus(status);
+
+        if (!status.ready) {
+          // Need to set up Claude or API key first
+          setScreen('claude-setup');
+          return;
+        }
+
+        // Then check OkraPDF auth
         const { token } = await window.electron.ipcRenderer.invoke('auth:get-token');
         if (token) {
           // Verify token is still valid
@@ -34,7 +55,11 @@ export default function App() {
       }
     };
 
-    checkAuth();
+    checkStartup();
+  }, []);
+
+  const handleClaudeReady = useCallback(() => {
+    setScreen('auth');
   }, []);
 
   const handleAuthenticated = useCallback(() => {
@@ -67,6 +92,11 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  // Claude setup screen (BYOA - Bring Your Own Agent)
+  if (screen === 'claude-setup') {
+    return <ClaudeSetupScreen onReady={handleClaudeReady} claudeStatus={claudeStatus} />;
   }
 
   // Auth screen

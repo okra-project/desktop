@@ -39,3 +39,4 @@ lerna-debug.log*
 # Build artifacts
 *.tsbuildinfo
 tsconfig.tsbuildinfo
+.claude/

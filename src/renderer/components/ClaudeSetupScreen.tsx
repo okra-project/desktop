@@ -1,0 +1,206 @@
+import React, { useState } from 'react';
+
+interface ClaudeStatus {
+  claudeInstalled: boolean;
+  claudeAuthenticated: boolean;
+  hasUserApiKey: boolean;
+  hasEnvApiKey: boolean;
+  ready: boolean;
+}
+
+interface ClaudeSetupScreenProps {
+  onReady: () => void;
+  claudeStatus: ClaudeStatus | null;
+}
+
+/**
+ * ClaudeSetupScreen - BYOA (Bring Your Own Agent) setup
+ *
+ * Inspired by:
+ * - Jan: Provider settings with API key input
+ * - OpenHands: LLM API key configuration
+ * - OpenCode: /connect command for BYOK
+ * - Dyad: Settings page for provider API keys
+ */
+function ClaudeSetupScreen({ onReady, claudeStatus }: ClaudeSetupScreenProps) {
+  const [apiKey, setApiKey] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmitApiKey = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!apiKey.trim()) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await window.electron.ipcRenderer.invoke('settings:set-api-key', apiKey.trim());
+      onReady();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save API key');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRefreshStatus = async () => {
+    setIsLoading(true);
+    try {
+      const status = await window.electron.ipcRenderer.invoke('claude:check-status');
+      if (status.ready) {
+        onReady();
+      } else {
+        setError('Claude Code CLI not detected. Please install it or enter an API key below.');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to check status');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-emerald-50 to-teal-100 p-8">
+      <div className="w-full max-w-lg">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="text-6xl mb-4">🥬</div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">OkraPDF Desktop</h1>
+          <p className="text-gray-600">
+            Use your own Claude subscription - no API billing through OkraPDF
+          </p>
+        </div>
+
+        {/* Setup Card */}
+        <div className="bg-white rounded-2xl shadow-xl p-8">
+          <h2 className="text-xl font-semibold text-gray-800 mb-6">
+            Connect Your Claude Account
+          </h2>
+
+          {/* Status Display */}
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
+            <h3 className="font-medium text-gray-700 mb-3">Status</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">Claude Code CLI</span>
+                <span className={claudeStatus?.claudeInstalled ? 'text-green-600' : 'text-gray-400'}>
+                  {claudeStatus?.claudeInstalled ? '✓ Installed' : '✗ Not found'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">CLI Authenticated</span>
+                <span className={claudeStatus?.claudeAuthenticated ? 'text-green-600' : 'text-gray-400'}>
+                  {claudeStatus?.claudeAuthenticated ? '✓ Yes' : '✗ No'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">API Key (BYOK)</span>
+                <span className={claudeStatus?.hasUserApiKey ? 'text-green-600' : 'text-gray-400'}>
+                  {claudeStatus?.hasUserApiKey ? '✓ Set' : '✗ Not set'}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={handleRefreshStatus}
+              disabled={isLoading}
+              className="mt-3 text-sm text-blue-600 hover:text-blue-800"
+            >
+              Refresh Status
+            </button>
+          </div>
+
+          {/* Option 1: Claude Code CLI */}
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="font-medium text-blue-800 mb-2">Option 1: Use Claude Code CLI (Recommended)</h3>
+            <ol className="text-sm text-blue-700 list-decimal list-inside space-y-1">
+              <li>
+                Install Claude Code CLI:{' '}
+                <code className="bg-blue-100 px-1 rounded">npm install -g @anthropic-ai/claude-code</code>
+              </li>
+              <li>Run <code className="bg-blue-100 px-1 rounded">claude</code> in terminal to authenticate</li>
+              <li>Click "Refresh Status" above</li>
+            </ol>
+            <a
+              href="https://docs.anthropic.com/en/docs/claude-code"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block mt-2 text-sm text-blue-600 hover:text-blue-800 underline"
+            >
+              Learn more about Claude Code CLI →
+            </a>
+          </div>
+
+          {/* Option 2: Direct API Key */}
+          <div className="mb-6">
+            <h3 className="font-medium text-gray-700 mb-2">Option 2: Enter API Key Directly</h3>
+            <p className="text-sm text-gray-500 mb-3">
+              Get your API key from{' '}
+              <a
+                href="https://console.anthropic.com/settings/keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-orange-600 hover:text-orange-800 underline"
+              >
+                console.anthropic.com
+              </a>
+            </p>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitApiKey}>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="sk-ant-api03-..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 font-mono text-sm mb-3"
+              />
+              <button
+                type="submit"
+                disabled={isLoading || !apiKey.trim()}
+                className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
+                  isLoading || !apiKey.trim()
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-orange-600 text-white hover:bg-orange-700'
+                }`}
+              >
+                {isLoading ? 'Saving...' : 'Save API Key'}
+              </button>
+            </form>
+          </div>
+
+          {/* Privacy Note */}
+          <div className="pt-4 border-t border-gray-200">
+            <p className="text-xs text-gray-500 text-center">
+              Your API key is stored locally on your device and never sent to OkraPDF servers.
+              You are billed directly by Anthropic for your usage.
+            </p>
+          </div>
+        </div>
+
+        {/* Benefits */}
+        <div className="mt-8 grid grid-cols-3 gap-4 text-center">
+          <div className="p-4">
+            <div className="text-2xl mb-2">💰</div>
+            <p className="text-sm text-gray-600">Use your own pricing tier</p>
+          </div>
+          <div className="p-4">
+            <div className="text-2xl mb-2">🔐</div>
+            <p className="text-sm text-gray-600">Keys stay on your device</p>
+          </div>
+          <div className="p-4">
+            <div className="text-2xl mb-2">⚡</div>
+            <p className="text-sm text-gray-600">Full Claude capabilities</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default ClaudeSetupScreen;
