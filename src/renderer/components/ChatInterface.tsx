@@ -180,13 +180,7 @@ function ChatInterface() {
   );
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-        <h1 className="text-2xl font-semibold text-gray-800">
-          OkraPDF Desktop
-        </h1>
-      </header>
-
+    <div className="flex flex-col flex-1 overflow-hidden">
       <div className="flex-1 overflow-hidden">
         <MessageList
           messages={messages}

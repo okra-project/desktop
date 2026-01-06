@@ -14,12 +14,22 @@ import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
 import fs from 'fs';
 import path from 'path';
+import { execSync, spawn } from 'child_process';
 import { initializeAPIConfig } from '../config/api-config';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 
 // Initialize API configuration with pre-bundled key
 initializeAPIConfig();
+
+// OkraPDF API configuration
+const OKRAPDF_API_BASE = process.env.OKRAPDF_API_URL || 'https://app.okrapdf.com';
+
+// Store auth token in memory (for now - could use electron-store for persistence)
+let authToken: string | null = null;
+
+// Current workspace path (set when bootstrapping from OkraPDF)
+let currentWorkspacePath: string | null = null;
 
 class AppUpdater {
   constructor() {
@@ -88,6 +98,144 @@ ipcMain.handle('open-output-directory', async () => {
   }
 });
 
+// ============================================
+// OkraPDF Integration: Auth & Workspace
+// ============================================
+
+// Auth token management
+ipcMain.handle('auth:set-token', async (_event, token: string) => {
+  authToken = token;
+  console.log('[auth] Token set');
+  return { success: true };
+});
+
+ipcMain.handle('auth:get-token', async () => {
+  return { token: authToken };
+});
+
+ipcMain.handle('auth:clear-token', async () => {
+  authToken = null;
+  console.log('[auth] Token cleared');
+  return { success: true };
+});
+
+// Fetch library from OkraPDF
+ipcMain.handle('library:fetch', async () => {
+  if (!authToken) {
+    return { success: false, error: 'Not authenticated' };
+  }
+
+  try {
+    const response = await fetch(`${OKRAPDF_API_BASE}/api/desktop/library`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        authToken = null;
+        return { success: false, error: 'Session expired. Please login again.' };
+      }
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return { success: true, documents: data.documents || [] };
+  } catch (error) {
+    console.error('[library] Fetch error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+});
+
+// Bootstrap workspace from OkraPDF document
+ipcMain.handle(
+  'workspace:bootstrap',
+  async (event, documentUuid: string, documentName: string) => {
+    if (!authToken) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    try {
+      console.log(`[workspace] Bootstrapping ${documentUuid}...`);
+
+      // Create workspace directory in user's home
+      const workspacesDir = path.join(app.getPath('home'), '.okrapdf', 'workspaces');
+      const workspaceDir = path.join(workspacesDir, documentUuid);
+
+      // Clean and create workspace directory
+      if (fs.existsSync(workspaceDir)) {
+        fs.rmSync(workspaceDir, { recursive: true });
+      }
+      fs.mkdirSync(workspaceDir, { recursive: true });
+
+      // Download bootstrap zip from OkraPDF
+      console.log(`[workspace] Downloading bootstrap zip...`);
+      const response = await fetch(
+        `${OKRAPDF_API_BASE}/api/desktop/bootstrap/${documentUuid}`,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to download workspace: ${response.status}`);
+      }
+
+      // Save and extract zip
+      const zipBuffer = await response.arrayBuffer();
+      const zipPath = path.join(workspaceDir, 'bootstrap.zip');
+      fs.writeFileSync(zipPath, Buffer.from(zipBuffer));
+
+      // Extract zip using system unzip (cross-platform)
+      console.log(`[workspace] Extracting zip...`);
+      try {
+        if (process.platform === 'win32') {
+          execSync(`powershell -command "Expand-Archive -Path '${zipPath}' -DestinationPath '${workspaceDir}' -Force"`, {
+            cwd: workspaceDir,
+          });
+        } else {
+          execSync(`unzip -o "${zipPath}" -d "${workspaceDir}"`, {
+            cwd: workspaceDir,
+          });
+        }
+      } catch (unzipError) {
+        console.error('[workspace] Unzip error:', unzipError);
+        // Try using adm-zip as fallback (need to install)
+        throw new Error('Failed to extract workspace files');
+      }
+
+      // Clean up zip file
+      fs.unlinkSync(zipPath);
+
+      currentWorkspacePath = workspaceDir;
+      console.log(`[workspace] Ready at ${workspaceDir}`);
+
+      return {
+        success: true,
+        workspacePath: workspaceDir,
+        documentName,
+      };
+    } catch (error) {
+      console.error('[workspace] Bootstrap error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  },
+);
+
+// Get current workspace path
+ipcMain.handle('workspace:get-current', async () => {
+  return { workspacePath: currentWorkspacePath };
+});
+
 ipcMain.on(
   'claude-code:query',
   async (
@@ -97,10 +245,11 @@ ipcMain.on(
       | { content: string; files?: { name: string; buffer: ArrayBuffer }[] },
   ) => {
     const abortController = new AbortController();
-    const cwd = path.join(process.cwd(), 'agent');
+    // Use current workspace if set (from OkraPDF bootstrap), otherwise default to agent directory
+    const cwd = currentWorkspacePath || path.join(process.cwd(), 'agent');
     const problemsDir = path.join(cwd, 'problems');
     const outputDir = cwd; // Watch the agent directory itself, not a subdirectory
-    console.log('Querying!', cwd);
+    console.log('Querying in workspace:', cwd);
 
     // Track files in output directory before starting
     let initialOutputFiles: string[] = [];

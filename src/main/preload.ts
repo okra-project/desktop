@@ -7,7 +7,15 @@ export type Channels =
   | 'claude-code:query'
   | 'claude-code:response'
   | 'claude-code:error'
-  | 'claude-code:output-files';
+  | 'claude-code:output-files'
+  | 'auth:set-token'
+  | 'auth:get-token'
+  | 'auth:clear-token'
+  | 'library:fetch'
+  | 'library:result'
+  | 'workspace:bootstrap'
+  | 'workspace:ready'
+  | 'workspace:error';
 
 const electronHandler = {
   ipcRenderer: {
