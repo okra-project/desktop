@@ -23,6 +23,15 @@ import { resolveHtmlPath } from './util';
 // Initialize API configuration (BYOA mode - no bundled key)
 initializeAPIConfig();
 
+// Register custom protocol for OAuth callbacks
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('okrapdf', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('okrapdf');
+}
+
 // Persistent store for auth tokens and settings (like Jan, OpenHands, Dyad)
 const store = new Store({
   name: 'okrapdf-settings',
