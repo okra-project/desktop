@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
-import ChatInterface from './components/ChatInterface';
 import AuthScreen from './components/AuthScreen';
 import DocumentBrowser from './components/DocumentBrowser';
 import ClaudeSetupScreen from './components/ClaudeSetupScreen';
+import DocumentViewer from './components/DocumentViewer';
 import './App.css';
 
-type AppScreen = 'loading' | 'claude-setup' | 'auth' | 'browser' | 'chat';
+type AppScreen = 'loading' | 'claude-setup' | 'auth' | 'browser' | 'viewer';
 
 interface SelectedDocument {
   uuid: string;
   file_name: string;
+  workspacePath: string;
 }
 
 interface ClaudeStatus {
@@ -72,10 +73,34 @@ export default function App() {
     setScreen('auth');
   }, []);
 
-  const handleSelectDocument = useCallback((doc: { uuid: string; file_name: string }) => {
-    setSelectedDocument(doc);
-    setScreen('chat');
-  }, []);
+  const handleSelectDocument = useCallback(
+    async (doc: { uuid: string; file_name: string }) => {
+      // Bootstrap workspace before switching to viewer
+      try {
+        const result = await window.electron.ipcRenderer.invoke(
+          'workspace:bootstrap',
+          doc.uuid,
+          doc.file_name
+        );
+
+        if (result.success) {
+          setSelectedDocument({
+            uuid: doc.uuid,
+            file_name: doc.file_name,
+            workspacePath: result.workspacePath,
+          });
+          setScreen('viewer');
+        } else {
+          console.error('Failed to bootstrap workspace:', result.error);
+          alert(`Failed to load document: ${result.error}`);
+        }
+      } catch (err) {
+        console.error('Bootstrap error:', err);
+        alert('Failed to load document. Please try again.');
+      }
+    },
+    []
+  );
 
   const handleBackToBrowser = useCallback(() => {
     setSelectedDocument(null);
@@ -85,10 +110,10 @@ export default function App() {
   // Loading screen
   if (screen === 'loading') {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-emerald-50 to-teal-100">
+      <div className="flex items-center justify-center min-h-screen bg-cream">
         <div className="text-center">
           <div className="text-6xl mb-4">🥬</div>
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-okra-orange mx-auto"></div>
         </div>
       </div>
     );
@@ -114,51 +139,25 @@ export default function App() {
     );
   }
 
-  // Chat interface with document context
-  return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      {/* Header with document info and back button */}
-      <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handleBackToBrowser}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Back to documents"
-            >
-              <svg
-                className="w-5 h-5 text-gray-600"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-            </button>
-            <div>
-              <h1 className="text-lg font-semibold text-gray-800">
-                {selectedDocument?.file_name || 'OkraPDF Desktop'}
-              </h1>
-              <p className="text-sm text-gray-500">
-                Connected to local Claude agent
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full mr-1.5 animate-pulse"></span>
-              Local Agent
-            </span>
-          </div>
-        </div>
-      </header>
+  // Two-panel document viewer (PDF + Chat)
+  if (screen === 'viewer' && selectedDocument) {
+    return (
+      <DocumentViewer
+        documentUuid={selectedDocument.uuid}
+        documentName={selectedDocument.file_name}
+        workspacePath={selectedDocument.workspacePath}
+        onBack={handleBackToBrowser}
+      />
+    );
+  }
 
-      <ChatInterface />
+  // Fallback
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-cream">
+      <div className="text-center">
+        <div className="text-6xl mb-4">🥬</div>
+        <p className="text-slate-500">Loading...</p>
+      </div>
     </div>
   );
 }

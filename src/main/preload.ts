@@ -18,6 +18,7 @@ export type Channels =
   | 'workspace:ready'
   | 'workspace:error'
   | 'workspace:get-current'
+  | 'workspace:list-files'
   | 'settings:set-api-key'
   | 'settings:get-api-key'
   | 'settings:clear-api-key'

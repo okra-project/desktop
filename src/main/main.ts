@@ -389,6 +389,23 @@ ipcMain.handle('workspace:get-current', async () => {
   return { workspacePath: currentWorkspacePath };
 });
 
+// List files in workspace directory
+ipcMain.handle('workspace:list-files', async (_event, workspacePath: string) => {
+  try {
+    if (!fs.existsSync(workspacePath)) {
+      return [];
+    }
+    const files = fs.readdirSync(workspacePath);
+    return files.filter((f) => {
+      const filePath = path.join(workspacePath, f);
+      return fs.statSync(filePath).isFile();
+    });
+  } catch (error) {
+    console.error('[workspace:list-files] Error:', error);
+    return [];
+  }
+});
+
 ipcMain.on(
   'claude-code:query',
   async (
@@ -420,7 +437,19 @@ ipcMain.on(
       console.warn('Could not read initial output directory:', error);
     }
 
-    const BASE_PROMPT = ``;
+    const BASE_PROMPT = `You are working in an OkraPDF document workspace. Read CLAUDE.md first to understand the available files and structure.
+
+Key files:
+- source.pdf - The original PDF document
+- tables/*.md - Extracted tables as markdown
+- ocr/*.md - OCR text per page
+- metadata.json - Document metadata
+
+When answering questions, cite specific page numbers. Use the xlsx and pdf skills for file operations.
+
+---
+
+User query: `;
 
     // Handle both old string format and new object format for backward compatibility
     let prompt: string = BASE_PROMPT;

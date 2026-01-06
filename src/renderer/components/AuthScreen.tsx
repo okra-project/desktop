@@ -42,19 +42,19 @@ function AuthScreen({ onAuthenticated }: AuthScreenProps) {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-emerald-50 to-teal-100 p-8">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-cream p-8">
       <div className="w-full max-w-md">
         {/* Logo/Header */}
         <div className="text-center mb-8">
           <div className="text-6xl mb-4">🥬</div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">OkraPDF Desktop</h1>
-          <p className="text-gray-600">
+          <h1 className="text-3xl font-bold font-serif text-ink mb-2">OkraPDF Desktop</h1>
+          <p className="text-sidebar-text">
             Connect your local Claude agent to your documents
           </p>
         </div>
 
         {/* Auth Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="bg-white rounded-2xl shadow-xl p-8 border border-sidebar-border">
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-red-700 text-sm">{error}</p>
@@ -67,12 +67,12 @@ function AuthScreen({ onAuthenticated }: AuthScreenProps) {
             className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all ${
               isLoading
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg hover:shadow-xl'
+                : 'bg-okra-yellow text-ink hover:bg-okra-yellow-hover shadow-lg hover:shadow-xl'
             }`}
           >
             {isLoading ? (
               <span className="flex items-center justify-center gap-3">
-                <span className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full" />
+                <span className="animate-spin h-5 w-5 border-2 border-ink border-t-transparent rounded-full" />
                 Signing in...
               </span>
             ) : (
@@ -80,7 +80,7 @@ function AuthScreen({ onAuthenticated }: AuthScreenProps) {
             )}
           </button>
 
-          <p className="text-center text-sm text-gray-500 mt-4">
+          <p className="text-center text-sm text-sidebar-text mt-4">
             Sign in with Google, email, or your existing account
           </p>
         </div>
@@ -89,26 +89,26 @@ function AuthScreen({ onAuthenticated }: AuthScreenProps) {
         <div className="mt-8 grid grid-cols-3 gap-4 text-center">
           <div className="p-4">
             <div className="text-2xl mb-2">🔒</div>
-            <p className="text-sm text-gray-600">Data stays local</p>
+            <p className="text-sm text-sidebar-text">Data stays local</p>
           </div>
           <div className="p-4">
             <div className="text-2xl mb-2">💳</div>
-            <p className="text-sm text-gray-600">Your Claude subscription</p>
+            <p className="text-sm text-sidebar-text">Your Claude subscription</p>
           </div>
           <div className="p-4">
             <div className="text-2xl mb-2">⚡</div>
-            <p className="text-sm text-gray-600">Full agent power</p>
+            <p className="text-sm text-sidebar-text">Full agent power</p>
           </div>
         </div>
 
         {/* Sign up link */}
-        <p className="text-center text-sm text-gray-500 mt-6">
+        <p className="text-center text-sm text-sidebar-text mt-6">
           Don't have an account?{' '}
           <button
             onClick={() => {
               window.open('https://app.okrapdf.com/sign-up', '_blank');
             }}
-            className="text-emerald-600 hover:text-emerald-700 font-medium"
+            className="text-okra-orange hover:text-okra-orange/80 font-medium"
           >
             Sign up free
           </button>

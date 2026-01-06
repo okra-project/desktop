@@ -92,9 +92,11 @@
     "electron-updater": "^6.3.9",
     "exceljs": "^4.4.0",
     "fix-path": "^5.0.0",
+    "pdfjs-dist": "^5.4.530",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
+    "react-pdf": "^10.3.0",
     "react-router-dom": "^7.3.0",
     "remark-gfm": "^4.0.1",
     "xlsx": "^0.18.5"

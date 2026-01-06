@@ -24,7 +24,7 @@ function MessageList({ messages, isLoading, currentTodos = [] }: MessageListProp
   return (
     <div className="h-full overflow-y-auto px-6 py-4 space-y-4">
       {messages.length === 0 && (
-        <div className="text-center text-gray-500 mt-8">
+        <div className="text-center text-sidebar-text mt-8">
           <p className="text-lg mb-2">Welcome!</p>
           <p className="text-sm">
             Start by typing a message below and attach files to get started.
@@ -37,15 +37,15 @@ function MessageList({ messages, isLoading, currentTodos = [] }: MessageListProp
       ))}
 
       {isLoading && messages[messages.length - 1]?.isThinking && (
-        <div className="flex items-center space-x-2 text-gray-500">
+        <div className="flex items-center space-x-2 text-sidebar-text">
           <div className="animate-pulse flex space-x-1">
-            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+            <div className="w-2 h-2 bg-sidebar-text rounded-full animate-bounce" />
             <div
-              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+              className="w-2 h-2 bg-sidebar-text rounded-full animate-bounce"
               style={{ animationDelay: '0.1s' }}
             />
             <div
-              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+              className="w-2 h-2 bg-sidebar-text rounded-full animate-bounce"
               style={{ animationDelay: '0.2s' }}
             />
           </div>

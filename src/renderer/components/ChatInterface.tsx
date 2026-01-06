@@ -189,7 +189,7 @@ function ChatInterface() {
         />
       </div>
 
-      <div className="border-t border-gray-200 bg-white">
+      <div className="border-t border-sidebar-border bg-white">
         <MessageInput onSendMessage={sendMessage} disabled={isLoading} />
       </div>
 

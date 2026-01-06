@@ -115,7 +115,7 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
       case '.xls':
         return (
           <svg
-            className="w-4 h-4 text-green-600"
+            className="w-4 h-4 text-okra-yellow-hover"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -125,7 +125,7 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
       case '.pdf':
         return (
           <svg
-            className="w-4 h-4 text-red-600"
+            className="w-4 h-4 text-okra-orange"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -140,7 +140,7 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
       case '.doc':
         return (
           <svg
-            className="w-4 h-4 text-gray-600"
+            className="w-4 h-4 text-sidebar-text"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -154,7 +154,7 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
       default:
         return (
           <svg
-            className="w-4 h-4 text-gray-500"
+            className="w-4 h-4 text-sidebar-text"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -193,10 +193,10 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
           {selectedFiles.map((file, index) => (
             <div
               key={`${file.name}-${index}`}
-              className="flex items-center gap-1 bg-gray-100 rounded px-2 py-1 text-xs"
+              className="flex items-center gap-1 bg-sidebar-bg rounded px-2 py-1 text-xs"
             >
               {getFileIcon(file.name)}
-              <span className="text-gray-700 max-w-[120px] truncate">
+              <span className="text-ink max-w-[120px] truncate">
                 {file.name}
               </span>
               <button
@@ -228,7 +228,7 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
       <div className="flex items-end gap-2">
         <div
           className={`flex flex-col relative gap-2 w-full ${
-            isDragOver ? 'ring-2 ring-gray-400 ring-opacity-50 rounded-lg' : ''
+            isDragOver ? 'ring-2 ring-okra-orange ring-opacity-50 rounded-lg' : ''
           }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -244,7 +244,7 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
             onKeyDown={handleKeyDown}
             placeholder="Type a message... (Shift+Enter for new line)"
             disabled={disabled}
-            className="w-full resize-none rounded-lg border border-gray-300 px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className="w-full resize-none rounded-lg border border-sidebar-border px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-okra-orange focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed text-ink bg-white placeholder-sidebar-text"
             rows={1}
             style={{ minHeight: '48px', maxHeight: '150px' }}
           />
@@ -253,7 +253,7 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={disabled}
-              className="text-gray-400 hover:text-gray-600 focus:outline-none"
+              className="text-sidebar-text hover:text-ink focus:outline-none"
               title="Attach files"
             >
               Attach Files
@@ -275,8 +275,7 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
                 (!message.trim() && selectedFiles.length === 0) ||
                 isUploading
               }
-              className="px-4 py-1 text-white rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors min-w-[70px]"
-              style={{ backgroundColor: '#217346' }}
+              className="px-4 py-1 text-white rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-okra-orange focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors min-w-[70px] bg-okra-orange"
             >
               {isUploading ? (
                 <svg
@@ -308,7 +307,7 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
       </div>
 
       {isDragOver && (
-        <div className="text-xs text-gray-600 text-center">
+        <div className="text-xs text-sidebar-text text-center">
           Drop files to attach • Excel, PDF, Word supported
         </div>
       )}

@@ -36,13 +36,13 @@ function TodoListDisplay({ todos }: TodoListDisplayProps) {
   const getPriorityColor = (priority: TodoItem['priority']) => {
     switch (priority) {
       case 'high':
-        return 'text-red-600 border-red-200';
+        return 'text-okra-orange border-okra-orange';
       case 'medium':
-        return 'text-yellow-600 border-yellow-200';
+        return 'text-okra-yellow-hover border-okra-yellow';
       case 'low':
-        return 'text-green-600 border-green-200';
+        return 'text-ink border-sage';
       default:
-        return 'text-gray-600 border-gray-200';
+        return 'text-sidebar-text border-sidebar-border';
     }
   };
 
@@ -51,8 +51,8 @@ function TodoListDisplay({ todos }: TodoListDisplayProps) {
   }
 
   return (
-    <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-      <h3 className="text-xs font-semibold text-gray-800 mb-2 flex items-center">
+    <div className="mt-3 p-3 bg-sidebar-bg border border-sidebar-border rounded-lg">
+      <h3 className="text-xs font-semibold text-ink mb-2 flex items-center">
         📝 Todo List ({todos.length} items)
       </h3>
       <div className="space-y-1">
@@ -69,7 +69,7 @@ function TodoListDisplay({ todos }: TodoListDisplayProps) {
             >
               <button
                 onClick={() => toggleCrossOff(todo.id)}
-                className="flex-shrink-0 w-4 h-4 flex items-center justify-center text-xs hover:bg-gray-100 rounded border border-gray-300 transition-colors"
+                className="flex-shrink-0 w-4 h-4 flex items-center justify-center text-xs hover:bg-sidebar-bg-hover rounded border border-sidebar-border transition-colors"
                 title={isCrossedOff ? 'Uncheck item' : 'Cross off item'}
               >
                 {isCrossedOff ? '❌' : '☐'}
@@ -82,13 +82,13 @@ function TodoListDisplay({ todos }: TodoListDisplayProps) {
                     {todo.priority}
                   </span>
                   {isCompleted && (
-                    <span className="text-xs text-gray-500 italic">
+                    <span className="text-xs text-sidebar-text italic">
                       (completed)
                     </span>
                   )}
                 </div>
                 <p
-                  className={`text-xs text-gray-800 ${
+                  className={`text-xs text-ink ${
                     isCrossedOff || isCompleted ? 'line-through' : ''
                   }`}
                 >
@@ -100,8 +100,8 @@ function TodoListDisplay({ todos }: TodoListDisplayProps) {
         })}
       </div>
       
-      <div className="mt-2 pt-2 border-t border-gray-200">
-        <div className="flex justify-between text-xs text-gray-600">
+      <div className="mt-2 pt-2 border-t border-sidebar-border">
+        <div className="flex justify-between text-xs text-sidebar-text">
           <span>
             Completed: {todos.filter(t => t.status === 'completed').length}
           </span>
