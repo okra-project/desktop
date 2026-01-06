@@ -13,12 +13,17 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
 import Store from 'electron-store';
+import fixPath from 'fix-path';
 import fs from 'fs';
 import path from 'path';
 import { execSync, spawn } from 'child_process';
 import { initializeAPIConfig, API_CONFIG } from '../config/api-config';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
+
+// Fix PATH for Electron - GUI apps don't inherit shell PATH
+// This is required for spawning node/claude processes
+fixPath();
 
 // Initialize API configuration (BYOA mode - no bundled key)
 initializeAPIConfig();
