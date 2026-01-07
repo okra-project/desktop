@@ -762,10 +762,12 @@ ipcMain.on(
     const outputDir = cwd; // Watch the agent directory itself, not a subdirectory
     console.error('Querying in workspace:', cwd);
 
-    // Guard: ensure API key is set
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.error('[query] No API key configured');
-      event.reply('claude-code:error', 'No API key configured. Please add your Anthropic API key in Settings.');
+    // Guard: ensure API key (BYOK) or auth token (proxy mode) is available
+    const hasByokKey = !!getStoredApiKey();
+    const hasProxyAuth = !!authToken;
+    if (!hasByokKey && !hasProxyAuth) {
+      console.error('[query] No API key or auth token configured');
+      event.reply('claude-code:error', 'Please log in to OkraPDF or add your Anthropic API key in Settings.');
       return;
     }
 
