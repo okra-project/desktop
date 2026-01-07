@@ -543,20 +543,22 @@ ipcMain.handle('claude:check-status', async () => {
     const claudeConfigPath = path.join(app.getPath('home'), '.claude.json');
     const claudeInstalled = fs.existsSync(claudeConfigPath);
 
-    // Check if user has set their own API key (BYOK)
+    // Check if user has set their own API key (BYOK) - legacy, not needed with proxy
     const userApiKey = getStoredApiKey();
     const hasUserApiKey = !!userApiKey;
 
-    // Check environment variable
+    // Check if logged into okrapdf (enables proxy mode)
+    const hasProxyAuth = !!authToken;
+
+    // Check environment variable - legacy
     const hasEnvApiKey = !!process.env.ANTHROPIC_API_KEY;
 
-    // Try to check if Claude CLI is authenticated by reading config
+    // Claude CLI auth check - not needed with proxy mode
     let claudeAuthenticated = false;
     if (claudeInstalled) {
       try {
         const configContent = fs.readFileSync(claudeConfigPath, 'utf-8');
         const config = JSON.parse(configContent);
-        // If numStartups > 0, user has used Claude Code
         claudeAuthenticated = config.numStartups > 0;
       } catch {
         claudeAuthenticated = false;
@@ -568,7 +570,9 @@ ipcMain.handle('claude:check-status', async () => {
       claudeAuthenticated,
       hasUserApiKey,
       hasEnvApiKey,
-      ready: claudeAuthenticated || hasUserApiKey || hasEnvApiKey,
+      hasProxyAuth,
+      // Ready if logged into okrapdf (proxy) OR has own API key
+      ready: hasProxyAuth || hasUserApiKey || hasEnvApiKey || claudeAuthenticated,
     };
   } catch (error) {
     console.error('[claude:check-status] Error:', error);
@@ -577,6 +581,7 @@ ipcMain.handle('claude:check-status', async () => {
       claudeAuthenticated: false,
       hasUserApiKey: false,
       hasEnvApiKey: false,
+      hasProxyAuth: false,
       ready: false,
       error: error instanceof Error ? error.message : 'Unknown error',
     };

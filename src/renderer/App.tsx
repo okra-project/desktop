@@ -18,6 +18,7 @@ interface ClaudeStatus {
   claudeAuthenticated: boolean;
   hasUserApiKey: boolean;
   hasEnvApiKey: boolean;
+  hasProxyAuth: boolean;
   ready: boolean;
 }
 
