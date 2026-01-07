@@ -2,7 +2,7 @@
  * RTK Query API for OkraPDF Desktop
  *
  * Fetches data from okrapdf backend via /api/desktop/* routes.
- * All routes use Bearer token auth.
+ * All routes use Bearer token auth with auto-refreshing Clerk session tokens.
  */
 
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
@@ -249,7 +249,7 @@ export interface ResolvePageStatusRequest {
 const desktopBaseQuery = fetchBaseQuery({
   baseUrl: getBaseUrl(),
   prepareHeaders: async (headers) => {
-    // Get token from electron store via IPC
+    // Get token via IPC (main process handles refresh if expired)
     if (typeof window !== 'undefined' && window.electron?.ipcRenderer) {
       try {
         const result = await window.electron.ipcRenderer.invoke('auth:get-token');

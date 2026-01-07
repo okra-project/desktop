@@ -384,7 +384,89 @@ ipcMain.handle('auth:set-token', async (_event, token: string) => {
   return { success: true };
 });
 
+// Hidden window for token refresh
+let tokenRefreshWindow: BrowserWindow | null = null;
+
+async function refreshClerkToken(): Promise<string | null> {
+  return new Promise((resolve) => {
+    // Create hidden window to trigger Clerk token refresh
+    tokenRefreshWindow = new BrowserWindow({
+      width: 400,
+      height: 300,
+      show: false, // Hidden
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    });
+
+    const timeout = setTimeout(() => {
+      tokenRefreshWindow?.close();
+      tokenRefreshWindow = null;
+      resolve(null);
+    }, 10000); // 10s timeout
+
+    tokenRefreshWindow.webContents.on('did-finish-load', async () => {
+      // Wait a bit for Clerk to refresh token
+      await new Promise((r) => setTimeout(r, 1000));
+
+      try {
+        const cookies = await tokenRefreshWindow?.webContents.session.cookies.get({
+          domain: '.okrapdf.com',
+          name: '__session',
+        });
+        const sessionCookie = cookies?.[0];
+        clearTimeout(timeout);
+        tokenRefreshWindow?.close();
+        tokenRefreshWindow = null;
+
+        if (sessionCookie?.value) {
+          authToken = sessionCookie.value;
+          store.set('okrapdfToken', authToken);
+          resolve(sessionCookie.value);
+        } else {
+          resolve(null);
+        }
+      } catch (err) {
+        console.error('[auth] Token refresh failed:', err);
+        clearTimeout(timeout);
+        tokenRefreshWindow?.close();
+        tokenRefreshWindow = null;
+        resolve(null);
+      }
+    });
+
+    // Load app.okrapdf.com to trigger Clerk session refresh
+    tokenRefreshWindow.loadURL('https://app.okrapdf.com');
+  });
+}
+
 ipcMain.handle('auth:get-token', async () => {
+  // Check if stored token is expired (JWT exp check)
+  if (authToken) {
+    try {
+      const payload = JSON.parse(atob(authToken.split('.')[1]));
+      const exp = payload.exp * 1000; // Convert to ms
+      const now = Date.now();
+      const buffer = 30000; // 30s buffer before expiry
+
+      if (now < exp - buffer) {
+        // Token still valid
+        return { token: authToken };
+      }
+      console.log('[auth] Token expired or expiring soon, refreshing...');
+    } catch {
+      // Invalid token format, try to refresh
+    }
+  }
+
+  // Refresh token via hidden window
+  const newToken = await refreshClerkToken();
+  if (newToken) {
+    return { token: newToken };
+  }
+
+  // Fall back to stored token (might be expired but let backend decide)
   return { token: authToken };
 });
 
