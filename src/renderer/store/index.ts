@@ -18,6 +18,7 @@ import {
 } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
 import verificationReducer from './verification/slice';
+import { desktopApi } from './desktopApi';
 
 // ============================================
 // Root Reducer
@@ -25,6 +26,7 @@ import verificationReducer from './verification/slice';
 
 const rootReducer = combineReducers({
   verification: verificationReducer,
+  [desktopApi.reducerPath]: desktopApi.reducer,
 });
 
 // ============================================
@@ -104,7 +106,9 @@ export const store = configureStore({
           'verification.pendingPermission.timestamp',
         ],
       },
-    }).concat(verificationLoggerMiddleware, ipcBridgeMiddleware),
+    })
+      .concat(desktopApi.middleware)
+      .concat(verificationLoggerMiddleware, ipcBridgeMiddleware),
   devTools: process.env.NODE_ENV !== 'production',
 });
 

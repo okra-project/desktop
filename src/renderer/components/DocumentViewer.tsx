@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import PDFViewer from './PDFViewer';
 import ChatInterface from './ChatInterface';
+import { ReviewTab } from './review';
+
+type ViewMode = 'chat' | 'review';
 
 interface DocumentViewerProps {
   documentUuid: string;
@@ -19,6 +22,7 @@ export default function DocumentViewer({
   workspacePath,
   onBack,
 }: DocumentViewerProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>('chat');
   const [leftPanelWidth, setLeftPanelWidth] = useState(50); // percentage
   const [pdfPath, setPdfPath] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -104,7 +108,31 @@ export default function DocumentViewer({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* View mode toggle */}
+          <div className="flex bg-slate-100 rounded-lg p-0.5">
+            <button
+              onClick={() => setViewMode('chat')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                viewMode === 'chat'
+                  ? 'bg-white text-slate-700 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              💬 Chat
+            </button>
+            <button
+              onClick={() => setViewMode('review')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                viewMode === 'review'
+                  ? 'bg-white text-slate-700 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              ✓ Review
+            </button>
+          </div>
+
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-sage/50 text-ink">
             <span className="w-2 h-2 bg-okra-orange rounded-full mr-1.5 animate-pulse" />
             Connected
@@ -112,46 +140,58 @@ export default function DocumentViewer({
         </div>
       </header>
 
-      {/* Two-panel content */}
-      <div id="split-container" className="flex-1 flex overflow-hidden">
-        {/* Left: PDF Viewer */}
-        <div
-          className="h-full overflow-hidden border-r border-slate-200"
-          style={{ width: `${leftPanelWidth}%` }}
-        >
-          {pdfPath ? (
-            <PDFViewer pdfPath={pdfPath} onPageChange={setCurrentPage} />
-          ) : (
-            <div className="flex items-center justify-center h-full bg-slate-50">
-              <div className="text-center">
-                <div className="text-4xl mb-2">📄</div>
-                <p className="text-slate-500 text-sm">Loading document...</p>
+      {/* Content - either Chat mode or Review mode */}
+      {viewMode === 'chat' ? (
+        /* Chat mode: Two-panel layout */
+        <div id="split-container" className="flex-1 flex overflow-hidden">
+          {/* Left: PDF Viewer */}
+          <div
+            className="h-full overflow-hidden border-r border-slate-200"
+            style={{ width: `${leftPanelWidth}%` }}
+          >
+            {pdfPath ? (
+              <PDFViewer pdfPath={pdfPath} onPageChange={setCurrentPage} />
+            ) : (
+              <div className="flex items-center justify-center h-full bg-slate-50">
+                <div className="text-center">
+                  <div className="text-4xl mb-2">📄</div>
+                  <p className="text-slate-500 text-sm">Loading document...</p>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Divider (draggable) */}
-        <div
-          className="w-1 bg-slate-200 hover:bg-blue-400 cursor-col-resize transition-colors shrink-0"
-          onMouseDown={() => {
-            isDragging.current = true;
-            document.body.style.cursor = 'col-resize';
-            document.body.style.userSelect = 'none';
-          }}
-        />
-
-        {/* Right: Chat Interface */}
-        <div className="flex-1 h-full overflow-hidden flex flex-col bg-white">
-          <div className="px-4 py-2 border-b border-slate-200 bg-slate-50">
-            <h2 className="text-sm font-medium text-slate-700">Chat with your document</h2>
-            <p className="text-xs text-slate-500">
-              Ask questions about the PDF content
-            </p>
+            )}
           </div>
-          <ChatInterface />
+
+          {/* Divider (draggable) */}
+          <div
+            className="w-1 bg-slate-200 hover:bg-blue-400 cursor-col-resize transition-colors shrink-0"
+            onMouseDown={() => {
+              isDragging.current = true;
+              document.body.style.cursor = 'col-resize';
+              document.body.style.userSelect = 'none';
+            }}
+          />
+
+          {/* Right: Chat Interface */}
+          <div className="flex-1 h-full overflow-hidden flex flex-col bg-white">
+            <div className="px-4 py-2 border-b border-slate-200 bg-slate-50">
+              <h2 className="text-sm font-medium text-slate-700">Chat with your document</h2>
+              <p className="text-xs text-slate-500">
+                Ask questions about the PDF content
+              </p>
+            </div>
+            <ChatInterface />
+          </div>
         </div>
-      </div>
+      ) : (
+        /* Review mode: Full-width ReviewTab */
+        <div className="flex-1 overflow-hidden">
+          <ReviewTab
+            jobId={documentUuid}
+            documentName={documentName}
+            onBack={() => setViewMode('chat')}
+          />
+        </div>
+      )}
     </div>
   );
 }
