@@ -99,7 +99,7 @@ export default function DocumentViewer({
               {documentName}
             </h1>
             <p className="text-xs text-sidebar-text">
-              Page {currentPage} • Local Agent
+              Page {currentPage}
             </p>
           </div>
         </div>

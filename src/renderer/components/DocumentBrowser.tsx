@@ -1,36 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-
-interface Document {
-  uuid: string;
-  file_name: string;
-  file_size: number;
-  upload_date: string;
-  document_type: string;
-  thumbnail_url?: string;
-  verification_progress?: {
-    totalPages?: number;
-    extractionStatus?: string;
-  };
-}
+import { Document } from '../types';
+import DocumentCard from './DocumentCard';
 
 interface DocumentBrowserProps {
   onSelectDocument: (doc: Document) => void;
   onLogout: () => void;
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 function DocumentBrowser({ onSelectDocument, onLogout }: DocumentBrowserProps) {
@@ -65,7 +39,7 @@ function DocumentBrowser({ onSelectDocument, onLogout }: DocumentBrowserProps) {
     fetchLibrary();
   }, [fetchLibrary]);
 
-  const handleConnectLocalAgent = async (doc: Document) => {
+  const handleDocumentClick = async (doc: Document) => {
     setBootstrappingDoc(doc.uuid);
     setError(null);
 
@@ -106,7 +80,7 @@ function DocumentBrowser({ onSelectDocument, onLogout }: DocumentBrowserProps) {
         <div>
           <h1 className="text-2xl font-semibold font-serif text-ink">Your Documents</h1>
           <p className="text-sm text-sidebar-text">
-            Select a document to connect your local Claude agent
+            Select a document to view
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -153,63 +127,14 @@ function DocumentBrowser({ onSelectDocument, onLogout }: DocumentBrowserProps) {
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {documents.map((doc) => (
-              <div
+              <DocumentCard
                 key={doc.uuid}
-                className="bg-white rounded-lg border border-sidebar-border p-4 hover:shadow-md transition-shadow"
-              >
-                {/* Thumbnail */}
-                <div className="aspect-[4/3] bg-sidebar-bg rounded-lg mb-3 overflow-hidden">
-                  {doc.thumbnail_url ? (
-                    <img
-                      src={doc.thumbnail_url}
-                      alt={doc.file_name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-4xl text-sidebar-text">
-                      📄
-                    </div>
-                  )}
-                </div>
-
-                {/* Document info */}
-                <h3 className="font-medium text-ink truncate mb-1" title={doc.file_name}>
-                  {doc.file_name}
-                </h3>
-                <div className="flex items-center gap-2 text-sm text-sidebar-text mb-3">
-                  <span>{formatFileSize(doc.file_size)}</span>
-                  <span>•</span>
-                  <span>{formatDate(doc.upload_date)}</span>
-                  {doc.verification_progress?.totalPages && (
-                    <>
-                      <span>•</span>
-                      <span>{doc.verification_progress.totalPages} pages</span>
-                    </>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <button
-                  onClick={() => handleConnectLocalAgent(doc)}
-                  disabled={bootstrappingDoc === doc.uuid}
-                  className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
-                    bootstrappingDoc === doc.uuid
-                      ? 'bg-gray-100 text-gray-400 cursor-wait'
-                      : 'bg-okra-yellow text-ink hover:bg-okra-yellow-hover'
-                  }`}
-                >
-                  {bootstrappingDoc === doc.uuid ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <span className="animate-spin h-4 w-4 border-2 border-ink border-t-transparent rounded-full"></span>
-                      Setting up...
-                    </span>
-                  ) : (
-                    'Connect Local Agent'
-                  )}
-                </button>
-              </div>
+                document={doc}
+                onClick={handleDocumentClick}
+                isLoading={bootstrappingDoc === doc.uuid}
+              />
             ))}
           </div>
         )}
@@ -217,5 +142,8 @@ function DocumentBrowser({ onSelectDocument, onLogout }: DocumentBrowserProps) {
     </div>
   );
 }
+
+export default DocumentBrowser;
+
 
 export default DocumentBrowser;

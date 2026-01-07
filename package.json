@@ -95,6 +95,7 @@
     "electron-updater": "^6.3.9",
     "exceljs": "^4.4.0",
     "fix-path": "^5.0.0",
+    "lucide-react": "^0.562.0",
     "pdfjs-dist": "5.4.296",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
