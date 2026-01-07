@@ -55,3 +55,8 @@ resources/uv.tar.gz
 
 # Compiled skills output
 out/.claude/
+
+# Symlinks created by link-modules
+src/node_modules
+.erb/node_modules
+.vercel
