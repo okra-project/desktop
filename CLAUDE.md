@@ -33,3 +33,15 @@ const { userId } = await auth({ acceptsToken: 'session_token' });
 ```
 
 Routes must be in middleware skip list to work with Bearer tokens.
+
+### Release Process (Manual)
+
+1. **Build**: `npm run package` → outputs to `release/build/`
+2. **Upload to GCS**:
+   ```bash
+   gsutil cp release/build/OkraPDF-*.dmg gs://okrapdf-public/releases/vX.X.X/
+   ```
+3. **Proxy**: okrapdf's `next.config.ts` rewrites `/download/desktop/*` → GCS
+4. **Share link**: `https://okrapdf.com/download/desktop/vX.X.X/OkraPDF-X.X.X-arm64.dmg`
+
+No CI/CD yet. GitHub releases created but repo is private so use GCS for distribution.
