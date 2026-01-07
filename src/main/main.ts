@@ -638,6 +638,7 @@ const createWindow = async () => {
     // icon: getAssetPath('icon.png'), // temporarily disabled for debugging
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      webSecurity: false, // Allow loading local file:// PDFs
     },
   });
   console.log('Main window created successfully');
