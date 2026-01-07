@@ -137,7 +137,8 @@ function getStoredApiKey(): string | null {
 
 // Proxy URL for users without their own API key
 // Routes through okrapdf.com which adds server's API key
-const CLAUDE_PROXY_URL = 'https://okrapdf.com/api/desktop/agent';
+// SDK appends /v1/messages, so this becomes https://okrapdf.com/api/v1/messages
+const CLAUDE_PROXY_URL = 'https://okrapdf.com/api';
 
 // Load user's API key if previously saved (BYOK)
 const savedApiKey = getStoredApiKey();
