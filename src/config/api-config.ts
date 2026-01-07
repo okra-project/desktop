@@ -21,5 +21,6 @@ export function initializeAPIConfig(): void {
   // 1. User's Claude Code CLI authentication (if installed)
   // 2. User-provided API key (via settings)
   // 3. Environment variable ANTHROPIC_API_KEY (if set by user)
-  console.log('[config] BYOA mode - using user\'s own Claude subscription');
+  // Use stderr to avoid polluting JSON stream when SDK spawns process
+  console.error('[config] BYOA mode - using user\'s own Claude subscription');
 }

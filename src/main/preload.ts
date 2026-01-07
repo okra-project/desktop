@@ -44,7 +44,13 @@ export type Channels =
   | 'verification:state-changed'
   | 'verification:get-events'
   | 'verification:get-events-since'
-  | 'verification:execute-action';
+  | 'verification:execute-action'
+  // Review agent channels
+  | 'review-agent:query'
+  | 'review-agent:response'
+  | 'review-agent:error'
+  | 'review-agent:done'
+  | 'review-agent:abort';
 
 const electronHandler = {
   ipcRenderer: {

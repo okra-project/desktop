@@ -188,6 +188,9 @@ export default function DocumentViewer({
           <ReviewTab
             jobId={documentUuid}
             documentName={documentName}
+            pdfPath={pdfPath}
+            currentPage={currentPage}
+            onPageChange={setCurrentPage}
             onBack={() => setViewMode('chat')}
           />
         </div>

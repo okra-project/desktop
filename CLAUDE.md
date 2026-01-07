@@ -34,17 +34,26 @@ const { userId } = await auth({ acceptsToken: 'session_token' });
 
 Routes must be in middleware skip list to work with Bearer tokens.
 
-### Release Process (Manual)
+### Release Process (GHA)
 
-1. **Build**: `npm run package` → outputs to `release/build/`
-2. **Upload to GCS**:
-   ```bash
-   gsutil cp release/build/OkraPDF-*.dmg gs://okrapdf-public/releases/vX.X.X/
-   ```
-3. **Proxy**: okrapdf's `next.config.ts` rewrites `/download/desktop/*` → GCS
-4. **Share link**: `https://okrapdf.com/download/desktop/vX.X.X/OkraPDF-X.X.X-arm64.dmg`
+**Before tagging a release:**
+1. Bump version in `release/app/package.json` ← **CRITICAL** or DMG filenames won't match tag
+2. Commit the version bump
 
-No CI/CD yet. GitHub releases created but repo is private so use GCS for distribution.
+**To release:**
+```bash
+git tag vX.X.X && git push origin vX.X.X
+```
+
+GHA workflow (`.github/workflows/release.yml`) will:
+- Build for arm64 + x64
+- Upload DMGs to `gs://okrapdf-public/releases/vX.X.X/`
+
+**Download link**: `https://okrapdf.com/download/desktop/vX.X.X/OkraPDF-X.X.X-arm64.dmg`
+
+Proxy: okrapdf's `next.config.ts` rewrites `/download/desktop/*` → GCS
+
+**Current stable**: v4.6.0
 
 ### Bundled Runtimes (Fresh Install Support)
 

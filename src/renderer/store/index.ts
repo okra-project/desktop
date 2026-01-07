@@ -18,6 +18,7 @@ import {
 } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
 import verificationReducer from './verification/slice';
+import reviewAgentReducer from './reviewAgentSlice';
 import { desktopApi } from './desktopApi';
 
 // ============================================
@@ -26,6 +27,7 @@ import { desktopApi } from './desktopApi';
 
 const rootReducer = combineReducers({
   verification: verificationReducer,
+  reviewAgent: reviewAgentReducer,
   [desktopApi.reducerPath]: desktopApi.reducer,
 });
 

@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
+import { ENTITY_COLORS, type EntityColorType } from '../lib/entity-colors';
 
 // Bundle worker locally - versions now synced (5.4.296)
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -9,18 +10,77 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
-interface PDFViewerProps {
-  pdfPath: string; // Local file path or URL
-  onPageChange?: (page: number) => void;
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
-export default function PDFViewer({ pdfPath, onPageChange }: PDFViewerProps) {
+export interface EntityOverlay {
+  id: string;
+  type: 'table' | 'figure' | 'footnote' | 'summary' | 'paragraph' | 'signature';
+  title: string | null;
+  bbox?: BoundingBox;
+  page: number;
+}
+
+export interface PageDimension {
+  width: number | null;
+  height: number | null;
+}
+
+interface PDFViewerProps {
+  pdfPath: string; // Local file path or URL
+  initialPage?: number;
+  onPageChange?: (page: number) => void;
+  /** Entities with bbox for overlay */
+  entities?: EntityOverlay[];
+  /** Whether to show entity overlays */
+  showEntityOverlays?: boolean;
+  /** Callback when an entity overlay is clicked */
+  onEntityClick?: (entity: EntityOverlay, event: React.MouseEvent) => void;
+  /** DocAI dimensions per page for bbox scaling */
+  pageDimensions?: Record<number, PageDimension>;
+}
+
+// ============================================================================
+// Overlay Colors Configuration
+// ============================================================================
+
+const OVERLAY_COLORS: Record<string, { border: string; fill: string; label: string }> = {
+  table: { border: ENTITY_COLORS.table.border, fill: ENTITY_COLORS.table.fill, label: ENTITY_COLORS.table.hex },
+  figure: { border: ENTITY_COLORS.figure.border, fill: ENTITY_COLORS.figure.fill, label: ENTITY_COLORS.figure.hex },
+  footnote: { border: ENTITY_COLORS.footnote.border, fill: ENTITY_COLORS.footnote.fill, label: ENTITY_COLORS.footnote.hex },
+  summary: { border: ENTITY_COLORS.summary.border, fill: ENTITY_COLORS.summary.fill, label: ENTITY_COLORS.summary.hex },
+  paragraph: { border: ENTITY_COLORS.paragraph.border, fill: ENTITY_COLORS.paragraph.fill, label: ENTITY_COLORS.paragraph.hex },
+  signature: { border: ENTITY_COLORS.signature.border, fill: ENTITY_COLORS.signature.fill, label: ENTITY_COLORS.signature.hex },
+};
+
+// ============================================================================
+// Main Component
+// ============================================================================
+
+export default function PDFViewer({
+  pdfPath,
+  initialPage = 1,
+  onPageChange,
+  entities = [],
+  showEntityOverlays = false,
+  onEntityClick,
+  pageDimensions = {},
+}: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
-  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [currentPage, setCurrentPage] = useState<number>(initialPage);
   const [scale, setScale] = useState<number>(1.0);
   const [pdfUrl, setPdfUrl] = useState<string>('');
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
+  const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   // Convert local path to file:// URL or use as-is if already URL
   useEffect(() => {
@@ -52,8 +112,16 @@ export default function PDFViewer({ pdfPath, onPageChange }: PDFViewerProps) {
 
   const onDocumentLoadSuccess = ({ numPages: pages }: { numPages: number }) => {
     setNumPages(pages);
-    setCurrentPage(1);
+    // Use initialPage but clamp to valid range
+    setCurrentPage(Math.max(1, Math.min(initialPage, pages)));
   };
+
+  // Sync with external page changes
+  useEffect(() => {
+    if (initialPage && numPages > 0 && initialPage !== currentPage) {
+      setCurrentPage(Math.max(1, Math.min(initialPage, numPages)));
+    }
+  }, [initialPage, numPages]);
 
   const handlePageChange = (page: number) => {
     const newPage = Math.max(1, Math.min(page, numPages));
@@ -71,6 +139,61 @@ export default function PDFViewer({ pdfPath, onPageChange }: PDFViewerProps) {
       onPageChange?.(estimatedPage);
     }
   };
+
+  // Get entities for a specific page
+  const getPageEntities = useCallback((pageNum: number) => {
+    if (!showEntityOverlays || !entities.length) return [];
+    return entities.filter((e) => e.page === pageNum);
+  }, [entities, showEntityOverlays]);
+
+  // Handle entity click on overlay
+  const handleOverlayClick = useCallback((entity: EntityOverlay, event: React.MouseEvent) => {
+    event.stopPropagation();
+    onEntityClick?.(entity, event);
+  }, [onEntityClick]);
+
+  // Track rendered page dimensions for overlay scaling
+  const [renderedPageDimensions, setRenderedPageDimensions] = useState<Record<number, { width: number; height: number }>>({});
+
+  // Scale bbox from DocAI coordinates to rendered coordinates
+  const scaleBbox = useCallback((bbox: BoundingBox, pageNum: number, renderedWidth: number, renderedHeight: number) => {
+    const docDims = pageDimensions[pageNum];
+    if (!docDims || !docDims.width || !docDims.height) {
+      // Fallback: assume bbox is already in percentage
+      return {
+        left: bbox.x * renderedWidth,
+        top: bbox.y * renderedHeight,
+        width: bbox.width * renderedWidth,
+        height: bbox.height * renderedHeight,
+      };
+    }
+    // Scale from DocAI page dimensions to rendered dimensions
+    const scaleX = renderedWidth / docDims.width;
+    const scaleY = renderedHeight / docDims.height;
+    return {
+      left: bbox.x * scaleX,
+      top: bbox.y * scaleY,
+      width: bbox.width * scaleX,
+      height: bbox.height * scaleY,
+    };
+  }, [pageDimensions]);
+
+  // Handle page render complete to capture dimensions
+  const handlePageRenderSuccess = useCallback((pageNum: number) => {
+    // Get the rendered canvas dimensions after a small delay
+    setTimeout(() => {
+      const pageDiv = pageRefs.current.get(pageNum);
+      if (pageDiv) {
+        const canvas = pageDiv.querySelector('canvas');
+        if (canvas) {
+          setRenderedPageDimensions(prev => ({
+            ...prev,
+            [pageNum]: { width: canvas.width, height: canvas.height }
+          }));
+        }
+      }
+    }, 50);
+  }, []);
 
   // Calculate page width to fit container
   const pageWidth = containerWidth ? Math.min(containerWidth - 32, 800) : 600;
@@ -159,16 +282,80 @@ export default function PDFViewer({ pdfPath, onPageChange }: PDFViewerProps) {
             </div>
           }
         >
-          {Array.from({ length: numPages }, (_, index) => (
-            <div key={`page_${index + 1}`} className="mb-4 shadow-lg">
-              <Page
-                pageNumber={index + 1}
-                width={pageWidth * scale}
-                renderTextLayer={true}
-                renderAnnotationLayer={true}
-              />
-            </div>
-          ))}
+          {Array.from({ length: numPages }, (_, index) => {
+            const pageNum = index + 1;
+            const pageEntities = getPageEntities(pageNum);
+            const renderedDims = renderedPageDimensions[pageNum];
+
+            return (
+              <div
+                key={`page_${pageNum}`}
+                className="mb-4 shadow-lg relative"
+                ref={(el) => {
+                  if (el) pageRefs.current.set(pageNum, el);
+                }}
+              >
+                <Page
+                  pageNumber={pageNum}
+                  width={pageWidth * scale}
+                  renderTextLayer={true}
+                  renderAnnotationLayer={true}
+                  onRenderSuccess={() => handlePageRenderSuccess(pageNum)}
+                />
+
+                {/* Entity Overlays */}
+                {showEntityOverlays && pageEntities.length > 0 && renderedDims && (
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{
+                      width: pageWidth * scale,
+                      height: (renderedDims.height / renderedDims.width) * pageWidth * scale
+                    }}
+                  >
+                    {pageEntities.map((entity) => {
+                      if (!entity.bbox) return null;
+                      const colors = OVERLAY_COLORS[entity.type] || OVERLAY_COLORS.paragraph;
+                      const scaled = scaleBbox(
+                        entity.bbox,
+                        pageNum,
+                        pageWidth * scale,
+                        (renderedDims.height / renderedDims.width) * pageWidth * scale
+                      );
+
+                      return (
+                        <div
+                          key={entity.id}
+                          className="absolute pointer-events-auto cursor-pointer transition-all hover:brightness-110"
+                          style={{
+                            left: scaled.left,
+                            top: scaled.top,
+                            width: scaled.width,
+                            height: scaled.height,
+                            border: `2px solid ${colors.border}`,
+                            backgroundColor: colors.fill,
+                            borderRadius: 2,
+                          }}
+                          onClick={(e) => handleOverlayClick(entity, e)}
+                          title={entity.title || `${entity.type} #${entity.id}`}
+                        >
+                          {/* Entity label */}
+                          <span
+                            className="absolute -top-5 left-0 text-[10px] font-medium px-1 py-0.5 rounded whitespace-nowrap"
+                            style={{
+                              backgroundColor: colors.label,
+                              color: 'white',
+                            }}
+                          >
+                            {entity.type}{entity.title ? `: ${entity.title}` : ''}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </Document>
       </div>
     </div>

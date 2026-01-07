@@ -8,7 +8,7 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
-import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+// Note: @anthropic-ai/claude-agent-sdk is ESM-only, use dynamic import
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron';
 import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
@@ -749,7 +749,8 @@ User query: `;
         }
       }
 
-      const messages: SDKMessage[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const messages: any[] = [];
 
       // Get bundled bun path (works on fresh install without Node.js)
       const getBundledBunPath = (): string | undefined => {
@@ -830,6 +831,8 @@ User query: `;
       console.error(`[query] Using claude: ${claudePath}`);
       console.error(`[query] Enhanced PATH: ${enhancedEnv.PATH?.substring(0, 100)}...`);
 
+      // Dynamic import for ESM-only SDK
+      const { query } = await import('@anthropic-ai/claude-agent-sdk');
       const queryIterator = query({
         prompt,
         options: {
@@ -904,6 +907,174 @@ User query: `;
     }
   },
 );
+
+// ============================================================================
+// Review Agent IPC Handler
+// Uses Claude Agent SDK to run a specialized review assistant
+// ============================================================================
+
+// Store active review agent abort controllers
+const reviewAgentAbortControllers = new Map<string, AbortController>();
+
+ipcMain.on(
+  'review-agent:query',
+  async (
+    event,
+    data: {
+      sessionId: string;
+      message: string;
+      context: {
+        jobId: string;
+        documentName?: string;
+        currentPage?: number;
+        tableMarkdown?: string;
+        pageContent?: string;
+      };
+    },
+  ) => {
+    const { sessionId, message, context } = data;
+    console.error(`[review-agent] Query received for session ${sessionId}:`, message.slice(0, 100));
+
+    // Create abort controller for this session
+    const abortController = new AbortController();
+    reviewAgentAbortControllers.set(sessionId, abortController);
+
+    try {
+      // Build a specialized review prompt
+      const systemContext = [
+        `You are a document review assistant helping verify OCR extraction results.`,
+        ``,
+        `Current context:`,
+        `- Job ID: ${context.jobId}`,
+        context.documentName ? `- Document: ${context.documentName}` : null,
+        context.currentPage ? `- Page: ${context.currentPage}` : null,
+        ``,
+        context.tableMarkdown ? `## Table Content (editable)\n\`\`\`markdown\n${context.tableMarkdown}\n\`\`\`` : null,
+        context.pageContent ? `## Page Content\n\`\`\`\n${context.pageContent}\n\`\`\`` : null,
+        ``,
+        `Your role:`,
+        `- Answer questions about the extracted content`,
+        `- Help verify table data accuracy`,
+        `- Suggest corrections when you spot issues`,
+        `- Be concise and direct`,
+      ].filter(Boolean).join('\n');
+
+      const fullPrompt = `${systemContext}\n\n## User Request\n${message}`;
+
+      // Get workspace path
+      const workspacePath = store.get('currentWorkspace') as string || path.join(app.getPath('desktop'), 'okrapdf');
+
+      // Get bundled paths (reusing from claude-code handler)
+      const getBundledBunPath = (): string | undefined => {
+        if (app.isPackaged) {
+          const bunPath = path.join(process.resourcesPath, 'bun');
+          if (fs.existsSync(bunPath)) return bunPath;
+        }
+        const devResourcePath = path.join(__dirname, '../../resources/bun');
+        if (fs.existsSync(devResourcePath)) return devResourcePath;
+        try {
+          const result = execSync('which bun', { encoding: 'utf-8' }).trim();
+          if (result && fs.existsSync(result)) return result;
+        } catch { /* no system bun */ }
+        return undefined;
+      };
+
+      const getBundledClaudePath = (): string | undefined => {
+        if (app.isPackaged) {
+          const resourcePath = path.join(process.resourcesPath, 'app.asar.unpacked/node_modules/@anthropic-ai/claude-agent-sdk/cli.js');
+          if (fs.existsSync(resourcePath)) return resourcePath;
+        }
+        const devPath = path.join(__dirname, '../../node_modules/@anthropic-ai/claude-agent-sdk/cli.js');
+        if (fs.existsSync(devPath)) return devPath;
+        return undefined;
+      };
+
+      const bunPath = getBundledBunPath();
+      const claudePath = getBundledClaudePath();
+
+      if (!bunPath || !claudePath) {
+        event.reply('review-agent:error', { sessionId, error: 'Runtime not found' });
+        return;
+      }
+
+      const runtimeDir = app.isPackaged ? process.resourcesPath : path.join(__dirname, '../../resources');
+      const enhancedEnv = {
+        ...process.env,
+        PATH: `${runtimeDir}:${process.env.PATH || ''}`,
+      };
+
+      // Dynamic import for ESM-only SDK
+      console.error('[review-agent] About to import SDK...');
+      const { query } = await import('@anthropic-ai/claude-agent-sdk');
+      console.error('[review-agent] SDK imported, starting query...');
+
+      // Run the agent with limited tools for review
+      const queryIterator = query({
+        prompt: fullPrompt,
+        options: {
+          cwd: workspacePath,
+          pathToClaudeCodeExecutable: claudePath,
+          env: enhancedEnv,
+          stderr: (msg) => console.error('[review-agent stderr]', msg),
+          abortController,
+          maxTurns: 10, // Limit turns for review agent
+          allowedTools: ['Read', 'WebSearch'], // Limited tools for review
+        },
+      });
+
+      for await (const sdkMessage of queryIterator) {
+        if (abortController.signal.aborted) {
+          console.error(`[review-agent] Session ${sessionId} aborted`);
+          break;
+        }
+
+        // Map SDK message to review agent response format
+        if (sdkMessage.type === 'assistant') {
+          // Extract text content from assistant message
+          const textContent = sdkMessage.message.content
+            .filter((block: { type: string }) => block.type === 'text')
+            .map((block: { type: string; text?: string }) => block.text || '')
+            .join('');
+
+          if (textContent) {
+            event.reply('review-agent:response', {
+              sessionId,
+              type: 'text',
+              content: textContent,
+            });
+          }
+        } else if (sdkMessage.type === 'result') {
+          // Tool result
+          event.reply('review-agent:response', {
+            sessionId,
+            type: 'tool_result',
+            content: typeof sdkMessage.result === 'string' ? sdkMessage.result : JSON.stringify(sdkMessage.result),
+          });
+        }
+      }
+
+      event.reply('review-agent:done', { sessionId });
+    } catch (error) {
+      console.error('[review-agent] Error:', error);
+      event.reply('review-agent:error', {
+        sessionId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
+      reviewAgentAbortControllers.delete(sessionId);
+    }
+  },
+);
+
+// Handle abort requests
+ipcMain.on('review-agent:abort', (_event, sessionId: string) => {
+  const controller = reviewAgentAbortControllers.get(sessionId);
+  if (controller) {
+    console.error(`[review-agent] Aborting session ${sessionId}`);
+    controller.abort();
+    reviewAgentAbortControllers.delete(sessionId);
+  }
+});
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');

@@ -47,7 +47,7 @@ function getWebContents(): Electron.WebContents | null {
 // ============================================
 
 export function setupVerificationIpcHandlers(): void {
-  console.log('[Verification IPC] Setting up handlers...');
+  console.error('[Verification IPC] Setting up handlers...');
 
   // ==========================================
   // Session Lifecycle
@@ -58,7 +58,7 @@ export function setupVerificationIpcHandlers(): void {
    */
   ipcMain.handle('verification:start-session', async (_event, config: SessionConfig) => {
     try {
-      console.log('[Verification] Starting session for document:', config.documentId);
+      console.error('[Verification] Starting session for document:', config.documentId);
 
       const sessionId = uuidv4();
       const now = new Date();
@@ -102,7 +102,7 @@ export function setupVerificationIpcHandlers(): void {
         runtime.initialize(session, webContents);
       }
 
-      console.log('[Verification] Session started:', sessionId);
+      console.error('[Verification] Session started:', sessionId);
 
       return {
         success: true,
@@ -180,7 +180,7 @@ export function setupVerificationIpcHandlers(): void {
       // Clean up runtime
       runtimeManager.removeRuntime(sessionId);
 
-      console.log('[Verification] Session ended:', sessionId);
+      console.error('[Verification] Session ended:', sessionId);
 
       return { success: true };
     } catch (error) {
@@ -340,7 +340,7 @@ export function setupVerificationIpcHandlers(): void {
 
     // Store the rrweb event path or append to session
     // For now, we just log it - persistence will be added later
-    console.log('[Verification] rrweb event received for session:', data.sessionId);
+    console.error('[Verification] rrweb event received for session:', data.sessionId);
   });
 
   // ==========================================
@@ -351,11 +351,11 @@ export function setupVerificationIpcHandlers(): void {
    * Receive state changes from renderer (Redux sync)
    */
   ipcMain.on('verification:state-changed', (_event, data: { type: string; payload: any }) => {
-    console.log('[Verification] State changed:', data.type);
+    console.error('[Verification] State changed:', data.type);
     // This can be used to sync state or trigger persistence
   });
 
-  console.log('[Verification IPC] Handlers registered');
+  console.error('[Verification IPC] Handlers registered');
 }
 
 // ============================================
@@ -372,5 +372,5 @@ export function cleanupVerificationIpcHandlers(): void {
   // Clear sessions
   sessions.clear();
 
-  console.log('[Verification IPC] Cleaned up');
+  console.error('[Verification IPC] Cleaned up');
 }

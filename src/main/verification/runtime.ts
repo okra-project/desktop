@@ -73,7 +73,7 @@ export class VerificationRuntime {
     this.eventStream = eventStreamManager.getStream(session.id);
     this.isRunning = true;
 
-    console.log('[Runtime] Initialized for session:', session.id);
+    console.error('[Runtime] Initialized for session:', session.id);
   }
 
   /**
@@ -88,7 +88,7 @@ export class VerificationRuntime {
    */
   pause(): void {
     this.isRunning = false;
-    console.log('[Runtime] Paused');
+    console.error('[Runtime] Paused');
   }
 
   /**
@@ -96,7 +96,7 @@ export class VerificationRuntime {
    */
   resume(): void {
     this.isRunning = true;
-    console.log('[Runtime] Resumed');
+    console.error('[Runtime] Resumed');
   }
 
   /**
@@ -105,7 +105,7 @@ export class VerificationRuntime {
   stop(): void {
     this.isRunning = false;
     this.pendingApproval.clear();
-    console.log('[Runtime] Stopped');
+    console.error('[Runtime] Stopped');
   }
 
   // ==========================================
@@ -511,7 +511,7 @@ export class VerificationRuntime {
     const payload = action.payload as { thought: string };
 
     // Just log the thought - no state change
-    console.log('[Agent Thinking]', payload.thought);
+    console.error('[Agent Thinking]', payload.thought);
 
     // Notify renderer for UI display
     this.webContents?.send('verification:agent-thinking', payload.thought);

@@ -10,11 +10,14 @@
  */
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { useAppDispatch } from '../../store';
+import PDFViewer, { type EntityOverlay, type PageDimension as PDFPageDimension } from '../PDFViewer';
 import {
   useGetVerificationTreeQuery,
   useGetEntitiesQuery,
   useGetTablesByJobIdQuery,
   useGetPageContentQuery,
+  useGetVerificationHistoryQuery,
   useSavePageVersionMutation,
   useUpdateTableStatusMutation,
   useFixAndAcceptTableMutation,
@@ -25,6 +28,12 @@ import {
 import { PageNode, STATUS_CONFIG } from './TreeNodes';
 import { FilterChipsRow } from './FilterChips';
 import { TableVerificationPanel } from './TableVerificationPanel';
+import { HistoryModal } from './HistoryModal';
+import { PageVerificationControl } from './PageVerificationControl';
+import { EntityActionPopover, type EntityAction, type EntityOverlayInfo } from './EntityActionPopover';
+import { DockedChat } from './DockedChat';
+import { SelectableMarkdownRenderer, type SelectionData } from './SelectableMarkdownRenderer';
+import { setContext } from '../../store/reviewAgentSlice';
 
 // ============================================================================
 // Types
@@ -33,6 +42,9 @@ import { TableVerificationPanel } from './TableVerificationPanel';
 export interface ReviewTabProps {
   jobId: string;
   documentName?: string;
+  pdfPath?: string;
+  currentPage?: number;
+  onPageChange?: (page: number) => void;
   onBack?: () => void;
 }
 
@@ -40,10 +52,10 @@ export interface ReviewTabProps {
 // Main Component
 // ============================================================================
 
-export function ReviewTab({ jobId, documentName, onBack }: ReviewTabProps) {
+export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageChange, onBack }: ReviewTabProps) {
   // State
   const [expandedPages, setExpandedPages] = useState<Set<number>>(new Set());
-  const [previewPage, setPreviewPage] = useState<number | null>(null);
+  const [previewPage, setPreviewPage] = useState<number | null>(currentPage ?? 1);
   const [activeStatusFilter, setActiveStatusFilter] = useState<string | null>(null);
   const [activeEntityFilter, setActiveEntityFilter] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -53,6 +65,22 @@ export function ReviewTab({ jobId, documentName, onBack }: ReviewTabProps) {
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [verificationPanelOpen, setVerificationPanelOpen] = useState(false);
   const [syntheticTable, setSyntheticTable] = useState<ExtractedTable | null>(null);
+
+  // History modal state
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // Entity overlay state
+  const [showEntityOverlays, setShowEntityOverlays] = useState(true);
+
+  // Entity action popover state
+  const [popoverEntity, setPopoverEntity] = useState<EntityOverlayInfo | null>(null);
+  const [popoverPosition, setPopoverPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Chat state
+  const [chatPrefill, setChatPrefill] = useState<string>('');
+  const [chatAutoSend, setChatAutoSend] = useState(false);
+  const [tableSelection, setTableSelection] = useState<SelectionData | null>(null);
+  const dispatch = useAppDispatch();
 
   // RTK Query
   const { data: treeData, isLoading: treeLoading, refetch: refetchTree } = useGetVerificationTreeQuery(jobId, {
@@ -79,6 +107,12 @@ export function ReviewTab({ jobId, documentName, onBack }: ReviewTabProps) {
   const [updateTableStatus, { isLoading: isUpdatingTable }] = useUpdateTableStatusMutation();
   const [fixAndAcceptTable] = useFixAndAcceptTableMutation();
 
+  // Verification history - only fetch when modal is open
+  const { data: historyData, isLoading: historyLoading } = useGetVerificationHistoryQuery(
+    { jobId, limit: 100 },
+    { skip: !jobId || !historyOpen }
+  );
+
   // Group entities by page
   const entitiesByPage = useMemo(() => {
     const map = new Map<number, Entity[]>();
@@ -91,6 +125,22 @@ export function ReviewTab({ jobId, documentName, onBack }: ReviewTabProps) {
     }
     return map;
   }, [entitiesData?.entities]);
+
+  // Convert entities to EntityOverlay format for PDFViewer
+  const entityOverlays: EntityOverlay[] = useMemo(() => {
+    if (!entitiesData?.entities) return [];
+    return entitiesData.entities.map((e) => ({
+      id: e.id,
+      type: e.type,
+      title: e.title,
+      bbox: e.bbox,
+      page: e.page,
+    }));
+  }, [entitiesData?.entities]);
+
+  // Page dimensions map - currently empty, relies on PDFViewer fallback
+  // TODO: Fetch from API when available
+  const pageDimensions = useMemo<Record<number, PDFPageDimension>>(() => ({}), []);
 
   // Filter pages based on active filters
   const filteredPages = useMemo(() => {
@@ -122,6 +172,17 @@ export function ReviewTab({ jobId, documentName, onBack }: ReviewTabProps) {
     return { percent, verified, total };
   }, [treeData]);
 
+  // Get current page info for verification control
+  const previewPageInfo = useMemo(() => {
+    if (!previewPage || !treeData?.pages) return null;
+    const pageData = treeData.pages.find((p) => p.page === previewPage);
+    return pageData ? {
+      resolution: pageData.resolution,
+      isStale: pageData.isStale,
+      status: pageData.status,
+    } : null;
+  }, [previewPage, treeData?.pages]);
+
   // Sync edited content when page content changes
   useEffect(() => {
     if (pageContent?.content && !isEditMode) {
@@ -145,7 +206,8 @@ export function ReviewTab({ jobId, documentName, onBack }: ReviewTabProps) {
   const handlePreviewPage = useCallback((pageNum: number) => {
     setPreviewPage(pageNum);
     setIsEditMode(false);
-  }, []);
+    onPageChange?.(pageNum);
+  }, [onPageChange]);
 
   const handleExpandAll = useCallback(() => {
     if (!filteredPages.length) return;
@@ -205,6 +267,70 @@ export function ReviewTab({ jobId, documentName, onBack }: ReviewTabProps) {
     setVerificationPanelOpen(true);
     setPreviewPage(entity.page);
   }, [tablesData?.tables]);
+
+  // Handle entity overlay click from PDFViewer - show popover
+  const handleOverlayEntityClick = useCallback((overlay: EntityOverlay, event: React.MouseEvent) => {
+    // Set popover entity info
+    setPopoverEntity({
+      id: overlay.id,
+      type: overlay.type,
+      title: overlay.title,
+      page: overlay.page,
+    });
+    setPopoverPosition({ x: event.clientX, y: event.clientY });
+  }, []);
+
+  // Handle popover close
+  const handlePopoverClose = useCallback(() => {
+    setPopoverEntity(null);
+  }, []);
+
+  // Handle popover action
+  const handlePopoverAction = useCallback((action: EntityAction, entity: EntityOverlayInfo) => {
+    // For tables with verify-schema, open verification panel
+    if (entity.type === 'table' && action.id === 'verify-schema') {
+      const fullEntity = entitiesData?.entities.find((e) => e.id === entity.id);
+      if (fullEntity) {
+        handleEntityClick(fullEntity);
+      }
+    } else {
+      // Build context message for the chat
+      const contextMessage = `[${entity.type.toUpperCase()}${entity.title ? `: ${entity.title}` : ''} on page ${entity.page}]\n\n${action.prompt}`;
+
+      // Set the context for the agent
+      dispatch(setContext({
+        jobId,
+        documentName,
+        currentPage: entity.page,
+        selectedEntityId: entity.id,
+        selectedEntityType: entity.type,
+      }));
+
+      // Set prefill and auto-send
+      setChatPrefill(contextMessage);
+      setChatAutoSend(action.autoSend);
+    }
+  }, [entitiesData?.entities, handleEntityClick, dispatch, jobId, documentName]);
+
+  // Handle chat with table selection
+  const handleChatWithSelection = useCallback((selection: SelectionData) => {
+    // Build a message with the selection
+    const label = `${selection.headers.slice(0, 3).join(', ')} p${previewPage}`;
+    const contextMessage = `[TABLE SELECTION: ${label}]\n\n${selection.asMarkdown}\n\nPlease analyze this table selection.`;
+
+    // Set the context for the agent
+    dispatch(setContext({
+      jobId,
+      documentName,
+      currentPage: previewPage ?? undefined,
+      tableMarkdown: selection.asMarkdown,
+    }));
+
+    // Set prefill and auto-send
+    setChatPrefill(contextMessage);
+    setChatAutoSend(true);
+    setTableSelection(selection);
+  }, [previewPage, dispatch, jobId, documentName]);
 
   const handleCloseVerificationPanel = useCallback(() => {
     setVerificationPanelOpen(false);
@@ -344,6 +470,12 @@ export function ReviewTab({ jobId, documentName, onBack }: ReviewTabProps) {
               {progress.verified}/{progress.total} pages ({progress.percent}%)
             </span>
           </div>
+          <button
+            onClick={() => setHistoryOpen(true)}
+            style={styles.historyButton}
+          >
+            🕐 History
+          </button>
         </div>
       </div>
 
@@ -398,26 +530,71 @@ export function ReviewTab({ jobId, documentName, onBack }: ReviewTabProps) {
           </div>
         </div>
 
-        {/* Middle panel - PDF preview placeholder */}
+        {/* Middle panel - PDF preview */}
         <div style={styles.middlePanel}>
           <div style={styles.panelHeader}>
-            <h2 style={styles.panelTitle}>PDF Preview</h2>
-            {previewPage && (
-              <span style={styles.pageIndicator}>Page {previewPage}</span>
-            )}
+            <div style={styles.panelHeaderLeft}>
+              {previewPage && previewPageInfo && (
+                <PageVerificationControl
+                  jobId={jobId}
+                  pageNum={previewPage}
+                  currentResolution={previewPageInfo.resolution}
+                  isStale={previewPageInfo.isStale}
+                  onResolved={refetchTree}
+                />
+              )}
+              <h2 style={styles.panelTitle}>Page {previewPage || '-'}</h2>
+              <button
+                onClick={() => setShowEntityOverlays((prev) => !prev)}
+                style={{
+                  ...styles.overlayToggle,
+                  backgroundColor: showEntityOverlays ? '#dbeafe' : 'transparent',
+                  color: showEntityOverlays ? '#2563eb' : '#64748b',
+                }}
+                title={showEntityOverlays ? 'Hide entity overlays' : 'Show entity overlays'}
+              >
+                {showEntityOverlays ? '◉' : '◯'} Layers
+              </button>
+            </div>
+            <div style={styles.panelActions}>
+              {previewPage && treeData && (
+                <>
+                  <button
+                    onClick={() => setPreviewPage((p) => Math.max(1, (p ?? 1) - 1))}
+                    disabled={previewPage <= 1}
+                    style={{...styles.navButton, opacity: previewPage <= 1 ? 0.5 : 1}}
+                  >
+                    ←
+                  </button>
+                  <span style={styles.pageIndicator}>
+                    {previewPage}/{treeData.totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPreviewPage((p) => Math.min(treeData.totalPages, (p ?? 1) + 1))}
+                    disabled={previewPage >= treeData.totalPages}
+                    style={{...styles.navButton, opacity: previewPage >= treeData.totalPages ? 0.5 : 1}}
+                  >
+                    →
+                  </button>
+                </>
+              )}
+            </div>
           </div>
           <div style={styles.pdfContainer}>
-            {previewPage ? (
-              <div style={styles.pdfPlaceholder}>
-                <div style={styles.pdfPlaceholderIcon}>📄</div>
-                <p style={styles.pdfPlaceholderText}>Page {previewPage}</p>
-                <p style={styles.pdfPlaceholderSubtext}>
-                  PDF preview will be integrated with PDFViewer component
-                </p>
-              </div>
+            {pdfPath ? (
+              <PDFViewer
+                pdfPath={pdfPath}
+                initialPage={previewPage ?? 1}
+                onPageChange={handlePreviewPage}
+                entities={entityOverlays}
+                showEntityOverlays={showEntityOverlays}
+                onEntityClick={handleOverlayEntityClick}
+                pageDimensions={pageDimensions}
+              />
             ) : (
               <div style={styles.pdfPlaceholder}>
-                <p style={styles.pdfPlaceholderText}>Select a page to preview</p>
+                <div style={styles.pdfPlaceholderIcon}>📄</div>
+                <p style={styles.pdfPlaceholderText}>Loading PDF...</p>
               </div>
             )}
           </div>
@@ -426,7 +603,15 @@ export function ReviewTab({ jobId, documentName, onBack }: ReviewTabProps) {
         {/* Right panel - Page content */}
         <div style={styles.rightPanel}>
           <div style={styles.panelHeader}>
-            <h2 style={styles.panelTitle}>Page Content</h2>
+            <div style={styles.panelHeaderLeft}>
+              <h2 style={styles.panelTitle}>Page Content</h2>
+              {pageContent?.version && pageContent.version > 1 && (
+                <span style={styles.versionBadge}>v{pageContent.version}</span>
+              )}
+              {isEditMode && editedContent !== (pageContent?.content ?? '') && (
+                <span style={styles.editedBadge}>edited</span>
+              )}
+            </div>
             <div style={styles.panelActions}>
               {pageContent && !isEditMode && (
                 <button
@@ -470,7 +655,10 @@ export function ReviewTab({ jobId, documentName, onBack }: ReviewTabProps) {
                 />
               ) : (
                 <div style={styles.contentPreview}>
-                  <MarkdownContent content={pageContent.content} />
+                  <SelectableMarkdownRenderer
+                    content={pageContent.content}
+                    onChatWithSelection={handleChatWithSelection}
+                  />
                 </div>
               )
             ) : (
@@ -479,6 +667,14 @@ export function ReviewTab({ jobId, documentName, onBack }: ReviewTabProps) {
               </div>
             )}
           </div>
+          {/* Character count footer */}
+          {pageContent && (
+            <div style={styles.contentFooter}>
+              <span style={styles.charCount}>
+                {(isEditMode ? editedContent : pageContent.content).length.toLocaleString()} characters
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -503,6 +699,42 @@ export function ReviewTab({ jobId, documentName, onBack }: ReviewTabProps) {
           hasNext={tableQueue?.hasNext}
         />
       )}
+
+      {/* History Modal */}
+      <HistoryModal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        history={historyData?.history}
+        isLoading={historyLoading}
+      />
+
+      {/* Entity Action Popover */}
+      {popoverEntity && (
+        <EntityActionPopover
+          entity={popoverEntity}
+          position={popoverPosition}
+          onAction={handlePopoverAction}
+          onClose={handlePopoverClose}
+        />
+      )}
+
+      {/* Docked Chat */}
+      <DockedChat
+        context={{
+          jobId,
+          documentName,
+          currentPage: previewPage ?? undefined,
+        }}
+        prefill={chatPrefill}
+        autoSend={chatAutoSend}
+        onSave={(content) => {
+          // Save edited content to page
+          if (previewPage && content) {
+            savePageVersion({ jobId, pageNum: previewPage, content });
+          }
+        }}
+        isSaving={isSaving}
+      />
     </div>
   );
 }
@@ -662,9 +894,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
   leftPanel: {
     width: '280px',
+    minWidth: '200px',
+    maxWidth: '400px',
     borderRight: '1px solid #e2e8f0',
     display: 'flex',
     flexDirection: 'column',
+    resize: 'horizontal',
+    overflow: 'auto',
   },
   middlePanel: {
     flex: 1,
@@ -675,6 +911,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   rightPanel: {
     width: '350px',
+    minWidth: '280px',
+    maxWidth: '500px',
     display: 'flex',
     flexDirection: 'column',
   },
@@ -806,11 +1044,75 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '13px',
     lineHeight: 1.6,
   },
+  contentFooter: {
+    padding: '8px 12px',
+    borderTop: '1px solid #f1f5f9',
+    backgroundColor: '#f8fafc',
+  },
+  charCount: {
+    fontSize: '11px',
+    color: '#94a3b8',
+    fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+  },
   emptyState: {
     textAlign: 'center',
     padding: '24px',
     color: '#94a3b8',
     fontSize: '13px',
+  },
+  historyButton: {
+    padding: '6px 12px',
+    borderRadius: '6px',
+    border: '1px solid #e2e8f0',
+    backgroundColor: '#fff',
+    color: '#64748b',
+    cursor: 'pointer',
+    fontSize: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+  panelHeaderLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  navButton: {
+    padding: '4px 8px',
+    borderRadius: '4px',
+    border: '1px solid #e2e8f0',
+    backgroundColor: '#fff',
+    color: '#475569',
+    cursor: 'pointer',
+    fontSize: '12px',
+  },
+  versionBadge: {
+    fontSize: '10px',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    backgroundColor: '#dbeafe',
+    color: '#1d4ed8',
+    fontWeight: 500,
+  },
+  editedBadge: {
+    fontSize: '10px',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    backgroundColor: '#fef3c7',
+    color: '#b45309',
+    fontWeight: 500,
+  },
+  overlayToggle: {
+    padding: '4px 8px',
+    borderRadius: '4px',
+    border: '1px solid #e2e8f0',
+    cursor: 'pointer',
+    fontSize: '11px',
+    fontWeight: 500,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    transition: 'all 0.15s ease',
   },
 };
 
