@@ -135,17 +135,48 @@ function getStoredApiKey(): string | null {
   return store.get('anthropicApiKey') as string | null;
 }
 
-// Alpha default API key (for trusted testers only)
-const ALPHA_API_KEY = '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';
+// Proxy URL for users without their own API key
+// Routes through okrapdf.com which adds server's API key
+const CLAUDE_PROXY_URL = 'https://okrapdf.com/api/desktop/agent';
 
-// Load user's API key if previously saved (BYOK), fallback to alpha key
+// Load user's API key if previously saved (BYOK)
 const savedApiKey = getStoredApiKey();
 if (savedApiKey) {
   process.env.ANTHROPIC_API_KEY = savedApiKey;
-  console.error('[config] Loaded saved API key (encrypted:', safeStorage.isEncryptionAvailable(), ')');
+  console.error('[config] Loaded saved API key (BYOK, encrypted:', safeStorage.isEncryptionAvailable(), ')');
 } else {
-  process.env.ANTHROPIC_API_KEY = ALPHA_API_KEY;
-  console.error('[config] Using alpha API key');
+  // No BYOK key - will use proxy (requires okrapdf auth token)
+  console.error('[config] No BYOK key, will use proxy');
+}
+
+/**
+ * Get environment variables for Claude SDK
+ * - BYOK users: use their API key directly
+ * - Others: route through okrapdf proxy with auth token
+ */
+function getClaudeEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const userApiKey = getStoredApiKey();
+
+  if (userApiKey) {
+    // BYOK: use their key directly with Anthropic
+    return {
+      ...baseEnv,
+      ANTHROPIC_API_KEY: userApiKey,
+    };
+  }
+
+  // Proxy mode: route through okrapdf.com
+  // The proxy adds the API key server-side
+  if (!authToken) {
+    console.error('[config] WARNING: No auth token for proxy mode');
+  }
+
+  return {
+    ...baseEnv,
+    ANTHROPIC_BASE_URL: CLAUDE_PROXY_URL,
+    // Auth token as API key - proxy extracts userId from Bearer token
+    ANTHROPIC_API_KEY: authToken || 'missing-auth-token',
+  };
 }
 
 class AppUpdater {
@@ -759,7 +790,8 @@ ipcMain.on(
 Key files:
 - source.pdf - The original PDF document
 - tables/*.md - Extracted tables as markdown
-- ocr/*.md - OCR text per page
+- ocr/*.md - OCR text per page (flat)
+- derived/ocr/{jobId}/*.md - OCR text per page (namespaced)
 - metadata.json - Document metadata
 
 When answering questions, cite specific page numbers. Use the xlsx and pdf skills for file operations.
@@ -902,11 +934,13 @@ User query: `;
       // The resources dir contains: bun, node (symlink to bun), uv
       const uvPath = getBundledUvPath();
       const runtimeDir = app.isPackaged ? process.resourcesPath : path.join(__dirname, '../../resources');
-      const enhancedEnv = {
+      const baseEnv = {
         ...process.env,
         // Put bundled runtimes first in PATH so they take precedence
         PATH: `${runtimeDir}:${process.env.PATH || ''}`,
       };
+      // Add Claude API config (BYOK or proxy)
+      const enhancedEnv = getClaudeEnv(baseEnv);
 
       console.error(`[query] Using bun: ${bunPath}`);
       console.error(`[query] Using uv: ${uvPath || 'not found'}`);
@@ -1080,10 +1114,12 @@ ipcMain.on(
       }
 
       const runtimeDir = app.isPackaged ? process.resourcesPath : path.join(__dirname, '../../resources');
-      const enhancedEnv = {
+      const baseEnv = {
         ...process.env,
         PATH: `${runtimeDir}:${process.env.PATH || ''}`,
       };
+      // Add Claude API config (BYOK or proxy)
+      const enhancedEnv = getClaudeEnv(baseEnv);
 
       // Dynamic import for ESM-only SDK
       console.error('[review-agent] About to import SDK...');
