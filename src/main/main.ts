@@ -1202,8 +1202,11 @@ const createWindow = async () => {
   console.error('Creating main window...');
   mainWindow = new BrowserWindow({
     show: true, // show immediately for debugging
-    width: 1024,
-    height: 728,
+    width: 1280,
+    height: 800,
+    minWidth: 1024,   // Prevent cropping: sidebar(165) + pdf(450) + content(350) + margins
+    minHeight: 700,   // Prevent cropping: header(60) + content area
+    useContentSize: true, // Dimensions refer to web content, not window chrome
     // icon: getAssetPath('icon.png'), // temporarily disabled for debugging
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

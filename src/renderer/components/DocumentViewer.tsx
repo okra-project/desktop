@@ -143,11 +143,11 @@ export default function DocumentViewer({
       {/* Content - either Chat mode or Review mode */}
       {viewMode === 'chat' ? (
         /* Chat mode: Two-panel layout */
-        <div id="split-container" className="flex-1 flex overflow-hidden">
+        <div id="split-container" className="flex-1 flex overflow-hidden min-h-0">
           {/* Left: PDF Viewer */}
           <div
             className="h-full overflow-hidden border-r border-slate-200"
-            style={{ width: `${leftPanelWidth}%` }}
+            style={{ width: `${leftPanelWidth}%`, minWidth: '400px' }}
           >
             {pdfPath ? (
               <PDFViewer pdfPath={pdfPath} onPageChange={setCurrentPage} />
@@ -172,8 +172,8 @@ export default function DocumentViewer({
           />
 
           {/* Right: Chat Interface */}
-          <div className="flex-1 h-full overflow-hidden flex flex-col bg-white">
-            <div className="px-4 py-2 border-b border-slate-200 bg-slate-50">
+          <div className="flex-1 h-full overflow-hidden flex flex-col bg-white" style={{ minWidth: '350px' }}>
+            <div className="px-4 py-2 border-b border-slate-200 bg-slate-50 shrink-0">
               <h2 className="text-sm font-medium text-slate-700">Chat with your document</h2>
               <p className="text-xs text-slate-500">
                 Ask questions about the PDF content
@@ -184,7 +184,7 @@ export default function DocumentViewer({
         </div>
       ) : (
         /* Review mode: Full-width ReviewTab */
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden min-h-0">
           <ReviewTab
             jobId={documentUuid}
             documentName={documentName}

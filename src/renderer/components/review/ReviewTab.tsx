@@ -965,6 +965,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flex: 1,
     overflow: 'hidden',
+    minHeight: 0, // Required for flex children to shrink properly
   },
   leftPanel: {
     width: '280px',
@@ -981,14 +982,16 @@ const styles: Record<string, React.CSSProperties> = {
     borderRight: '1px solid #e2e8f0',
     display: 'flex',
     flexDirection: 'column',
-    minWidth: 0,
+    minWidth: '400px', // Prevent PDF panel from being too narrow
+    overflow: 'hidden',
   },
   rightPanel: {
     width: '350px',
-    minWidth: '280px',
+    minWidth: '300px', // Ensure content panel stays readable
     maxWidth: '500px',
     display: 'flex',
     flexDirection: 'column',
+    flexShrink: 0, // Don't shrink below minWidth
   },
   panelHeader: {
     display: 'flex',
@@ -1064,8 +1067,9 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'auto',
     backgroundColor: '#f1f5f9',
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start', // Start from top, not center (prevents vertical cropping)
     justifyContent: 'center',
+    minHeight: 0, // Required for flex children to scroll properly
   },
   pdfPlaceholder: {
     textAlign: 'center',
@@ -1089,6 +1093,7 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     overflow: 'auto',
     padding: '12px',
+    minHeight: 0, // Required for flex children to scroll properly
   },
   contentLoading: {
     color: '#64748b',

@@ -207,9 +207,9 @@ export default function PDFViewer({
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="flex flex-col h-full min-h-0 bg-slate-50">
       {/* Toolbar */}
-      <div className="px-3 py-2 border-b border-slate-200 bg-white flex items-center justify-between gap-2 shrink-0">
+      <div className="px-3 py-2 border-b border-slate-200 bg-white flex items-center justify-between gap-2 shrink-0 flex-none">
         {/* Page navigation */}
         <div className="text-xs font-mono text-slate-600 flex items-center gap-1">
           <button
@@ -265,7 +265,7 @@ export default function PDFViewer({
       {/* PDF Content */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto p-4 flex flex-col items-center"
+        className="flex-1 overflow-auto p-4 flex flex-col items-center min-h-0"
         onScroll={handleScroll}
       >
         <Document
