@@ -25,8 +25,9 @@ import {
   type ExtractedTable,
   type VerificationPageStatus,
 } from '../../store/desktopApi';
-import { PageNode, STATUS_CONFIG } from './TreeNodes';
-import { FilterChipsRow } from './FilterChips';
+import { PageNode, SimplePageNode, STATUS_CONFIG } from './TreeNodes';
+import { FilterChip } from './FilterChips';
+import { LayerMenu } from './LayerMenu';
 import { TableVerificationPanel } from './TableVerificationPanel';
 import { HistoryModal } from './HistoryModal';
 import { PageVerificationControl } from './PageVerificationControl';
@@ -69,8 +70,12 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
   // History modal state
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  // Entity overlay state
-  const [showEntityOverlays, setShowEntityOverlays] = useState(true);
+  // Entity overlay state - now with per-layer visibility
+  const [visibleLayers, setVisibleLayers] = useState<Set<string>>(new Set(['table', 'figure', 'footnote']));
+  const [layerMenuOpen, setLayerMenuOpen] = useState(false);
+
+  // Sidebar collapsed state (web-style 165px collapsible)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Entity action popover state
   const [popoverEntity, setPopoverEntity] = useState<EntityOverlayInfo | null>(null);
@@ -126,17 +131,32 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
     return map;
   }, [entitiesData?.entities]);
 
-  // Convert entities to EntityOverlay format for PDFViewer
+  // Convert entities to EntityOverlay format for PDFViewer (filtered by visible layers)
   const entityOverlays: EntityOverlay[] = useMemo(() => {
     if (!entitiesData?.entities) return [];
-    return entitiesData.entities.map((e) => ({
-      id: e.id,
-      type: e.type,
-      title: e.title,
-      bbox: e.bbox,
-      page: e.page,
-    }));
-  }, [entitiesData?.entities]);
+    return entitiesData.entities
+      .filter((e) => visibleLayers.has(e.type))
+      .map((e) => ({
+        id: e.id,
+        type: e.type,
+        title: e.title,
+        bbox: e.bbox,
+        page: e.page,
+      }));
+  }, [entitiesData?.entities, visibleLayers]);
+
+  // Toggle layer visibility
+  const handleToggleLayer = useCallback((layer: string) => {
+    setVisibleLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(layer)) {
+        next.delete(layer);
+      } else {
+        next.add(layer);
+      }
+      return next;
+    });
+  }, []);
 
   // Page dimensions map - currently empty, relies on PDFViewer fallback
   // TODO: Fetch from API when available
@@ -479,56 +499,102 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
         </div>
       </div>
 
-      {/* Filter chips */}
-      {treeData && entitiesData && (
-        <div style={styles.filtersContainer}>
-          <FilterChipsRow
-            summary={treeData.summary}
-            entityCounts={entitiesData.counts}
-            activeStatusFilter={activeStatusFilter}
-            activeEntityFilter={activeEntityFilter}
-            onStatusFilterChange={setActiveStatusFilter}
-            onEntityFilterChange={setActiveEntityFilter}
-          />
-        </div>
-      )}
-
       {/* Main content - three panels */}
       <div style={styles.content}>
-        {/* Left panel - Document tree */}
-        <div style={styles.leftPanel}>
-          <div style={styles.panelHeader}>
-            <h2 style={styles.panelTitle}>Pages</h2>
-            <div style={styles.panelActions}>
-              <button onClick={handleExpandAll} style={styles.iconButton} title="Expand all">
-                ⊞
-              </button>
-              <button onClick={handleCollapseAll} style={styles.iconButton} title="Collapse all">
-                ⊟
-              </button>
-            </div>
+        {/* Left panel - Document tree (web-style collapsible 165px) */}
+        <div
+          style={{
+            ...styles.leftPanelCollapsible,
+            width: sidebarCollapsed ? 0 : 165,
+            overflow: sidebarCollapsed ? 'hidden' : 'visible',
+          }}
+        >
+          {/* Filter chips in sidebar header */}
+          <div style={styles.sidebarFilterRow}>
+            {entitiesData && (
+              <>
+                <FilterChip
+                  label=""
+                  icon="▤"
+                  count={entitiesData.counts.tables}
+                  active={activeEntityFilter === 'table'}
+                  onClick={() => setActiveEntityFilter(activeEntityFilter === 'table' ? null : 'table')}
+                />
+                <FilterChip
+                  label=""
+                  icon="▣"
+                  count={entitiesData.counts.figures}
+                  active={activeEntityFilter === 'figure'}
+                  onClick={() => setActiveEntityFilter(activeEntityFilter === 'figure' ? null : 'figure')}
+                />
+                <FilterChip
+                  label=""
+                  icon="†"
+                  count={entitiesData.counts.footnotes}
+                  active={activeEntityFilter === 'footnote'}
+                  onClick={() => setActiveEntityFilter(activeEntityFilter === 'footnote' ? null : 'footnote')}
+                />
+                {(activeStatusFilter || activeEntityFilter) && (
+                  <button
+                    onClick={() => { setActiveStatusFilter(null); setActiveEntityFilter(null); }}
+                    style={styles.clearFilterButton}
+                    title="Clear filters"
+                  >
+                    ✕
+                  </button>
+                )}
+              </>
+            )}
           </div>
-          <div style={styles.treeContainer}>
-            {filteredPages.map((page) => (
-              <PageNode
-                key={page.page}
-                jobId={jobId}
-                page={page}
-                entities={entitiesByPage.get(page.page) ?? []}
-                expanded={expandedPages.has(page.page)}
-                onToggle={() => handleTogglePage(page.page)}
-                onPreview={() => handlePreviewPage(page.page)}
-                isPreviewActive={previewPage === page.page}
-                onEntityClick={handleEntityClick}
-              />
-            ))}
-            {filteredPages.length === 0 && (
-              <div style={styles.emptyState}>
-                No pages match the current filters
+          {/* Page tree (scrollbar on hover) */}
+          <div style={styles.treeContainerScrollable}>
+            {treeLoading ? (
+              <div style={styles.skeletonContainer}>
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} style={styles.skeletonRow} />
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {treeData?.pages.map((page) => {
+                  const pageEntities = entitiesByPage.get(page.page) ?? [];
+                  const entityCounts = {
+                    tables: pageEntities.filter((e) => e.type === 'table').length,
+                    figures: pageEntities.filter((e) => e.type === 'figure').length,
+                    footnotes: pageEntities.filter((e) => e.type === 'footnote').length,
+                  };
+                  const isFilteredOut = Boolean(
+                    (activeStatusFilter && page.status !== activeStatusFilter) ||
+                    (activeEntityFilter && !pageEntities.some((e) => e.type === activeEntityFilter))
+                  );
+
+                  return (
+                    <SimplePageNode
+                      key={page.page}
+                      page={page}
+                      entityCounts={entityCounts}
+                      onPreview={() => handlePreviewPage(page.page)}
+                      isPreviewActive={previewPage === page.page}
+                      isFilteredOut={isFilteredOut}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
+
+        {/* Toggle sidebar button */}
+        <button
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          style={{
+            ...styles.sidebarToggle,
+            left: sidebarCollapsed ? 0 : 165,
+          }}
+          title={sidebarCollapsed ? 'Show pages' : 'Hide pages'}
+        >
+          {sidebarCollapsed ? '▶' : '◀'}
+        </button>
 
         {/* Middle panel - PDF preview */}
         <div style={styles.middlePanel}>
@@ -544,19 +610,14 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
                 />
               )}
               <h2 style={styles.panelTitle}>Page {previewPage || '-'}</h2>
-              <button
-                onClick={() => setShowEntityOverlays((prev) => !prev)}
-                style={{
-                  ...styles.overlayToggle,
-                  backgroundColor: showEntityOverlays ? '#dbeafe' : 'transparent',
-                  color: showEntityOverlays ? '#2563eb' : '#64748b',
-                }}
-                title={showEntityOverlays ? 'Hide entity overlays' : 'Show entity overlays'}
-              >
-                {showEntityOverlays ? '◉' : '◯'} Layers
-              </button>
             </div>
             <div style={styles.panelActions}>
+              <LayerMenu
+                open={layerMenuOpen}
+                onOpenChange={setLayerMenuOpen}
+                visibleLayers={visibleLayers}
+                onToggleLayer={handleToggleLayer}
+              />
               {previewPage && treeData && (
                 <>
                   <button
@@ -587,7 +648,7 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
                 initialPage={previewPage ?? 1}
                 onPageChange={handlePreviewPage}
                 entities={entityOverlays}
-                showEntityOverlays={showEntityOverlays}
+                showEntityOverlays={visibleLayers.size > 0}
                 onEntityClick={handleOverlayEntityClick}
                 pageDimensions={pageDimensions}
               />
@@ -604,7 +665,6 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
         <div style={styles.rightPanel}>
           <div style={styles.panelHeader}>
             <div style={styles.panelHeaderLeft}>
-              <h2 style={styles.panelTitle}>Page Content</h2>
               {pageContent?.version && pageContent.version > 1 && (
                 <span style={styles.versionBadge}>v{pageContent.version}</span>
               )}
@@ -613,68 +673,82 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
               )}
             </div>
             <div style={styles.panelActions}>
-              {pageContent && !isEditMode && (
+              <span style={styles.charCountSmall}>
+                {pageContent?.content ? `${pageContent.content.length.toLocaleString()} chars` : ''}
+              </span>
+              {/* Save button when edited */}
+              {isEditMode && editedContent !== (pageContent?.content ?? '') && (
                 <button
-                  onClick={() => setIsEditMode(true)}
-                  style={styles.editButton}
+                  onClick={handleSaveContent}
+                  disabled={isSaving}
+                  style={styles.saveButtonCompact}
                 >
-                  ✎ Edit
+                  {isSaving ? '⏳' : '💾'} Save
                 </button>
               )}
-              {isEditMode && (
-                <>
-                  <button
-                    onClick={() => {
-                      setIsEditMode(false);
-                      setEditedContent(pageContent?.content ?? '');
-                    }}
-                    style={styles.cancelButton}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveContent}
-                    disabled={isSaving}
-                    style={styles.saveButton}
-                  >
-                    {isSaving ? '⏳ Saving...' : '✓ Save'}
-                  </button>
-                </>
-              )}
+              {/* Eye/Code toggle (web-style) */}
+              <div style={styles.modeToggleGroup}>
+                <button
+                  onClick={() => setIsEditMode(false)}
+                  style={{
+                    ...styles.modeToggleButton,
+                    ...(isEditMode ? {} : styles.modeToggleButtonActive),
+                  }}
+                  title="Preview"
+                >
+                  👁
+                </button>
+                <button
+                  onClick={() => setIsEditMode(true)}
+                  style={{
+                    ...styles.modeToggleButton,
+                    ...(isEditMode ? styles.modeToggleButtonActive : {}),
+                  }}
+                  title="Edit"
+                >
+                  ⌨
+                </button>
+              </div>
             </div>
           </div>
           <div style={styles.contentContainer}>
-            {contentLoading ? (
-              <div style={styles.contentLoading}>Loading content...</div>
-            ) : previewPage && pageContent ? (
-              isEditMode ? (
-                <textarea
-                  value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
-                  style={styles.contentEditor}
-                />
-              ) : (
-                <div style={styles.contentPreview}>
-                  <SelectableMarkdownRenderer
-                    content={pageContent.content}
-                    onChatWithSelection={handleChatWithSelection}
+            {(() => {
+              // Loading skeleton when fetching and no content yet
+              if (contentLoading && !pageContent) {
+                return (
+                  <div style={styles.skeletonContent}>
+                    <div style={{ ...styles.skeletonLine, width: '75%' }} />
+                    <div style={{ ...styles.skeletonLine, width: '100%' }} />
+                    <div style={{ ...styles.skeletonLine, width: '85%' }} />
+                    <div style={{ ...styles.skeletonLine, width: '65%' }} />
+                  </div>
+                );
+              }
+              // Content available
+              if (previewPage && pageContent) {
+                return isEditMode ? (
+                  <textarea
+                    value={editedContent}
+                    onChange={(e) => setEditedContent(e.target.value)}
+                    style={styles.contentEditor}
                   />
+                ) : (
+                  <div style={styles.contentPreview}>
+                    <SelectableMarkdownRenderer
+                      content={pageContent.content}
+                      onChatWithSelection={handleChatWithSelection}
+                    />
+                  </div>
+                );
+              }
+              // No content
+              return (
+                <div style={styles.contentPlaceholder}>
+                  No content available
                 </div>
-              )
-            ) : (
-              <div style={styles.contentPlaceholder}>
-                Select a page to view its content
-              </div>
-            )}
+              );
+            })()}
           </div>
-          {/* Character count footer */}
-          {pageContent && (
-            <div style={styles.contentFooter}>
-              <span style={styles.charCount}>
-                {(isEditMode ? editedContent : pageContent.content).length.toLocaleString()} characters
-              </span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1113,6 +1187,121 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '4px',
     transition: 'all 0.15s ease',
+  },
+  // Web-style collapsible sidebar (165px fixed width)
+  leftPanelCollapsible: {
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+    borderRight: '1px solid #e2e8f0',
+    backgroundColor: '#fff',
+    transition: 'width 0.2s ease',
+    flexShrink: 0,
+  },
+  sidebarFilterRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '4px',
+    padding: '8px',
+    borderBottom: '1px solid #e2e8f0',
+  },
+  clearFilterButton: {
+    padding: '4px',
+    borderRadius: '4px',
+    border: 'none',
+    backgroundColor: 'transparent',
+    color: '#94a3b8',
+    cursor: 'pointer',
+    fontSize: '10px',
+  },
+  treeContainerScrollable: {
+    flex: 1,
+    overflow: 'auto',
+    padding: '4px',
+    // Scrollbar on hover pattern would need CSS pseudo-elements
+  },
+  sidebarToggle: {
+    position: 'absolute' as const,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    zIndex: 20,
+    padding: '4px',
+    backgroundColor: '#fff',
+    border: '1px solid #e2e8f0',
+    borderRadius: '0 4px 4px 0',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+    cursor: 'pointer',
+    color: '#64748b',
+    fontSize: '10px',
+    transition: 'left 0.2s ease',
+  },
+  // Skeleton loading
+  skeletonContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+  },
+  skeletonRow: {
+    height: '28px',
+    backgroundColor: '#f1f5f9',
+    borderRadius: '4px',
+    animation: 'pulse 1.5s ease-in-out infinite',
+  },
+  skeletonContent: {
+    padding: '16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  skeletonLine: {
+    height: '16px',
+    backgroundColor: '#f1f5f9',
+    borderRadius: '4px',
+    animation: 'pulse 1.5s ease-in-out infinite',
+  },
+  // Eye/Code toggle (web-style)
+  modeToggleGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '2px',
+    backgroundColor: '#f1f5f9',
+    borderRadius: '6px',
+    padding: '2px',
+  },
+  modeToggleButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '4px 6px',
+    fontSize: '11px',
+    borderRadius: '4px',
+    border: 'none',
+    backgroundColor: 'transparent',
+    color: '#64748b',
+    cursor: 'pointer',
+    transition: 'all 0.1s',
+  },
+  modeToggleButtonActive: {
+    backgroundColor: '#fff',
+    color: '#334155',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+  },
+  saveButtonCompact: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '4px 8px',
+    borderRadius: '4px',
+    border: 'none',
+    backgroundColor: '#2563eb',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: '11px',
+    fontWeight: 500,
+  },
+  charCountSmall: {
+    fontSize: '11px',
+    color: '#94a3b8',
   },
 };
 

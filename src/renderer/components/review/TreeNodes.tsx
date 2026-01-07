@@ -3,6 +3,11 @@
  *
  * Displays hierarchical page/entity tree with status indicators.
  * Adapted from okrapdf/components/review/TreeNodes.tsx for desktop.
+ *
+ * Updated to match web's simplified PageNode pattern (Jan 2026):
+ * - Compact: status icon + page number + inline entity counts
+ * - No expand/collapse (flat list)
+ * - Left-aligned entity counts
  */
 
 import React from 'react';
@@ -40,6 +45,11 @@ const ENTITY_COLORS: Record<string, string> = {
   summary: '#64748b',
   paragraph: '#475569',
 };
+
+// Page resolution choices (matching web)
+const PageResolutionChoices = {
+  REVIEWED: 'reviewed',
+} as const;
 
 // ============================================================================
 // Page Node Component
@@ -295,6 +305,103 @@ export function EntityNode({ entity, onClick }: EntityNodeProps) {
       {isClickable && (
         <span style={{ color: '#94a3b8', fontSize: '10px', marginTop: '2px', flexShrink: 0 }}>
           click to verify
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Simple Page Node Component (Web-style compact)
+// ============================================================================
+
+export interface SimplePageNodeProps {
+  page: {
+    page: number;
+    status: VerificationPageStatus;
+    resolution: string | null;
+  };
+  entityCounts?: { tables: number; figures: number; footnotes: number };
+  onPreview?: () => void;
+  isPreviewActive?: boolean;
+  isFilteredOut?: boolean;
+}
+
+/**
+ * Simplified page node matching web pattern:
+ * - CheckCircle (verified) or Circle (pending) icon
+ * - Page number
+ * - Inline entity counts with icons
+ */
+export function SimplePageNode({
+  page,
+  entityCounts,
+  onPreview,
+  isPreviewActive,
+  isFilteredOut,
+}: SimplePageNodeProps) {
+  const isVerified = page.resolution === PageResolutionChoices.REVIEWED;
+  const hasEntities = entityCounts && (
+    entityCounts.tables > 0 || entityCounts.figures > 0 || entityCounts.footnotes > 0
+  );
+
+  return (
+    <div
+      onClick={onPreview}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '4px 6px',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        backgroundColor: isPreviewActive ? '#eff6ff' : 'transparent',
+        opacity: isFilteredOut ? 0.3 : 1,
+        overflow: 'hidden',
+        whiteSpace: 'nowrap',
+        transition: 'background-color 0.1s',
+      }}
+      onMouseEnter={(e) => {
+        if (!isPreviewActive) e.currentTarget.style.backgroundColor = '#f1f5f9';
+      }}
+      onMouseLeave={(e) => {
+        if (!isPreviewActive) e.currentTarget.style.backgroundColor = 'transparent';
+      }}
+    >
+      {/* Status icon */}
+      <span
+        style={{
+          fontSize: '14px',
+          color: isVerified ? '#10b981' : '#cbd5e1',
+          flexShrink: 0,
+        }}
+      >
+        {isVerified ? '✓' : '○'}
+      </span>
+
+      {/* Page number */}
+      <span style={{ fontSize: '12px', color: '#475569', flexShrink: 0 }}>
+        {page.page}
+      </span>
+
+      {/* Entity counts - inline */}
+      {hasEntities && (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8', flexShrink: 0 }}>
+          {entityCounts.tables > 0 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontSize: '10px' }}>
+              <span style={{ color: '#9333ea' }}>▤</span>{entityCounts.tables}
+            </span>
+          )}
+          {entityCounts.figures > 0 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontSize: '10px' }}>
+              <span style={{ color: '#0891b2' }}>▣</span>{entityCounts.figures}
+            </span>
+          )}
+          {entityCounts.footnotes > 0 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontSize: '10px' }}>
+              <span style={{ color: '#d97706' }}>†</span>{entityCounts.footnotes}
+            </span>
+          )}
         </span>
       )}
     </div>

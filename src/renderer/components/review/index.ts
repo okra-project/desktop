@@ -3,7 +3,8 @@
  */
 
 export { ReviewTab } from './ReviewTab';
-export { PageNode, EntityNode, STATUS_CONFIG } from './TreeNodes';
+export { PageNode, EntityNode, SimplePageNode, STATUS_CONFIG } from './TreeNodes';
+export { LayerMenu } from './LayerMenu';
 export { FilterChipsRow, FilterBadge, EntityFilterBadge, FilterChip } from './FilterChips';
 export { TableVerificationPanel } from './TableVerificationPanel';
 export { HistoryModal } from './HistoryModal';
@@ -14,7 +15,8 @@ export { SelectableMarkdownRenderer } from './SelectableMarkdownRenderer';
 
 // Types
 export type { ReviewTabProps } from './ReviewTab';
-export type { PageNodeProps, EntityNodeProps } from './TreeNodes';
+export type { PageNodeProps, EntityNodeProps, SimplePageNodeProps } from './TreeNodes';
+export type { LayerMenuProps } from './LayerMenu';
 export type { FilterChipsRowProps, FilterBadgeProps, EntityFilterBadgeProps, FilterChipProps, FilterColor } from './FilterChips';
 export type { TableVerificationPanelProps } from './TableVerificationPanel';
 export type { HistoryModalProps } from './HistoryModal';
