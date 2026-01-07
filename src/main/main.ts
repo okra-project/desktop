@@ -20,6 +20,7 @@ import { execSync, spawn } from 'child_process';
 import { initializeAPIConfig, API_CONFIG } from '../config/api-config';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
+import { setupVerificationIpcHandlers, cleanupVerificationIpcHandlers } from './verification/ipc-handlers';
 
 // Fix PATH for Electron - GUI apps don't inherit shell PATH
 // This is required for spawning node/claude processes
@@ -677,6 +678,9 @@ const createWindow = async () => {
  */
 
 app.on('window-all-closed', () => {
+  // Clean up verification handlers
+  cleanupVerificationIpcHandlers();
+
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
   if (process.platform !== 'darwin') {
@@ -688,6 +692,10 @@ app
   .whenReady()
   .then(() => {
     console.log('App ready, creating window...');
+
+    // Set up verification system IPC handlers
+    setupVerificationIpcHandlers();
+
     createWindow();
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the

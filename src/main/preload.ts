@@ -22,7 +22,29 @@ export type Channels =
   | 'settings:set-api-key'
   | 'settings:get-api-key'
   | 'settings:clear-api-key'
-  | 'claude:check-status';
+  | 'claude:check-status'
+  // Verification system channels
+  | 'verification:start-session'
+  | 'verification:pause-session'
+  | 'verification:resume-session'
+  | 'verification:end-session'
+  | 'verification:get-session'
+  | 'verification:list-sessions'
+  | 'verification:permission-request'
+  | 'verification:permission-response'
+  | 'verification:event'
+  | 'verification:ghost-show'
+  | 'verification:ghost-hide'
+  | 'verification:navigate'
+  | 'verification:page-status'
+  | 'verification:edit-extraction'
+  | 'verification:add-annotation'
+  | 'verification:agent-thinking'
+  | 'verification:rrweb-event'
+  | 'verification:state-changed'
+  | 'verification:get-events'
+  | 'verification:get-events-since'
+  | 'verification:execute-action';
 
 const electronHandler = {
   ipcRenderer: {
