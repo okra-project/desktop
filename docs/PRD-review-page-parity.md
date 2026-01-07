@@ -1,5 +1,7 @@
 # PRD: Review Page Parity - okrapdf-desktop
 
+**Status**: ✅ COMPLETE (Jan 7, 2026)
+
 ## Overview
 
 Port recent web review page improvements (last 24h) from `okrapdf` to `okrapdf-desktop` to maintain feature parity.
@@ -84,3 +86,20 @@ Key changes to port:
 - VirtualPdfScroller (desktop uses different PDF viewer)
 - ResizeObserver/layoutVersion (not needed without react-resizable-panels)
 - Verification toggle (web-specific feature flag)
+
+## Backend API Fixes (Jan 7, 2026)
+
+Fixed desktop API routes in okrapdf to use correct database schema:
+
+| Route | Issue | Fix |
+|-------|-------|-----|
+| `/api/desktop/ocr/jobs/[jobId]/verification-tree` | `document_id` column doesn't exist | Changed to `document_uuid` |
+| `/api/desktop/ocr/jobs/[jobId]/verification-tree` | `page_extractions` table doesn't exist | Changed to `ocr_pages` |
+| `/api/desktop/ocr/jobs/[jobId]/entities` | `table_title`, `column_names` columns don't exist | Removed, use `bbox_*` columns |
+| `/api/desktop/ocr/jobs/[jobId]/tables` | `markdown` column doesn't exist | Changed to `content_markdown` |
+| `/api/desktop/ocr/jobs/[jobId]/tables` | `bbox` single column doesn't exist | Changed to `bbox_xmin/ymin/xmax/ymax` |
+| `/api/desktop/ocr/jobs/[jobId]/pages` | `page_extractions` table doesn't exist | Changed to `ocr_pages` |
+| `/api/desktop/ocr/jobs/[jobId]/pages/[pageNum]` | `page_extractions` table doesn't exist | Changed to `ocr_pages` |
+| `/api/desktop/ocr/jobs/[jobId]/pages/[pageNum]/resolve` | `page_extractions` update not needed | Resolution stored only in `entity_state_history` |
+
+Commit: `2837451` in okrapdf repo
