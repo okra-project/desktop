@@ -211,9 +211,18 @@
       "entitlementsInherit": "assets/entitlements.mac.plist",
       "gatekeeperAssess": false,
       "extraResources": [
-        { "from": "resources/bun", "to": "bun" },
-        { "from": "resources/node", "to": "node" },
-        { "from": "resources/uv", "to": "uv" }
+        {
+          "from": "resources/bun",
+          "to": "bun"
+        },
+        {
+          "from": "resources/node",
+          "to": "node"
+        },
+        {
+          "from": "resources/uv",
+          "to": "uv"
+        }
       ]
     },
     "dmg": {
@@ -233,6 +242,28 @@
     "win": {
       "target": [
         "nsis"
+      ],
+      "extraResources": [
+        {
+          "from": "resources/bun.exe",
+          "to": "bun.exe"
+        },
+        {
+          "from": "resources/uv.exe",
+          "to": "uv.exe"
+        },
+        {
+          "from": "resources/jq.exe",
+          "to": "jq.exe"
+        },
+        {
+          "from": "resources/git-portable",
+          "to": "git-portable"
+        },
+        {
+          "from": "resources/msys2",
+          "to": "msys2"
+        }
       ]
     },
     "linux": {
@@ -252,6 +283,13 @@
     "publish": {
       "provider": "generic",
       "url": "https://okrapdf.com/downloads"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "deleteAppDataOnUninstall": false
     }
   },
   "collective": {
