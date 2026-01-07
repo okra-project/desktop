@@ -30,10 +30,12 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --ignore-scripts
 
       - name: Install app dependencies
-        run: cd release/app && npm ci
+        run: |
+          cd release/app && npm install
+          cd ../.. && npm run build:dll
 
       - name: Determine version
         id: version
