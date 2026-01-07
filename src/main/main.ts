@@ -102,11 +102,23 @@ const store = new Store({
 // OkraPDF API configuration
 const OKRAPDF_API_BASE = API_CONFIG.OKRAPDF_API_BASE;
 
+// Default workspace directory (accessible to user for collaboration)
+const DEFAULT_WORKSPACE = path.join(app.getPath('desktop'), 'okrapdf');
+
+// Ensure default workspace exists on first launch
+if (!fs.existsSync(DEFAULT_WORKSPACE)) {
+  fs.mkdirSync(DEFAULT_WORKSPACE, { recursive: true });
+  console.error(`[workspace] Created default workspace at ${DEFAULT_WORKSPACE}`);
+}
+
 // Load persisted auth token
 let authToken: string | null = store.get('okrapdfToken') as string | null;
 
-// Current workspace path (set when bootstrapping from OkraPDF)
+// Current workspace path (defaults to ~/Desktop/okrapdf)
 let currentWorkspacePath: string | null = store.get('lastWorkspacePath') as string | null;
+if (!currentWorkspacePath) {
+  currentWorkspacePath = DEFAULT_WORKSPACE;
+}
 
 // Helper to get decrypted API key (safeStorage like Dyad)
 function getStoredApiKey(): string | null {
@@ -123,11 +135,17 @@ function getStoredApiKey(): string | null {
   return store.get('anthropicApiKey') as string | null;
 }
 
-// Load user's API key if previously saved (BYOK)
+// Alpha default API key (for trusted testers only)
+const ALPHA_API_KEY = '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';
+
+// Load user's API key if previously saved (BYOK), fallback to alpha key
 const savedApiKey = getStoredApiKey();
 if (savedApiKey) {
   process.env.ANTHROPIC_API_KEY = savedApiKey;
-  console.log('[config] Loaded saved API key (encrypted:', safeStorage.isEncryptionAvailable(), ')');
+  console.error('[config] Loaded saved API key (encrypted:', safeStorage.isEncryptionAvailable(), ')');
+} else {
+  process.env.ANTHROPIC_API_KEY = ALPHA_API_KEY;
+  console.error('[config] Using alpha API key');
 }
 
 class AppUpdater {
@@ -142,7 +160,7 @@ let mainWindow: BrowserWindow | null = null;
 
 ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
-  console.log(msgTemplate(arg));
+  console.error(msgTemplate(arg));
   event.reply('ipc-example', msgTemplate('pong'));
 });
 
@@ -228,7 +246,7 @@ ipcMain.handle(
       };
 
       fs.writeFileSync(filePath, JSON.stringify(sessionData, null, 2));
-      console.log(`[recorder] Session saved to ${filePath}`);
+      console.error(`[recorder] Session saved to ${filePath}`);
 
       return { success: true, path: filePath };
     } catch (error) {
@@ -281,7 +299,7 @@ ipcMain.handle(
       };
 
       fs.writeFileSync(filePath, JSON.stringify(trajectoryData, null, 2));
-      console.log(`[trajectory] Saved to ${filePath}`);
+      console.error(`[trajectory] Saved to ${filePath}`);
 
       return { success: true, path: filePath, fileName };
     } catch (error) {
@@ -305,7 +323,7 @@ ipcMain.handle('trajectory:load', async (_event, fileName: string) => {
     const content = fs.readFileSync(filePath, 'utf-8');
     const data = JSON.parse(content);
 
-    console.log(`[trajectory] Loaded ${filePath}, ${data.eventCount} events`);
+    console.error(`[trajectory] Loaded ${filePath}, ${data.eventCount} events`);
 
     return { success: true, data };
   } catch (error) {
@@ -362,7 +380,7 @@ ipcMain.handle('trajectory:list', async () => {
 ipcMain.handle('auth:set-token', async (_event, token: string) => {
   authToken = token;
   store.set('okrapdfToken', token);
-  console.log('[auth] Token set and persisted');
+  console.error('[auth] Token set and persisted');
   return { success: true };
 });
 
@@ -373,7 +391,7 @@ ipcMain.handle('auth:get-token', async () => {
 ipcMain.handle('auth:clear-token', async () => {
   authToken = null;
   store.delete('okrapdfToken');
-  console.log('[auth] Token cleared');
+  console.error('[auth] Token cleared');
   return { success: true };
 });
 
@@ -388,7 +406,7 @@ ipcMain.handle('settings:set-api-key', async (_event, apiKey: string) => {
     store.set('anthropicApiKey', apiKey);
   }
   process.env.ANTHROPIC_API_KEY = apiKey;
-  console.log('[settings] User API key set (encrypted:', safeStorage.isEncryptionAvailable(), ')');
+  console.error('[settings] User API key set (encrypted:', safeStorage.isEncryptionAvailable(), ')');
   return { success: true };
 });
 
@@ -401,7 +419,7 @@ ipcMain.handle('settings:clear-api-key', async () => {
   store.delete('anthropicApiKey');
   store.delete('anthropicApiKeyEncrypted');
   delete process.env.ANTHROPIC_API_KEY;
-  console.log('[settings] User API key cleared');
+  console.error('[settings] User API key cleared');
   return { success: true };
 });
 
@@ -493,7 +511,7 @@ ipcMain.handle(
     }
 
     try {
-      console.log(`[workspace] Bootstrapping ${documentUuid}...`);
+      console.error(`[workspace] Bootstrapping ${documentUuid}...`);
 
       // Create workspace directory in user's home
       const workspacesDir = path.join(app.getPath('home'), '.okrapdf', 'workspaces');
@@ -506,9 +524,9 @@ ipcMain.handle(
       fs.mkdirSync(workspaceDir, { recursive: true });
 
       // Download bootstrap zip from OkraPDF
-      console.log(`[workspace] Downloading bootstrap zip...`);
-      console.log(`[workspace] URL: ${OKRAPDF_API_BASE}/api/desktop/bootstrap/${documentUuid}`);
-      console.log(`[workspace] Token prefix: ${authToken?.substring(0, 20)}...`);
+      console.error(`[workspace] Downloading bootstrap zip...`);
+      console.error(`[workspace] URL: ${OKRAPDF_API_BASE}/api/desktop/bootstrap/${documentUuid}`);
+      console.error(`[workspace] Token prefix: ${authToken?.substring(0, 20)}...`);
       const response = await fetch(
         `${OKRAPDF_API_BASE}/api/desktop/bootstrap/${documentUuid}`,
         {
@@ -530,7 +548,7 @@ ipcMain.handle(
       fs.writeFileSync(zipPath, Buffer.from(zipBuffer));
 
       // Extract zip using system unzip (cross-platform)
-      console.log(`[workspace] Extracting zip...`);
+      console.error(`[workspace] Extracting zip...`);
       try {
         if (process.platform === 'win32') {
           execSync(`powershell -command "Expand-Archive -Path '${zipPath}' -DestinationPath '${workspaceDir}' -Force"`, {
@@ -551,7 +569,7 @@ ipcMain.handle(
       fs.unlinkSync(zipPath);
 
       // Download source PDF
-      console.log(`[workspace] Downloading source PDF...`);
+      console.error(`[workspace] Downloading source PDF...`);
       try {
         const pdfResponse = await fetch(
           `${OKRAPDF_API_BASE}/api/desktop/pdf/${documentUuid}`,
@@ -566,7 +584,7 @@ ipcMain.handle(
           const pdfBuffer = await pdfResponse.arrayBuffer();
           const pdfPath = path.join(workspaceDir, 'source.pdf');
           fs.writeFileSync(pdfPath, Buffer.from(pdfBuffer));
-          console.log(`[workspace] PDF saved to ${pdfPath}`);
+          console.error(`[workspace] PDF saved to ${pdfPath}`);
         } else {
           console.warn(`[workspace] Could not download PDF: ${pdfResponse.status}`);
         }
@@ -577,7 +595,7 @@ ipcMain.handle(
 
       currentWorkspacePath = workspaceDir;
       store.set('lastWorkspacePath', workspaceDir);
-      console.log(`[workspace] Ready at ${workspaceDir}`);
+      console.error(`[workspace] Ready at ${workspaceDir}`);
 
       return {
         success: true,
@@ -626,10 +644,10 @@ ipcMain.on(
   ) => {
     const abortController = new AbortController();
     // Use current workspace if set (from OkraPDF bootstrap), otherwise default to agent directory
-    const cwd = currentWorkspacePath || path.join(process.cwd(), 'agent');
+    const cwd = currentWorkspacePath || DEFAULT_WORKSPACE;
     const problemsDir = path.join(cwd, 'problems');
     const outputDir = cwd; // Watch the agent directory itself, not a subdirectory
-    console.log('Querying in workspace:', cwd);
+    console.error('Querying in workspace:', cwd);
 
     // Guard: ensure API key is set
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -717,7 +735,7 @@ User query: `;
             const buffer = Buffer.from(file.buffer);
             await fs.writeFile(filePath, buffer);
 
-            console.log(`Saved file: ${uniqueFileName} to ${problemsDir}`);
+            console.error(`Saved file: ${uniqueFileName} to ${problemsDir}`);
 
             // Append file information to prompt
             prompt += `\n\nUploaded file: ${uniqueFileName} (saved to ${filePath})`;
@@ -733,10 +751,92 @@ User query: `;
 
       const messages: SDKMessage[] = [];
 
+      // Get bundled bun path (works on fresh install without Node.js)
+      const getBundledBunPath = (): string | undefined => {
+        if (app.isPackaged) {
+          // Production: bundled in extraResources
+          const bunPath = path.join(process.resourcesPath, 'bun');
+          console.error(`[getBundledBunPath] Checking: ${bunPath}`);
+          if (fs.existsSync(bunPath)) return bunPath;
+        }
+        // Development: use resources directory or system bun
+        const devResourcePath = path.join(__dirname, '../../resources/bun');
+        if (fs.existsSync(devResourcePath)) return devResourcePath;
+        // Fallback to system bun in dev
+        try {
+          const result = execSync('which bun', { encoding: 'utf-8' }).trim();
+          if (result && fs.existsSync(result)) return result;
+        } catch { /* no system bun */ }
+        return undefined;
+      };
+
+      // Get bundled uv path (for Python/MCP servers)
+      const getBundledUvPath = (): string | undefined => {
+        if (app.isPackaged) {
+          const uvPath = path.join(process.resourcesPath, 'uv');
+          if (fs.existsSync(uvPath)) return uvPath;
+        }
+        const devResourcePath = path.join(__dirname, '../../resources/uv');
+        if (fs.existsSync(devResourcePath)) return devResourcePath;
+        try {
+          const result = execSync('which uv', { encoding: 'utf-8' }).trim();
+          if (result && fs.existsSync(result)) return result;
+        } catch { /* no system uv */ }
+        return undefined;
+      };
+
+      const bunPath = getBundledBunPath();
+      if (!bunPath) {
+        event.reply('claude-code:error', 'Bundled runtime not found. This is a packaging bug - please report it.');
+        console.error('[ERROR] Could not find bundled bun. App may not be packaged correctly.');
+        return;
+      }
+
+      // Find claude CLI - the SDK bundles its own cli.js
+      const getBundledClaudePath = (): string | undefined => {
+        // The SDK (@anthropic-ai/claude-agent-sdk) includes its own cli.js
+        if (app.isPackaged) {
+          // Production: unpacked from asar
+          const resourcePath = path.join(process.resourcesPath, 'app.asar.unpacked/node_modules/@anthropic-ai/claude-agent-sdk/cli.js');
+          console.error(`[getBundledClaudePath] Checking: ${resourcePath}`);
+          if (fs.existsSync(resourcePath)) return resourcePath;
+        }
+        // Development
+        const devPath = path.join(__dirname, '../../node_modules/@anthropic-ai/claude-agent-sdk/cli.js');
+        console.error(`[getBundledClaudePath] Checking dev: ${devPath}`);
+        if (fs.existsSync(devPath)) return devPath;
+        return undefined;
+      };
+
+      const claudePath = getBundledClaudePath();
+      if (!claudePath) {
+        event.reply('claude-code:error', 'Claude Code CLI not found in SDK bundle. This is a bug - please report it.');
+        console.error('[ERROR] Could not find bundled CLI. Checked paths above.');
+        return;
+      }
+
+      // Build enhanced PATH with bundled runtimes
+      // The resources dir contains: bun, node (symlink to bun), uv
+      const uvPath = getBundledUvPath();
+      const runtimeDir = app.isPackaged ? process.resourcesPath : path.join(__dirname, '../../resources');
+      const enhancedEnv = {
+        ...process.env,
+        // Put bundled runtimes first in PATH so they take precedence
+        PATH: `${runtimeDir}:${process.env.PATH || ''}`,
+      };
+
+      console.error(`[query] Using bun: ${bunPath}`);
+      console.error(`[query] Using uv: ${uvPath || 'not found'}`);
+      console.error(`[query] Using claude: ${claudePath}`);
+      console.error(`[query] Enhanced PATH: ${enhancedEnv.PATH?.substring(0, 100)}...`);
+
       const queryIterator = query({
         prompt,
         options: {
           cwd,
+          pathToClaudeCodeExecutable: claudePath,
+          env: enhancedEnv,
+          stderr: (msg) => console.error('[SDK stderr]', msg),
           abortController,
           maxTurns: 100,
           settingSources: ['local', 'project'],
@@ -759,7 +859,7 @@ User query: `;
       // eslint-disable-next-line no-restricted-syntax
       for await (const message of queryIterator) {
         messages.push(message);
-        console.log(JSON.stringify(message));
+        console.error(JSON.stringify(message));
         event.reply('claude-code:response', message);
       }
 
@@ -786,7 +886,7 @@ User query: `;
               created: fs.statSync(path.join(outputDir, fileName)).mtime,
             }));
 
-            console.log('New output files detected:', outputFiles);
+            console.error('New output files detected:', outputFiles);
             event.reply('claude-code:output-files', outputFiles);
           }
         }
@@ -794,7 +894,7 @@ User query: `;
         console.warn('Error checking for output files:', error);
       }
 
-      console.log('FINISHED CLAUDE CODE EVALUATION!');
+      console.error('FINISHED CLAUDE CODE EVALUATION!');
     } catch (error) {
       console.error('Claude Code SDK error:', error);
       event.reply(
@@ -827,15 +927,15 @@ const installExtensions = async () => {
       extensions.map((name) => installer[name]),
       forceDownload,
     )
-    .catch(console.log);
+    .catch(console.error);
 };
 
 const createWindow = async () => {
-  console.log('createWindow called');
+  console.error('createWindow called');
   if (isDebug) {
-    console.log('Installing extensions...');
+    console.error('Installing extensions...');
     await installExtensions();
-    console.log('Extensions installed');
+    console.error('Extensions installed');
   }
 
   const RESOURCES_PATH = app.isPackaged
@@ -846,7 +946,7 @@ const createWindow = async () => {
     return path.join(RESOURCES_PATH, ...paths);
   };
 
-  console.log('Creating main window...');
+  console.error('Creating main window...');
   mainWindow = new BrowserWindow({
     show: true, // show immediately for debugging
     width: 1024,
@@ -857,7 +957,7 @@ const createWindow = async () => {
       webSecurity: false, // Allow loading local file:// PDFs
     },
   });
-  console.log('Main window created successfully');
+  console.error('Main window created successfully');
 
   mainWindow.loadURL(resolveHtmlPath('index.html'));
 
@@ -908,7 +1008,7 @@ app.on('window-all-closed', () => {
 app
   .whenReady()
   .then(() => {
-    console.log('App ready, creating window...');
+    console.error('App ready, creating window...');
 
     // Set up verification system IPC handlers
     setupVerificationIpcHandlers();
@@ -920,4 +1020,4 @@ app
       if (mainWindow === null) createWindow();
     });
   })
-  .catch(console.log);
+  .catch(console.error);

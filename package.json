@@ -84,6 +84,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.25",
+    "@anthropic-ai/claude-code": "^2.0.76",
     "@clerk/clerk-js": "^5.117.0",
     "@electron/notarize": "^3.0.0",
     "@reduxjs/toolkit": "^2.11.2",
@@ -182,15 +183,21 @@
     "productName": "OkraPDF",
     "appId": "com.okrapdf.desktop",
     "asar": true,
+    "beforeBuild": "scripts/beforeBuild.js",
     "afterSign": ".erb/scripts/notarize.js",
-    "asarUnpack": "**\\*.{node,dll}",
+    "asarUnpack": [
+      "**/*.{node,dll}",
+      "node_modules/@anthropic-ai/**"
+    ],
     "files": [
       "dist",
       "node_modules",
       "package.json"
     ],
     "mac": {
-      "notarize": false,
+      "notarize": {
+        "teamId": "449BD89VDV"
+      },
       "target": {
         "target": "default",
         "arch": [
@@ -202,7 +209,12 @@
       "hardenedRuntime": true,
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "extraResources": [
+        { "from": "resources/bun", "to": "bun" },
+        { "from": "resources/node", "to": "node" },
+        { "from": "resources/uv", "to": "uv" }
+      ]
     },
     "dmg": {
       "contents": [

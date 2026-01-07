@@ -45,3 +45,30 @@ Routes must be in middleware skip list to work with Bearer tokens.
 4. **Share link**: `https://okrapdf.com/download/desktop/vX.X.X/OkraPDF-X.X.X-arm64.dmg`
 
 No CI/CD yet. GitHub releases created but repo is private so use GCS for distribution.
+
+### Bundled Runtimes (Fresh Install Support)
+
+App bundles its own runtimes so it works on fresh Mac without Node.js:
+
+- **bun** + **node symlink**: For running Claude Agent SDK CLI
+- **uv**: For Python/MCP server support
+
+Build process (`npm run package`):
+1. `scripts/beforeBuild.js` runs before electron-builder
+2. Downloads bun and uv binaries to `resources/`
+3. Creates `node` symlink to `bun`
+4. Compiles `.claude/skills/` TypeScript to native binaries
+5. All runtimes bundled in app via `extraResources`
+
+At runtime, `main.ts` adds `process.resourcesPath` to PATH so bundled runtimes are found.
+
+### Default Workspace
+
+App creates `~/Desktop/okrapdf` on first launch as the default agent workspace.
+Users can drag files here for agent to process.
+
+### Pre-configured Skills
+
+Skills in `.claude/skills/` are compiled at build time and bundled with app:
+- **xlsx**: Spreadsheet creation, editing, formula recalculation
+- **pdf**: PDF manipulation, text/table extraction, merging/splitting
