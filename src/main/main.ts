@@ -9,7 +9,7 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron';
 import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
 import Store from 'electron-store';
@@ -108,11 +108,26 @@ let authToken: string | null = store.get('okrapdfToken') as string | null;
 // Current workspace path (set when bootstrapping from OkraPDF)
 let currentWorkspacePath: string | null = store.get('lastWorkspacePath') as string | null;
 
+// Helper to get decrypted API key (safeStorage like Dyad)
+function getStoredApiKey(): string | null {
+  // Try encrypted key first
+  const encryptedKey = store.get('anthropicApiKeyEncrypted') as string | null;
+  if (encryptedKey && safeStorage.isEncryptionAvailable()) {
+    try {
+      return safeStorage.decryptString(Buffer.from(encryptedKey, 'base64'));
+    } catch {
+      console.warn('[settings] Failed to decrypt API key');
+    }
+  }
+  // Fall back to plaintext (legacy or no encryption available)
+  return store.get('anthropicApiKey') as string | null;
+}
+
 // Load user's API key if previously saved (BYOK)
-const savedApiKey = store.get('anthropicApiKey') as string | null;
+const savedApiKey = getStoredApiKey();
 if (savedApiKey) {
   process.env.ANTHROPIC_API_KEY = savedApiKey;
-  console.log('[config] Loaded saved API key from electron-store');
+  console.log('[config] Loaded saved API key (encrypted:', safeStorage.isEncryptionAvailable(), ')');
 }
 
 class AppUpdater {
@@ -183,6 +198,163 @@ ipcMain.handle('open-output-directory', async () => {
 });
 
 // ============================================
+// Session Recorder: Save session logs to disk
+// ============================================
+
+ipcMain.handle(
+  'recorder:save-session',
+  async (_event, data: { name: string; events: unknown[] }) => {
+    try {
+      const sessionsDir = path.join(
+        app.getPath('home'),
+        '.okrapdf',
+        'sessions',
+      );
+
+      // Ensure sessions directory exists
+      if (!fs.existsSync(sessionsDir)) {
+        fs.mkdirSync(sessionsDir, { recursive: true });
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const fileName = `${data.name}_${timestamp}.json`;
+      const filePath = path.join(sessionsDir, fileName);
+
+      const sessionData = {
+        name: data.name,
+        savedAt: new Date().toISOString(),
+        eventCount: data.events.length,
+        events: data.events,
+      };
+
+      fs.writeFileSync(filePath, JSON.stringify(sessionData, null, 2));
+      console.log(`[recorder] Session saved to ${filePath}`);
+
+      return { success: true, path: filePath };
+    } catch (error) {
+      console.error('[recorder] Error saving session:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  },
+);
+
+// ============================================
+// Trajectory Management (OpenHands-style Replay)
+// ============================================
+
+const TRAJECTORIES_DIR = path.join(app.getPath('home'), '.okrapdf', 'trajectories');
+
+// Ensure trajectories directory exists
+if (!fs.existsSync(TRAJECTORIES_DIR)) {
+  fs.mkdirSync(TRAJECTORIES_DIR, { recursive: true });
+}
+
+ipcMain.handle(
+  'trajectory:save',
+  async (
+    _event,
+    data: {
+      sessionId: string;
+      documentId?: string;
+      documentName?: string;
+      trajectory: object[];
+      metrics?: object;
+    }
+  ) => {
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const fileName = `trajectory_${data.sessionId}_${timestamp}.json`;
+      const filePath = path.join(TRAJECTORIES_DIR, fileName);
+
+      const trajectoryData = {
+        version: '1.0',
+        sessionId: data.sessionId,
+        documentId: data.documentId,
+        documentName: data.documentName,
+        savedAt: new Date().toISOString(),
+        eventCount: data.trajectory.length,
+        metrics: data.metrics,
+        trajectory: data.trajectory,
+      };
+
+      fs.writeFileSync(filePath, JSON.stringify(trajectoryData, null, 2));
+      console.log(`[trajectory] Saved to ${filePath}`);
+
+      return { success: true, path: filePath, fileName };
+    } catch (error) {
+      console.error('[trajectory] Save error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+);
+
+ipcMain.handle('trajectory:load', async (_event, fileName: string) => {
+  try {
+    const filePath = path.join(TRAJECTORIES_DIR, fileName);
+
+    if (!fs.existsSync(filePath)) {
+      return { success: false, error: 'Trajectory file not found' };
+    }
+
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const data = JSON.parse(content);
+
+    console.log(`[trajectory] Loaded ${filePath}, ${data.eventCount} events`);
+
+    return { success: true, data };
+  } catch (error) {
+    console.error('[trajectory] Load error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+});
+
+ipcMain.handle('trajectory:list', async () => {
+  try {
+    const files = fs.readdirSync(TRAJECTORIES_DIR);
+    const trajectories = files
+      .filter((f) => f.endsWith('.json'))
+      .map((fileName) => {
+        try {
+          const filePath = path.join(TRAJECTORIES_DIR, fileName);
+          const stat = fs.statSync(filePath);
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const data = JSON.parse(content);
+
+          return {
+            fileName,
+            sessionId: data.sessionId,
+            documentName: data.documentName,
+            eventCount: data.eventCount,
+            savedAt: data.savedAt,
+            size: stat.size,
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter((t): t is NonNullable<typeof t> => t !== null)
+      .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+
+    return { success: true, trajectories };
+  } catch (error) {
+    console.error('[trajectory] List error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+});
+
+// ============================================
 // OkraPDF Integration: Auth & Workspace
 // ============================================
 
@@ -205,21 +377,29 @@ ipcMain.handle('auth:clear-token', async () => {
   return { success: true };
 });
 
-// BYOK: Set user's own Anthropic API key
+// BYOK: Set user's own Anthropic API key (encrypted with safeStorage like Dyad)
 ipcMain.handle('settings:set-api-key', async (_event, apiKey: string) => {
-  store.set('anthropicApiKey', apiKey);
+  // Encrypt API key if safeStorage is available (recommended by Electron)
+  if (safeStorage.isEncryptionAvailable()) {
+    const encrypted = safeStorage.encryptString(apiKey);
+    store.set('anthropicApiKeyEncrypted', encrypted.toString('base64'));
+    store.delete('anthropicApiKey'); // Remove any old plaintext key
+  } else {
+    store.set('anthropicApiKey', apiKey);
+  }
   process.env.ANTHROPIC_API_KEY = apiKey;
-  console.log('[settings] User API key set');
+  console.log('[settings] User API key set (encrypted:', safeStorage.isEncryptionAvailable(), ')');
   return { success: true };
 });
 
 ipcMain.handle('settings:get-api-key', async () => {
-  const apiKey = store.get('anthropicApiKey') as string | null;
+  const apiKey = getStoredApiKey();
   return { apiKey: apiKey ? '***' + apiKey.slice(-4) : null }; // Masked for security
 });
 
 ipcMain.handle('settings:clear-api-key', async () => {
   store.delete('anthropicApiKey');
+  store.delete('anthropicApiKeyEncrypted');
   delete process.env.ANTHROPIC_API_KEY;
   console.log('[settings] User API key cleared');
   return { success: true };
@@ -233,7 +413,7 @@ ipcMain.handle('claude:check-status', async () => {
     const claudeInstalled = fs.existsSync(claudeConfigPath);
 
     // Check if user has set their own API key (BYOK)
-    const userApiKey = store.get('anthropicApiKey') as string | null;
+    const userApiKey = getStoredApiKey();
     const hasUserApiKey = !!userApiKey;
 
     // Check environment variable
@@ -327,6 +507,8 @@ ipcMain.handle(
 
       // Download bootstrap zip from OkraPDF
       console.log(`[workspace] Downloading bootstrap zip...`);
+      console.log(`[workspace] URL: ${OKRAPDF_API_BASE}/api/desktop/bootstrap/${documentUuid}`);
+      console.log(`[workspace] Token prefix: ${authToken?.substring(0, 20)}...`);
       const response = await fetch(
         `${OKRAPDF_API_BASE}/api/desktop/bootstrap/${documentUuid}`,
         {
@@ -337,6 +519,8 @@ ipcMain.handle(
       );
 
       if (!response.ok) {
+        const errorBody = await response.text().catch(() => 'no body');
+        console.error(`[workspace] Response body: ${errorBody}`);
         throw new Error(`Failed to download workspace: ${response.status}`);
       }
 
@@ -365,6 +549,31 @@ ipcMain.handle(
 
       // Clean up zip file
       fs.unlinkSync(zipPath);
+
+      // Download source PDF
+      console.log(`[workspace] Downloading source PDF...`);
+      try {
+        const pdfResponse = await fetch(
+          `${OKRAPDF_API_BASE}/api/desktop/pdf/${documentUuid}`,
+          {
+            headers: {
+              Authorization: `Bearer ${authToken}`,
+            },
+          },
+        );
+
+        if (pdfResponse.ok) {
+          const pdfBuffer = await pdfResponse.arrayBuffer();
+          const pdfPath = path.join(workspaceDir, 'source.pdf');
+          fs.writeFileSync(pdfPath, Buffer.from(pdfBuffer));
+          console.log(`[workspace] PDF saved to ${pdfPath}`);
+        } else {
+          console.warn(`[workspace] Could not download PDF: ${pdfResponse.status}`);
+        }
+      } catch (pdfError) {
+        console.warn('[workspace] PDF download failed:', pdfError);
+        // Non-fatal - workspace can still work without PDF viewer
+      }
 
       currentWorkspacePath = workspaceDir;
       store.set('lastWorkspacePath', workspaceDir);
@@ -421,6 +630,13 @@ ipcMain.on(
     const problemsDir = path.join(cwd, 'problems');
     const outputDir = cwd; // Watch the agent directory itself, not a subdirectory
     console.log('Querying in workspace:', cwd);
+
+    // Guard: ensure API key is set
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error('[query] No API key configured');
+      event.reply('claude-code:error', 'No API key configured. Please add your Anthropic API key in Settings.');
+      return;
+    }
 
     // Track files in output directory before starting
     let initialOutputFiles: string[] = [];
