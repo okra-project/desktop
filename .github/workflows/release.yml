@@ -33,9 +33,11 @@ jobs:
         run: npm install --ignore-scripts
 
       - name: Install app dependencies
-        run: |
-          cd release/app && npm install
-          cd ../.. && npm run build:dll
+        run: npm install
+        working-directory: release/app
+
+      - name: Build DLL
+        run: npm run build:dll
 
       - name: Determine version
         id: version
