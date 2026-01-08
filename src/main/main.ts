@@ -101,6 +101,12 @@ const store = new Store({
 
 // OkraPDF API configuration
 const OKRAPDF_API_BASE = API_CONFIG.OKRAPDF_API_BASE;
+const OKRAPDF_DESKTOP_TOKEN_URL = `${OKRAPDF_API_BASE}/api/desktop/token`;
+
+function formatKeyPrefix(key: string | null): string {
+  if (!key) return 'missing';
+  return `${key.slice(0, 12)}...`;
+}
 
 // Default workspace directory (accessible to user for collaboration)
 const DEFAULT_WORKSPACE = path.join(app.getPath('desktop'), 'okrapdf');
@@ -379,7 +385,8 @@ ipcMain.handle('auth:set-token', async (_event, token: string) => {
 
   // Exchange session token for long-lived API key (30 days)
   try {
-    const response = await fetch('https://okrapdf.com/api/desktop/token', {
+    console.error(`[auth] Requesting desktop API key from ${OKRAPDF_DESKTOP_TOKEN_URL}`);
+    const response = await fetch(OKRAPDF_DESKTOP_TOKEN_URL, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -392,17 +399,17 @@ ipcMain.handle('auth:set-token', async (_event, token: string) => {
       if (data.token) {
         desktopApiKey = data.token;
         store.set('desktopApiKey', data.token);
-        console.error('[auth] Desktop API key obtained (30-day expiry)');
+        console.error(`[auth] Desktop API key obtained (30-day expiry), prefix=${formatKeyPrefix(desktopApiKey)}`);
       } else if (data.hasExistingKey) {
         // Check if we actually have the cached key
         const cachedKey = store.get('desktopApiKey') as string | null;
         if (cachedKey) {
           desktopApiKey = cachedKey;
-          console.error('[auth] Desktop API key already exists, using cached');
+          console.error(`[auth] Desktop API key already exists, using cached prefix=${formatKeyPrefix(desktopApiKey)}`);
         } else {
           // Key exists on server but we lost it locally - revoke and recreate
           console.error('[auth] API key exists but not cached locally, revoking and recreating...');
-          const deleteResp = await fetch('https://okrapdf.com/api/desktop/token', {
+          const deleteResp = await fetch(OKRAPDF_DESKTOP_TOKEN_URL, {
             method: 'DELETE',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -411,7 +418,7 @@ ipcMain.handle('auth:set-token', async (_event, token: string) => {
           });
           if (deleteResp.ok) {
             // Now create a new key
-            const createResp = await fetch('https://okrapdf.com/api/desktop/token', {
+            const createResp = await fetch(OKRAPDF_DESKTOP_TOKEN_URL, {
               method: 'POST',
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -423,7 +430,7 @@ ipcMain.handle('auth:set-token', async (_event, token: string) => {
               if (newData.token) {
                 desktopApiKey = newData.token;
                 store.set('desktopApiKey', newData.token);
-                console.error('[auth] New desktop API key obtained after revoke');
+                console.error(`[auth] New desktop API key obtained after revoke, prefix=${formatKeyPrefix(desktopApiKey)}`);
               }
             }
           }
@@ -562,6 +569,7 @@ ipcMain.handle('library:fetch', async () => {
   }
 
   try {
+    console.error(`[library] Using API key prefix=${formatKeyPrefix(desktopApiKey)}`);
     const response = await fetch(`${OKRAPDF_API_BASE}/api/desktop/library`, {
       headers: {
         Authorization: `Bearer ${desktopApiKey}`,
