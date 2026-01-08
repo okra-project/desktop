@@ -23,7 +23,7 @@ export const STATUS_CONFIG: Record<
 > = {
   complete: { icon: '✓', color: '#10b981', bgColor: '#d1fae5', label: 'verified' },
   partial: { icon: '◐', color: '#f59e0b', bgColor: '#fef3c7', label: 'partial' },
-  flagged: { icon: '⚑', color: '#f97316', bgColor: '#fed7aa', label: 'flagged' },
+  flagged: { icon: '🔴', color: '#f97316', bgColor: '#fed7aa', label: 'flagged' },
   pending: { icon: '○', color: '#3b82f6', bgColor: '#dbeafe', label: 'pending' },
   empty: { icon: '−', color: '#94a3b8', bgColor: '#f1f5f9', label: 'empty' },
   gap: { icon: '!', color: '#ef4444', bgColor: '#fee2e2', label: 'gap' },

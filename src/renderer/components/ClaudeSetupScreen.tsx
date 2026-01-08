@@ -66,7 +66,7 @@ function ClaudeSetupScreen({ onReady, claudeStatus }: ClaudeSetupScreenProps) {
       <div className="w-full max-w-lg">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="text-6xl mb-4">🥬</div>
+          <div className="text-6xl mb-4">📄</div>
           <h1 className="text-3xl font-bold font-serif text-ink mb-2">OkraPDF Desktop</h1>
           <p className="text-sidebar-text">
             Use your own Claude subscription - no API billing through OkraPDF
@@ -187,7 +187,7 @@ function ClaudeSetupScreen({ onReady, claudeStatus }: ClaudeSetupScreenProps) {
         {/* Benefits */}
         <div className="mt-8 grid grid-cols-3 gap-4 text-center">
           <div className="p-4">
-            <div className="text-2xl mb-2">💰</div>
+            <div className="text-2xl mb-2">📈</div>
             <p className="text-sm text-sidebar-text">Use your own pricing tier</p>
           </div>
           <div className="p-4">

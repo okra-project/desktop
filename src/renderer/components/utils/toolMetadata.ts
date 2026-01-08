@@ -15,7 +15,7 @@ export interface ToolMetadata {
 export const TOOL_METADATA: Record<string, ToolMetadata> = {
   // File Reading Tools
   Read: {
-    icon: '📖',
+    icon: '📄',
     color: '#3B82F6', // blue-500
     category: 'read',
     description: 'Reading a file',
@@ -27,7 +27,7 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
     description: 'Finding files by pattern',
   },
   Grep: {
-    icon: '🔎',
+    icon: '🔍',
     color: '#3B82F6',
     category: 'search',
     description: 'Searching file contents',
@@ -35,19 +35,19 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
 
   // File Writing Tools
   Write: {
-    icon: '✍️',
+    icon: '✎',
     color: '#F59E0B', // amber-500
     category: 'write',
     description: 'Writing a file',
   },
   Edit: {
-    icon: '✏️',
+    icon: '✎',
     color: '#F59E0B',
     category: 'write',
     description: 'Editing a file',
   },
   NotebookEdit: {
-    icon: '📓',
+    icon: '📝',
     color: '#F59E0B',
     category: 'write',
     description: 'Editing Jupyter notebook',
@@ -67,7 +67,7 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
     description: 'Checking command output',
   },
   KillShell: {
-    icon: '🛑',
+    icon: '❌',
     color: '#EF4444', // red-500
     category: 'execute',
     description: 'Stopping background process',
@@ -111,7 +111,7 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
 
   // MCP Tools
   ListMcpResources: {
-    icon: '📚',
+    icon: '📋',
     color: '#6366F1', // indigo-500
     category: 'read',
     description: 'Listing MCP resources',

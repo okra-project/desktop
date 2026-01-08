@@ -46,7 +46,7 @@ function AuthScreen({ onAuthenticated }: AuthScreenProps) {
       <div className="w-full max-w-md">
         {/* Logo/Header */}
         <div className="text-center mb-8">
-          <div className="text-6xl mb-4">🥬</div>
+          <div className="text-6xl mb-4">📄</div>
           <h1 className="text-3xl font-bold font-serif text-ink mb-2">OkraPDF Desktop</h1>
           <p className="text-sidebar-text">
             Connect your local Claude agent to your documents
@@ -88,11 +88,11 @@ function AuthScreen({ onAuthenticated }: AuthScreenProps) {
         {/* Benefits */}
         <div className="mt-8 grid grid-cols-3 gap-4 text-center">
           <div className="p-4">
-            <div className="text-2xl mb-2">🔒</div>
+            <div className="text-2xl mb-2">🔐</div>
             <p className="text-sm text-sidebar-text">Data stays local</p>
           </div>
           <div className="p-4">
-            <div className="text-2xl mb-2">💳</div>
+            <div className="text-2xl mb-2">✅</div>
             <p className="text-sm text-sidebar-text">Your Claude subscription</p>
           </div>
           <div className="p-4">

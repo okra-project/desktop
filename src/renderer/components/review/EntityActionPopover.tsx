@@ -51,7 +51,7 @@ const ENTITY_ACTIONS: Record<string, EntityAction[]> = {
     {
       id: 'describe',
       label: 'Describe this figure',
-      icon: '💬',
+      icon: '💡',
       prompt: 'Please describe what is shown in this figure.',
       autoSend: true,
     },
@@ -60,7 +60,7 @@ const ENTITY_ACTIONS: Record<string, EntityAction[]> = {
     {
       id: 'explain',
       label: 'Explain footnote',
-      icon: '💬',
+      icon: '💡',
       prompt: 'Please explain this footnote in context.',
       autoSend: true,
     },
@@ -69,7 +69,7 @@ const ENTITY_ACTIONS: Record<string, EntityAction[]> = {
     {
       id: 'summarize',
       label: 'Summarize',
-      icon: '💬',
+      icon: '💡',
       prompt: 'Please summarize this paragraph.',
       autoSend: true,
     },
@@ -78,7 +78,7 @@ const ENTITY_ACTIONS: Record<string, EntityAction[]> = {
     {
       id: 'review',
       label: 'Review summary',
-      icon: '💬',
+      icon: '💡',
       prompt: 'Please review this summary for accuracy.',
       autoSend: true,
     },

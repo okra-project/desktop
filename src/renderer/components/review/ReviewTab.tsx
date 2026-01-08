@@ -696,7 +696,7 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
                   }}
                   title="Preview"
                 >
-                  👁
+                  👀
                 </button>
                 <button
                   onClick={() => setIsEditMode(true)}

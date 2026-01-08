@@ -20,7 +20,7 @@ function ThinkingDisplay({ thinking }: ThinkingDisplayProps) {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-lg">💭</span>
+            <span className="text-lg">🧐</span>
             <span className="font-medium text-ink">Thinking</span>
             <span className="text-xs text-sidebar-text">
               Extended reasoning process

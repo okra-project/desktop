@@ -42,7 +42,7 @@ type ViewMode = 'preview' | 'edit';
 const STATUS_CONFIG = {
   pending: { icon: '○', color: '#3b82f6', bgColor: '#dbeafe', label: 'Pending' },
   verified: { icon: '✓', color: '#10b981', bgColor: '#d1fae5', label: 'Verified' },
-  flagged: { icon: '⚑', color: '#f97316', bgColor: '#fed7aa', label: 'Flagged' },
+  flagged: { icon: '🔴', color: '#f97316', bgColor: '#fed7aa', label: 'Flagged' },
   rejected: { icon: '✕', color: '#ef4444', bgColor: '#fee2e2', label: 'Rejected' },
 };
 
@@ -448,7 +448,7 @@ export function TableVerificationPanel({
                   cursor: 'pointer',
                 }}
               >
-                📜 History ({historyData.entries.length} events)
+                📋 History ({historyData.entries.length} events)
               </summary>
               <div
                 style={{
@@ -505,7 +505,7 @@ export function TableVerificationPanel({
               disabled={isUpdating || !!actionInProgress}
               loading={actionInProgress === 'flag'}
               color="orange"
-              icon="⚑"
+              icon="🔴"
               label="Flag"
             />
 

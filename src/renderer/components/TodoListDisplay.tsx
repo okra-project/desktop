@@ -25,7 +25,7 @@ function TodoListDisplay({ todos }: TodoListDisplayProps) {
       case 'completed':
         return '✅';
       case 'in_progress':
-        return '🔄';
+        return '🔍';
       case 'pending':
         return '⏳';
       default:

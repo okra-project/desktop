@@ -434,7 +434,40 @@ ipcMain.handle('auth:set-token', async (_event, token: string) => {
         store.set('desktopApiKey', data.token);
         console.error('[auth] Desktop API key obtained (30-day expiry)');
       } else if (data.hasExistingKey) {
-        console.error('[auth] Desktop API key already exists, using cached');
+        // Check if we actually have the cached key
+        const cachedKey = store.get('desktopApiKey') as string | null;
+        if (cachedKey) {
+          desktopApiKey = cachedKey;
+          console.error('[auth] Desktop API key already exists, using cached');
+        } else {
+          // Key exists on server but we lost it locally - revoke and recreate
+          console.error('[auth] API key exists but not cached locally, revoking and recreating...');
+          const deleteResp = await fetch('https://okrapdf.com/api/desktop/token', {
+            method: 'DELETE',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          if (deleteResp.ok) {
+            // Now create a new key
+            const createResp = await fetch('https://okrapdf.com/api/desktop/token', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            });
+            if (createResp.ok) {
+              const newData = await createResp.json();
+              if (newData.token) {
+                desktopApiKey = newData.token;
+                store.set('desktopApiKey', newData.token);
+                console.error('[auth] New desktop API key obtained after revoke');
+              }
+            }
+          }
+        }
       }
     } else {
       console.error('[auth] Failed to get desktop API key:', response.status);

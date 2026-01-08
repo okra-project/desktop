@@ -119,7 +119,7 @@ export default function DocumentViewer({
                   : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              💬 Chat
+              💡 Chat
             </button>
             <button
               onClick={() => setViewMode('review')}

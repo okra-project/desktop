@@ -113,7 +113,7 @@ export default function App() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-cream">
         <div className="text-center">
-          <div className="text-6xl mb-4">🥬</div>
+          <div className="text-6xl mb-4">📄</div>
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-okra-orange mx-auto"></div>
         </div>
       </div>
@@ -156,7 +156,7 @@ export default function App() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-cream">
       <div className="text-center">
-        <div className="text-6xl mb-4">🥬</div>
+        <div className="text-6xl mb-4">📄</div>
         <p className="text-slate-500">Loading...</p>
       </div>
     </div>
