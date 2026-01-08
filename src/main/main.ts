@@ -9,7 +9,7 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 // Note: @anthropic-ai/claude-agent-sdk is ESM-only, use dynamic import
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
 import Store from 'electron-store';
@@ -95,7 +95,6 @@ const store = new Store({
   defaults: {
     okrapdfToken: null as string | null,
     desktopApiKey: null as string | null, // Long-lived Clerk API key (30 days)
-    anthropicApiKey: null as string | null, // BYOK support
     lastWorkspacePath: null as string | null,
   },
 });
@@ -123,54 +122,15 @@ if (!currentWorkspacePath) {
   currentWorkspacePath = DEFAULT_WORKSPACE;
 }
 
-// Helper to get decrypted API key (safeStorage like Dyad)
-function getStoredApiKey(): string | null {
-  // Try encrypted key first
-  const encryptedKey = store.get('anthropicApiKeyEncrypted') as string | null;
-  if (encryptedKey && safeStorage.isEncryptionAvailable()) {
-    try {
-      return safeStorage.decryptString(Buffer.from(encryptedKey, 'base64'));
-    } catch {
-      console.warn('[settings] Failed to decrypt API key');
-    }
-  }
-  // Fall back to plaintext (legacy or no encryption available)
-  return store.get('anthropicApiKey') as string | null;
-}
-
-// Proxy URL for users without their own API key
-// Routes through okrapdf.com which adds server's API key
+// Proxy URL - routes through okrapdf.com which adds server's API key
 // SDK appends /v1/messages, so this becomes https://okrapdf.com/api/v1/messages
 const CLAUDE_PROXY_URL = 'https://okrapdf.com/api';
 
-// Load user's API key if previously saved (BYOK)
-const savedApiKey = getStoredApiKey();
-if (savedApiKey) {
-  process.env.ANTHROPIC_API_KEY = savedApiKey;
-  console.error('[config] Loaded saved API key (BYOK, encrypted:', safeStorage.isEncryptionAvailable(), ')');
-} else {
-  // No BYOK key - will use proxy (requires okrapdf auth token)
-  console.error('[config] No BYOK key, will use proxy');
-}
-
 /**
  * Get environment variables for Claude SDK
- * - BYOK users: use their API key directly
- * - Others: route through okrapdf proxy with auth token
+ * Routes through okrapdf.com proxy with auth token
  */
 function getClaudeEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const userApiKey = getStoredApiKey();
-
-  if (userApiKey) {
-    // BYOK: use their key directly with Anthropic
-    return {
-      ...baseEnv,
-      ANTHROPIC_API_KEY: userApiKey,
-    };
-  }
-
-  // Proxy mode: route through okrapdf.com
-  // Uses long-lived Clerk API key (30 days) instead of session token
   if (!desktopApiKey) {
     console.error('[config] WARNING: No desktop API key for proxy mode');
   }
@@ -574,79 +534,19 @@ ipcMain.handle('auth:clear-token', async () => {
   return { success: true };
 });
 
-// BYOK: Set user's own Anthropic API key (encrypted with safeStorage like Dyad)
-ipcMain.handle('settings:set-api-key', async (_event, apiKey: string) => {
-  // Encrypt API key if safeStorage is available (recommended by Electron)
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(apiKey);
-    store.set('anthropicApiKeyEncrypted', encrypted.toString('base64'));
-    store.delete('anthropicApiKey'); // Remove any old plaintext key
-  } else {
-    store.set('anthropicApiKey', apiKey);
-  }
-  process.env.ANTHROPIC_API_KEY = apiKey;
-  console.error('[settings] User API key set (encrypted:', safeStorage.isEncryptionAvailable(), ')');
-  return { success: true };
-});
-
-ipcMain.handle('settings:get-api-key', async () => {
-  const apiKey = getStoredApiKey();
-  return { apiKey: apiKey ? '***' + apiKey.slice(-4) : null }; // Masked for security
-});
-
-ipcMain.handle('settings:clear-api-key', async () => {
-  store.delete('anthropicApiKey');
-  store.delete('anthropicApiKeyEncrypted');
-  delete process.env.ANTHROPIC_API_KEY;
-  console.error('[settings] User API key cleared');
-  return { success: true };
-});
-
-// Check if Claude Code CLI is installed and authenticated
+// Check if logged into okrapdf (enables proxy mode)
 ipcMain.handle('claude:check-status', async () => {
   try {
-    // Check if Claude Code CLI is installed
-    const claudeConfigPath = path.join(app.getPath('home'), '.claude.json');
-    const claudeInstalled = fs.existsSync(claudeConfigPath);
-
-    // Check if user has set their own API key (BYOK) - legacy, not needed with proxy
-    const userApiKey = getStoredApiKey();
-    const hasUserApiKey = !!userApiKey;
-
     // Check if logged into okrapdf (enables proxy mode via long-lived API key)
     const hasProxyAuth = !!desktopApiKey;
 
-    // Check environment variable - legacy
-    const hasEnvApiKey = !!process.env.ANTHROPIC_API_KEY;
-
-    // Claude CLI auth check - not needed with proxy mode
-    let claudeAuthenticated = false;
-    if (claudeInstalled) {
-      try {
-        const configContent = fs.readFileSync(claudeConfigPath, 'utf-8');
-        const config = JSON.parse(configContent);
-        claudeAuthenticated = config.numStartups > 0;
-      } catch {
-        claudeAuthenticated = false;
-      }
-    }
-
     return {
-      claudeInstalled,
-      claudeAuthenticated,
-      hasUserApiKey,
-      hasEnvApiKey,
       hasProxyAuth,
-      // Ready if logged into okrapdf (proxy) OR has own API key
-      ready: hasProxyAuth || hasUserApiKey || hasEnvApiKey || claudeAuthenticated,
+      ready: hasProxyAuth,
     };
   } catch (error) {
     console.error('[claude:check-status] Error:', error);
     return {
-      claudeInstalled: false,
-      claudeAuthenticated: false,
-      hasUserApiKey: false,
-      hasEnvApiKey: false,
       hasProxyAuth: false,
       ready: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -833,12 +733,10 @@ ipcMain.on(
     const outputDir = cwd; // Watch the agent directory itself, not a subdirectory
     console.error('Querying in workspace:', cwd);
 
-    // Guard: ensure API key (BYOK) or desktop API key (proxy mode) is available
-    const hasByokKey = !!getStoredApiKey();
-    const hasProxyAuth = !!desktopApiKey;
-    if (!hasByokKey && !hasProxyAuth) {
-      console.error('[query] No API key or desktop API key configured');
-      event.reply('claude-code:error', 'Please log in to OkraPDF or add your Anthropic API key in Settings.');
+    // Guard: ensure logged into okrapdf (proxy mode)
+    if (!desktopApiKey) {
+      console.error('[query] Not logged in - no desktop API key');
+      event.reply('claude-code:error', 'Please log in to OkraPDF to use the agent.');
       return;
     }
 

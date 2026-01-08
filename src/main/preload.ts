@@ -19,9 +19,6 @@ export type Channels =
   | 'workspace:error'
   | 'workspace:get-current'
   | 'workspace:list-files'
-  | 'settings:set-api-key'
-  | 'settings:get-api-key'
-  | 'settings:clear-api-key'
   | 'claude:check-status'
   // Verification system channels
   | 'verification:start-session'
