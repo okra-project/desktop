@@ -102,6 +102,7 @@ jobs:
           echo "| Intel | https://okrapdf.com/download/desktop/v${VERSION}/OkraPDF-${VERSION}.dmg |" >> $GITHUB_STEP_SUMMARY
 
   build-windows:
+    if: false  # Disabled - no Windows users yet. Remove this line when needed.
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
