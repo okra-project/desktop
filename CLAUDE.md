@@ -113,7 +113,7 @@ GHA workflow (`.github/workflows/release.yml`) will:
 
 Proxy: okrapdf's `next.config.ts` rewrites `/download/desktop/*` → GCS
 
-**Current stable**: v4.9.5
+**Current stable**: v4.9.11
 
 ### Bundled Runtimes (Fresh Install Support)
 
