@@ -514,32 +514,15 @@ async function refreshClerkToken(): Promise<string | null> {
 }
 
 ipcMain.handle('auth:get-token', async () => {
-  // Check if stored token is expired (JWT exp check)
-  if (authToken) {
-    try {
-      const payload = JSON.parse(atob(authToken.split('.')[1]));
-      const exp = payload.exp * 1000; // Convert to ms
-      const now = Date.now();
-      const buffer = 30000; // 30s buffer before expiry
-
-      if (now < exp - buffer) {
-        // Token still valid
-        return { token: authToken };
-      }
-      console.log('[auth] Token expired or expiring soon, refreshing...');
-    } catch {
-      // Invalid token format, try to refresh
-    }
+  // Use long-lived desktop API key (30-day expiry) instead of session token
+  // Session tokens expire in ~60s which breaks API calls during long operations
+  if (desktopApiKey) {
+    return { token: desktopApiKey };
   }
 
-  // Refresh token via hidden window
-  const newToken = await refreshClerkToken();
-  if (newToken) {
-    return { token: newToken };
-  }
-
-  // Fall back to stored token (might be expired but let backend decide)
-  return { token: authToken };
+  // No API key available - user needs to re-login
+  console.error('[auth:get-token] No desktop API key available');
+  return { token: null };
 });
 
 ipcMain.handle('auth:clear-token', async () => {
