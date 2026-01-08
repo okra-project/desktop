@@ -671,7 +671,7 @@ ipcMain.handle(
           `${OKRAPDF_API_BASE}/api/desktop/pdf/${documentUuid}`,
           {
             headers: {
-              Authorization: `Bearer ${authToken}`,
+              Authorization: `Bearer ${desktopApiKey}`,
             },
           },
         );
