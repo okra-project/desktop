@@ -43,24 +43,51 @@ Routes must be in middleware skip list to work with Bearer tokens.
 **How it works**:
 1. Desktop sets `ANTHROPIC_BASE_URL=https://okrapdf.com/api`
 2. Claude SDK appends `/v1/messages` → calls `https://okrapdf.com/api/v1/messages`
-3. Desktop passes Clerk session token as `ANTHROPIC_API_KEY` (SDK sends it as `x-api-key` header)
-4. Backend verifies token and proxies to Anthropic with server's real API key
+3. Desktop passes Clerk API key as `ANTHROPIC_API_KEY` (SDK sends it as `x-api-key` header)
+4. Backend verifies API key and proxies to Anthropic with server's real API key
 
-**Critical Clerk gotcha**: `auth({ acceptsToken })` only checks `Authorization: Bearer` header. Anthropic SDK sends token as `x-api-key` header instead. Must use `verifyToken` from `@clerk/backend`:
+### Clerk API Keys (NOT Session Tokens)
 
+**Problem**: Session JWTs expire in ~60 seconds. Long Claude conversations fail with "JWT expired".
+
+**Solution**: Use Clerk API Keys (30-day expiry) instead of session tokens.
+
+**CRITICAL**: Enable "User API keys" in Clerk Dashboard → Configure → API keys (beta feature)
+
+**Desktop flow**:
+1. OAuth popup → get session cookie
+2. Exchange session for 30-day API key via `POST /api/desktop/token`
+3. Store API key in electron-store
+4. Use API key for all Claude proxy calls
+
+**Backend verification**:
 ```typescript
-import { verifyToken } from '@clerk/backend';
-
-// Extract token from x-api-key (where Anthropic SDK puts it)
-const sessionToken = req.headers.get('x-api-key');
-
-const verified = await verifyToken(sessionToken, {
-  secretKey: process.env.CLERK_SECRET_KEY!,
-});
-const userId = verified.sub;
+// /api/v1/messages/route.ts
+const apiKeySecret = req.headers.get('x-api-key');
+const client = await clerkClient();
+const verifiedKey = await client.apiKeys.verifySecret(apiKeySecret);
+const userId = verifiedKey.subject;
 ```
 
-**Route location**: `/api/v1/messages/route.ts` in okrapdf backend (must be in middleware skip list)
+**API key management**:
+```typescript
+// Create 30-day key
+const apiKey = await client.apiKeys.create({
+  name: 'OkraPDF Desktop',
+  subject: userId,
+  secondsUntilExpiration: 30 * 24 * 60 * 60,
+});
+
+// List keys
+const keys = await client.apiKeys.list({ subject: userId });
+
+// Revoke key
+await client.apiKeys.revoke({ apiKeyId: key.id });
+```
+
+**Route locations** (must be in middleware skip list):
+- `/api/desktop/token` - Create/revoke API keys
+- `/api/v1/messages` - Anthropic proxy
 
 ### Release Process (GHA)
 
@@ -81,7 +108,7 @@ GHA workflow (`.github/workflows/release.yml`) will:
 
 Proxy: okrapdf's `next.config.ts` rewrites `/download/desktop/*` → GCS
 
-**Current stable**: v4.9.3
+**Current stable**: v4.9.4
 
 ### Bundled Runtimes (Fresh Install Support)
 
