@@ -17,7 +17,9 @@ import fixPath from 'fix-path';
 import fs from 'fs';
 import path from 'path';
 import { execSync, spawn } from 'child_process';
+import * as Sentry from '@sentry/electron/main';
 import { initializeAPIConfig, API_CONFIG } from '../config/api-config';
+import { SENTRY_DSN, SENTRY_ENABLED, SENTRY_ENVIRONMENT } from '../config/sentry';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import { setupVerificationIpcHandlers, cleanupVerificationIpcHandlers } from './verification/ipc-handlers';
@@ -28,6 +30,14 @@ fixPath();
 
 // Initialize API configuration (BYOA mode - no bundled key)
 initializeAPIConfig();
+if (SENTRY_ENABLED) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    environment: SENTRY_ENVIRONMENT,
+    tracesSampleRate: 0,
+  });
+  Sentry.setTag('process', 'main');
+}
 
 // OAuth popup window reference
 let authWindow: BrowserWindow | null = null;
@@ -683,9 +693,22 @@ ipcMain.handle(
           console.error(`[workspace] PDF saved to ${pdfPath}`);
         } else {
           console.warn(`[workspace] Could not download PDF: ${pdfResponse.status}`);
+          if (SENTRY_ENABLED) {
+            Sentry.captureMessage('[workspace] PDF download failed', {
+              level: 'error',
+              extra: {
+                documentUuid,
+                status: pdfResponse.status,
+                apiBase: OKRAPDF_API_BASE,
+              },
+            });
+          }
         }
       } catch (pdfError) {
         console.warn('[workspace] PDF download failed:', pdfError);
+        if (SENTRY_ENABLED) {
+          Sentry.captureException(pdfError);
+        }
         // Non-fatal - workspace can still work without PDF viewer
       }
 

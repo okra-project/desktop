@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
+import * as Sentry from '@sentry/electron/renderer';
 import PDFViewer from './PDFViewer';
 import ChatInterface from './ChatInterface';
 import { ReviewTab } from './review';
+import { SENTRY_ENABLED } from '../../config/sentry';
 
 type ViewMode = 'chat' | 'review';
 
@@ -27,6 +29,7 @@ export default function DocumentViewer({
   const [pdfPath, setPdfPath] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const isDragging = useRef(false);
+  const missingPdfReported = useRef<Set<string>>(new Set());
 
   // Find PDF file in workspace
   useEffect(() => {
@@ -47,10 +50,24 @@ export default function DocumentViewer({
           if (pdfFile) {
             const fullPath = `${workspacePath}/${pdfFile}`;
             setPdfPath(fullPath);
+          } else if (!missingPdfReported.current.has(documentUuid)) {
+            missingPdfReported.current.add(documentUuid);
+            if (SENTRY_ENABLED) {
+              Sentry.captureMessage('[viewer] No PDF found in workspace', {
+                level: 'warning',
+                extra: {
+                  documentUuid,
+                  fileCount: files?.length ?? 0,
+                },
+              });
+            }
           }
         }
       } catch (err) {
         console.error('Failed to find PDF:', err);
+        if (SENTRY_ENABLED) {
+          Sentry.captureException(err);
+        }
       }
     };
 
