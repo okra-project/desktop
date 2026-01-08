@@ -556,21 +556,24 @@ ipcMain.handle('claude:check-status', async () => {
 
 // Fetch library from OkraPDF
 ipcMain.handle('library:fetch', async () => {
-  if (!authToken) {
+  // Use long-lived API key (30 days), not short-lived session token
+  if (!desktopApiKey) {
     return { success: false, error: 'Not authenticated' };
   }
 
   try {
     const response = await fetch(`${OKRAPDF_API_BASE}/api/desktop/library`, {
       headers: {
-        Authorization: `Bearer ${authToken}`,
+        Authorization: `Bearer ${desktopApiKey}`,
       },
     });
 
     if (!response.ok) {
       if (response.status === 401) {
-        authToken = null;
-        return { success: false, error: 'Session expired. Please login again.' };
+        // API key expired or invalid - clear it so user re-auths
+        desktopApiKey = null;
+        store.delete('desktopApiKey');
+        return { success: false, error: 'API key expired. Please login again.' };
       }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
@@ -590,7 +593,8 @@ ipcMain.handle('library:fetch', async () => {
 ipcMain.handle(
   'workspace:bootstrap',
   async (event, documentUuid: string, documentName: string) => {
-    if (!authToken) {
+    // Use long-lived API key (30 days), not short-lived session token
+    if (!desktopApiKey) {
       return { success: false, error: 'Not authenticated' };
     }
 
@@ -610,12 +614,12 @@ ipcMain.handle(
       // Download bootstrap zip from OkraPDF
       console.error(`[workspace] Downloading bootstrap zip...`);
       console.error(`[workspace] URL: ${OKRAPDF_API_BASE}/api/desktop/bootstrap/${documentUuid}`);
-      console.error(`[workspace] Token prefix: ${authToken?.substring(0, 20)}...`);
+      console.error(`[workspace] Token prefix: ${desktopApiKey?.substring(0, 20)}...`);
       const response = await fetch(
         `${OKRAPDF_API_BASE}/api/desktop/bootstrap/${documentUuid}`,
         {
           headers: {
-            Authorization: `Bearer ${authToken}`,
+            Authorization: `Bearer ${desktopApiKey}`,
           },
         },
       );

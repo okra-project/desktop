@@ -71,9 +71,11 @@ const userId = verifiedKey.subject;
 
 **API key management**:
 ```typescript
-// Create 30-day key
+// CRITICAL: Use unique timestamped names!
+// Clerk enforces name uniqueness even on REVOKED keys → 409 Conflict
+const keyName = `OkraPDF Desktop ${Date.now()}`;
 const apiKey = await client.apiKeys.create({
-  name: 'OkraPDF Desktop',
+  name: keyName,
   subject: userId,
   secondsUntilExpiration: 30 * 24 * 60 * 60,
 });
@@ -81,8 +83,11 @@ const apiKey = await client.apiKeys.create({
 // List keys
 const keys = await client.apiKeys.list({ subject: userId });
 
-// Revoke key
-await client.apiKeys.revoke({ apiKeyId: key.id });
+// Revoke ALL old desktop keys before creating new one
+const desktopKeys = keys.data.filter(k => k.name.startsWith('OkraPDF Desktop'));
+for (const key of desktopKeys) {
+  await client.apiKeys.revoke({ apiKeyId: key.id });
+}
 ```
 
 **Route locations** (must be in middleware skip list):
@@ -108,7 +113,7 @@ GHA workflow (`.github/workflows/release.yml`) will:
 
 Proxy: okrapdf's `next.config.ts` rewrites `/download/desktop/*` → GCS
 
-**Current stable**: v4.9.4
+**Current stable**: v4.9.5
 
 ### Bundled Runtimes (Fresh Install Support)
 
