@@ -94,6 +94,7 @@ const store = new Store({
   name: 'okrapdf-settings',
   defaults: {
     okrapdfToken: null as string | null,
+    desktopApiKey: null as string | null, // Long-lived Clerk API key (30 days)
     anthropicApiKey: null as string | null, // BYOK support
     lastWorkspacePath: null as string | null,
   },
@@ -111,8 +112,10 @@ if (!fs.existsSync(DEFAULT_WORKSPACE)) {
   console.error(`[workspace] Created default workspace at ${DEFAULT_WORKSPACE}`);
 }
 
-// Load persisted auth token
+// Load persisted auth token (session token for API calls)
 let authToken: string | null = store.get('okrapdfToken') as string | null;
+// Long-lived API key for Claude proxy (30 days, from Clerk)
+let desktopApiKey: string | null = store.get('desktopApiKey') as string | null;
 
 // Current workspace path (defaults to ~/Desktop/okrapdf)
 let currentWorkspacePath: string | null = store.get('lastWorkspacePath') as string | null;
@@ -167,16 +170,16 @@ function getClaudeEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   }
 
   // Proxy mode: route through okrapdf.com
-  // The proxy adds the API key server-side
-  if (!authToken) {
-    console.error('[config] WARNING: No auth token for proxy mode');
+  // Uses long-lived Clerk API key (30 days) instead of session token
+  if (!desktopApiKey) {
+    console.error('[config] WARNING: No desktop API key for proxy mode');
   }
 
   return {
     ...baseEnv,
     ANTHROPIC_BASE_URL: CLAUDE_PROXY_URL,
-    // Auth token as API key - proxy extracts userId from Bearer token
-    ANTHROPIC_API_KEY: authToken || 'missing-auth-token',
+    // Long-lived Clerk API key - proxy verifies via clerkClient.apiKeys.verifySecret()
+    ANTHROPIC_API_KEY: desktopApiKey || 'missing-api-key',
   };
 }
 
@@ -412,7 +415,34 @@ ipcMain.handle('trajectory:list', async () => {
 ipcMain.handle('auth:set-token', async (_event, token: string) => {
   authToken = token;
   store.set('okrapdfToken', token);
-  console.error('[auth] Token set and persisted');
+  console.error('[auth] Session token set and persisted');
+
+  // Exchange session token for long-lived API key (30 days)
+  try {
+    const response = await fetch('https://okrapdf.com/api/desktop/token', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.token) {
+        desktopApiKey = data.token;
+        store.set('desktopApiKey', data.token);
+        console.error('[auth] Desktop API key obtained (30-day expiry)');
+      } else if (data.hasExistingKey) {
+        console.error('[auth] Desktop API key already exists, using cached');
+      }
+    } else {
+      console.error('[auth] Failed to get desktop API key:', response.status);
+    }
+  } catch (error) {
+    console.error('[auth] Error exchanging token for API key:', error);
+  }
+
   return { success: true };
 });
 
@@ -504,8 +534,10 @@ ipcMain.handle('auth:get-token', async () => {
 
 ipcMain.handle('auth:clear-token', async () => {
   authToken = null;
+  desktopApiKey = null;
   store.delete('okrapdfToken');
-  console.error('[auth] Token cleared');
+  store.delete('desktopApiKey');
+  console.error('[auth] Session token and API key cleared');
   return { success: true };
 });
 
@@ -548,8 +580,8 @@ ipcMain.handle('claude:check-status', async () => {
     const userApiKey = getStoredApiKey();
     const hasUserApiKey = !!userApiKey;
 
-    // Check if logged into okrapdf (enables proxy mode)
-    const hasProxyAuth = !!authToken;
+    // Check if logged into okrapdf (enables proxy mode via long-lived API key)
+    const hasProxyAuth = !!desktopApiKey;
 
     // Check environment variable - legacy
     const hasEnvApiKey = !!process.env.ANTHROPIC_API_KEY;
@@ -768,11 +800,11 @@ ipcMain.on(
     const outputDir = cwd; // Watch the agent directory itself, not a subdirectory
     console.error('Querying in workspace:', cwd);
 
-    // Guard: ensure API key (BYOK) or auth token (proxy mode) is available
+    // Guard: ensure API key (BYOK) or desktop API key (proxy mode) is available
     const hasByokKey = !!getStoredApiKey();
-    const hasProxyAuth = !!authToken;
+    const hasProxyAuth = !!desktopApiKey;
     if (!hasByokKey && !hasProxyAuth) {
-      console.error('[query] No API key or auth token configured');
+      console.error('[query] No API key or desktop API key configured');
       event.reply('claude-code:error', 'Please log in to OkraPDF or add your Anthropic API key in Settings.');
       return;
     }
