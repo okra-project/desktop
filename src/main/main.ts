@@ -163,7 +163,44 @@ class AppUpdater {
   constructor() {
     log.transports.file.level = 'info';
     autoUpdater.logger = log;
-    autoUpdater.checkForUpdatesAndNotify();
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    autoUpdater.on('checking-for-update', () => {
+      log.info('Checking for updates...');
+    });
+
+    autoUpdater.on('update-available', (info) => {
+      log.info(`Update available: ${info.version}`);
+    });
+
+    autoUpdater.on('update-not-available', () => {
+      log.info('App is up to date');
+    });
+
+    autoUpdater.on('download-progress', (progress) => {
+      log.info(`Download progress: ${Math.round(progress.percent)}%`);
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+      log.info(`Update downloaded: ${info.version}`);
+      // Show native notification - installs on next quit
+      const { Notification } = require('electron');
+      new Notification({
+        title: 'OkraPDF Update Ready',
+        body: `Version ${info.version} will be installed on restart.`,
+        silent: true,
+      }).show();
+    });
+
+    autoUpdater.on('error', (err) => {
+      log.error('Auto-update error:', err.message);
+    });
+
+    // Check for updates silently
+    autoUpdater.checkForUpdates().catch((err) => {
+      log.error('Update check failed:', err.message);
+    });
   }
 }
 

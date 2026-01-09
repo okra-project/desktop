@@ -287,7 +287,7 @@
     ],
     "publish": {
       "provider": "generic",
-      "url": "https://okrapdf.com/downloads"
+      "url": "https://okrapdf.com/download/desktop"
     },
     "nsis": {
       "oneClick": false,
