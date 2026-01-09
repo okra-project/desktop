@@ -113,7 +113,34 @@ GHA workflow (`.github/workflows/release.yml`) will:
 
 Proxy: okrapdf's `next.config.ts` rewrites `/download/desktop/*` → GCS
 
-**Current stable**: v4.9.11
+**Current stable**: v4.9.14
+
+### Auto-Updates (Jan 2026)
+
+Uses `electron-updater` with generic provider pointing to GCS via okrapdf.com proxy.
+
+**How it works**:
+1. On app launch, checks `https://okrapdf.com/download/desktop/latest-mac.yml`
+2. Downloads update `.zip` in background (macOS uses zip, not dmg for updates)
+3. Shows native notification: "Version X.X.X will be installed on restart"
+4. Auto-installs on app quit
+
+**Files uploaded per release**:
+- `*.dmg` - Manual download/install
+- `*.zip` - Auto-update payload (REQUIRED for macOS auto-update)
+- `latest-mac.yml` - Update manifest
+
+**Logs location** (production builds):
+```
+~/Library/Logs/electron-react-boilerplate/main.log
+```
+
+**Dev builds skip updates** with message:
+```
+Skip checkForUpdates because application is not packed
+```
+
+**First auto-update capable version**: v4.9.12 (earlier versions have wrong publish URL)
 
 ### Bundled Runtimes (Fresh Install Support)
 
