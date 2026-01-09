@@ -90,7 +90,7 @@ jobs:
         with:
           path: release/build
           destination: okrapdf-public/releases/v${{ steps.version.outputs.version }}
-          glob: '*.dmg'
+          glob: '*.{dmg,zip}'
           parent: false
 
       - name: Fix paths in auto-update manifest
