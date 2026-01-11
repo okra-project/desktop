@@ -45,6 +45,18 @@ pnpm start
 pnpm run package
 ```
 
+## Release (repeatable)
+
+```bash
+# Clean local build outputs
+rm -rf release/build
+
+# Install deps and build installers
+./build-installer.sh
+```
+
+Artifacts are written to `release/build/` (DMG, EXE, AppImage). For a manual build sequence, see `QUICKSTART.md`.
+
 ## Architecture
 
 ```
