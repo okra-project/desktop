@@ -117,7 +117,7 @@ function LocalDocumentBrowser({ onSelectDocument, onOpenSettings }: LocalDocumen
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full bg-cream">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-okra-orange" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-okra-yellow" />
       </div>
     );
   }
@@ -133,7 +133,7 @@ function LocalDocumentBrowser({ onSelectDocument, onOpenSettings }: LocalDocumen
           <button
             onClick={handleOpenPDF}
             disabled={isOpening}
-            className="px-4 py-2 bg-okra-orange hover:bg-okra-orange/90 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+            className="px-4 py-2 bg-okra-yellow hover:bg-okra-yellow-hover text-ink rounded-lg font-medium transition-all disabled:opacity-50 border border-ink/10 hover:border-ink shadow-sm hover:shadow-md"
           >
             {isOpening ? 'Opening...' : 'Open PDF'}
           </button>
@@ -159,7 +159,7 @@ function LocalDocumentBrowser({ onSelectDocument, onOpenSettings }: LocalDocumen
             <button
               onClick={handleOpenPDF}
               disabled={isOpening}
-              className="px-6 py-3 bg-okra-orange hover:bg-okra-orange/90 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+              className="px-6 py-3 bg-okra-yellow hover:bg-okra-yellow-hover text-ink rounded-xl font-medium transition-all disabled:opacity-50 border-2 border-ink shadow-[4px_4px_0px_0px_rgba(36,28,21,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]"
             >
               {isOpening ? 'Opening...' : 'Open PDF'}
             </button>
@@ -170,11 +170,11 @@ function LocalDocumentBrowser({ onSelectDocument, onOpenSettings }: LocalDocumen
               <div
                 key={workspace.id}
                 onClick={() => handleSelectWorkspace(workspace)}
-                className="bg-white rounded-xl border border-sidebar-border overflow-hidden hover:shadow-lg hover:border-okra-orange/50 transition-all cursor-pointer group relative"
+                className="bg-white rounded-xl border border-sidebar-border overflow-hidden hover:shadow-lg hover:border-okra-yellow transition-all cursor-pointer group relative"
               >
                 {openingId === workspace.id && (
                   <div className="absolute inset-0 bg-white/80 z-10 flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-okra-orange" />
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-okra-yellow" />
                   </div>
                 )}
                 

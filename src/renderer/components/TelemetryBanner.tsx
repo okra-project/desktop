@@ -55,10 +55,10 @@ export default function TelemetryBanner() {
             >
               No thanks
             </button>
-            <button
-              onClick={() => handleConsent(true)}
-              className="px-3 py-1.5 text-sm bg-okra-orange text-white rounded-md hover:bg-orange-600 transition-colors"
-            >
+          <button
+            onClick={handleUpgrade}
+            className="px-3 py-1.5 text-sm bg-okra-yellow text-ink rounded-md hover:bg-okra-yellow-hover transition-colors font-medium border border-ink/10 shadow-sm"
+          >
               Allow
             </button>
           </div>

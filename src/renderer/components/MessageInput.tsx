@@ -125,7 +125,7 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
       case '.pdf':
         return (
           <svg
-            className="w-4 h-4 text-okra-orange"
+            className="w-4 h-4 text-red-500"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -140,7 +140,7 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
       case '.doc':
         return (
           <svg
-            className="w-4 h-4 text-sidebar-text"
+            className="w-4 h-4 text-blue-500"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -227,9 +227,7 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
       {/* Message Input */}
       <div className="flex items-end gap-2">
         <div
-          className={`flex flex-col relative gap-2 w-full ${
-            isDragOver ? 'ring-2 ring-okra-orange ring-opacity-50 rounded-lg' : ''
-          }`}
+          className={`flex flex-col relative gap-2 w-full ${isDragOver ? 'ring-2 ring-okra-yellow ring-opacity-50 rounded-lg' : ''}`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -244,7 +242,7 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
             onKeyDown={handleKeyDown}
             placeholder="Type a message... (Shift+Enter for new line)"
             disabled={disabled}
-            className="w-full resize-none rounded-lg border border-sidebar-border px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-okra-orange focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed text-ink bg-white placeholder-sidebar-text"
+            className="w-full resize-none rounded-lg border border-sidebar-border px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-okra-yellow focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed text-ink bg-white placeholder-sidebar-text"
             rows={1}
             style={{ minHeight: '48px', maxHeight: '150px' }}
           />
@@ -275,11 +273,11 @@ function MessageInput({ onSendMessage, disabled = false }: MessageInputProps) {
                 (!message.trim() && selectedFiles.length === 0) ||
                 isUploading
               }
-              className="px-4 py-1 text-white rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-okra-orange focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors min-w-[70px] bg-okra-orange"
+              className="px-4 py-1 text-ink rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-okra-yellow focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors min-w-[70px] bg-okra-yellow font-medium shadow-sm hover:shadow"
             >
               {isUploading ? (
                 <svg
-                  className="animate-spin h-4 w-4 text-white mx-auto"
+                  className="animate-spin h-4 w-4 text-ink mx-auto"
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
                   viewBox="0 0 24 24"

@@ -32,17 +32,13 @@ export default function DocumentViewer({
   useEffect(() => {
     const findPdf = async () => {
       try {
-        // Look for source.pdf or any .pdf file in workspace
         const files = await window.electron.ipcRenderer.invoke(
           'workspace:list-files',
           workspacePath
         );
 
         if (files && files.length > 0) {
-          // Prefer source.pdf, otherwise take first PDF
-          const sourcePdf = files.find((f: string) => f === 'source.pdf');
-          const anyPdf = files.find((f: string) => f.endsWith('.pdf'));
-          const pdfFile = sourcePdf || anyPdf;
+          const pdfFile = files.find((f: string) => f.toLowerCase().endsWith('.pdf'));
 
           if (pdfFile) {
             const fullPath = `${workspacePath}/${pdfFile}`;

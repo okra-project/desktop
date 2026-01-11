@@ -94,6 +94,20 @@ function getClaudeEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return baseEnv;
 }
 
+/**
+ * Find the PDF file in a workspace directory.
+ * Looks for any .pdf file (workspaces should have exactly one).
+ */
+function findPdfInWorkspace(workspacePath: string): string | null {
+  try {
+    const files = fs.readdirSync(workspacePath);
+    const pdfFile = files.find((f) => f.toLowerCase().endsWith('.pdf'));
+    return pdfFile ? path.join(workspacePath, pdfFile) : null;
+  } catch {
+    return null;
+  }
+}
+
 class AppUpdater {
   constructor() {
     log.transports.file.level = 'info';
@@ -378,11 +392,13 @@ ipcMain.handle('workspace:open-pdf-dialog', async () => {
   fs.mkdirSync(path.join(workspacePath, 'ocr'));
   fs.mkdirSync(path.join(workspacePath, 'tables'));
 
-  fs.copyFileSync(pdfPath, path.join(workspacePath, 'source.pdf'));
+  const pdfFileName = path.basename(pdfPath);
+  fs.copyFileSync(pdfPath, path.join(workspacePath, pdfFileName));
 
   const metadata = {
     id: workspaceId,
     fileName,
+    pdfFileName,
     originalPath: pdfPath,
     createdAt: new Date().toISOString(),
     mode: 'local',
@@ -394,6 +410,7 @@ ipcMain.handle('workspace:open-pdf-dialog', async () => {
     id: workspaceId,
     name: fileName,
     pdfPath,
+    pdfFileName,
     workspacePath,
     createdAt: new Date().toISOString(),
     lastOpenedAt: new Date().toISOString(),
@@ -412,6 +429,7 @@ ipcMain.handle('workspace:open-pdf-dialog', async () => {
 
 ipcMain.handle('workspace:create-from-path', async (_event, pdfPath: string) => {
   const fileName = path.basename(pdfPath, '.pdf');
+  const pdfFileName = path.basename(pdfPath);
   const workspaceId = `local-${nanoid(12)}`;
   const workspacePath = path.join(WORKSPACES_DIR, workspaceId);
 
@@ -419,11 +437,12 @@ ipcMain.handle('workspace:create-from-path', async (_event, pdfPath: string) => 
   fs.mkdirSync(path.join(workspacePath, 'ocr'));
   fs.mkdirSync(path.join(workspacePath, 'tables'));
 
-  fs.copyFileSync(pdfPath, path.join(workspacePath, 'source.pdf'));
+  fs.copyFileSync(pdfPath, path.join(workspacePath, pdfFileName));
 
   const metadata = {
     id: workspaceId,
     fileName,
+    pdfFileName,
     originalPath: pdfPath,
     createdAt: new Date().toISOString(),
     mode: 'local',
@@ -436,6 +455,8 @@ ipcMain.handle('workspace:create-from-path', async (_event, pdfPath: string) => 
     name: fileName,
     path: workspacePath,
     pdfPath,
+    pdfFileName,
+    workspacePath,
     createdAt: new Date().toISOString(),
     lastOpenedAt: new Date().toISOString(),
     extractionStatus: 'pending',
@@ -492,7 +513,10 @@ ipcMain.handle('extraction:start-text', async (_event, workspaceId: string) => {
     return { success: false, error: 'Workspace not found' };
   }
 
-  const pdfPath = path.join(workspace.workspacePath, 'source.pdf');
+  const pdfPath = findPdfInWorkspace(workspace.workspacePath);
+  if (!pdfPath) {
+    return { success: false, error: 'PDF not found in workspace' };
+  }
   const ocrDir = path.join(workspace.workspacePath, 'ocr');
 
   const updateWorkspaceStatus = (status: string, progress?: number) => {
@@ -572,8 +596,8 @@ ipcMain.handle('extraction:save-page-content', async (_event, workspacePath: str
 });
 
 ipcMain.handle('extraction:get-page-count', async (_event, workspacePath: string) => {
-  const pdfPath = path.join(workspacePath, 'source.pdf');
-  if (!fs.existsSync(pdfPath)) {
+  const pdfPath = findPdfInWorkspace(workspacePath);
+  if (!pdfPath) {
     return 0;
   }
   return getPDFPageCount(pdfPath);
@@ -594,7 +618,10 @@ ipcMain.handle('extraction:start-tables', async (_event, workspaceId: string) =>
     return { success: false, error: 'OpenRouter API key not configured. Add it in Settings.' };
   }
 
-  const pdfPath = path.join(workspace.workspacePath, 'source.pdf');
+  const pdfPath = findPdfInWorkspace(workspace.workspacePath);
+  if (!pdfPath) {
+    return { success: false, error: 'PDF not found in workspace' };
+  }
   const tablesDir = path.join(workspace.workspacePath, 'tables');
 
   const onProgress = (progress: TableExtractionProgress) => {
@@ -873,11 +900,11 @@ ipcMain.handle('workspace:get-thumbnail', async (_event, workspacePath: string) 
     return `file://${thumbnailPath}`;
   }
   
-  const pdfPath = path.join(workspacePath, 'source.pdf');
-  if (!fs.existsSync(pdfPath)) {
+  const pdfPath = findPdfInWorkspace(workspacePath);
+  if (!pdfPath) {
     return null;
   }
-  
+
   const result = await generatePDFThumbnail(pdfPath, thumbnailPath, 800);
   if (result.success && result.path) {
     return `file://${result.path}`;
@@ -940,7 +967,7 @@ ipcMain.on(
     const BASE_PROMPT = `You are working in an OkraPDF document workspace. Read CLAUDE.md first to understand the available files and structure.
 
 Key files:
-- source.pdf - The original PDF document
+- *.pdf - The original PDF document (kept with original filename)
 - tables/*.md - Extracted tables as markdown
 - ocr/*.md - OCR text per page (flat)
 - derived/ocr/{jobId}/*.md - OCR text per page (namespaced)

@@ -56,9 +56,8 @@ export default function DocumentCard({ document, onClick, isLoading }: DocumentC
       </div>
 
       {isLoading && (
-        <div className="mt-3 text-xs text-okra-orange flex items-center gap-2 font-medium">
-            <span className="animate-spin h-3 w-3 border-2 border-okra-orange border-t-transparent rounded-full"></span>
-            Opening Document...
+                  <div className="mt-3 text-xs text-ink flex items-center gap-2 font-medium">
+                    <span className="animate-spin h-3 w-3 border-2 border-okra-yellow border-t-transparent rounded-full"></span>            Opening Document...
         </div>
       )}
     </button>
