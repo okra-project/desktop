@@ -29,7 +29,7 @@ function CodeComponent({ inline, className, children }: any) {
 function LinkComponent({ children, href }: any) {
   return (
     <a
-      className="text-okra-orange hover:underline"
+      className="text-ink decoration-okra-yellow underline hover:opacity-80"
       target="_blank"
       rel="noopener noreferrer"
       href={href}
@@ -185,7 +185,7 @@ function Message({ message }: MessageProps) {
                   </div>
                   <button
                     onClick={() => handleDownloadFile(file.path, file.name)}
-                    className="ml-2 px-3 py-1 text-xs text-white rounded hover:opacity-90 transition-colors bg-okra-orange"
+                    className="ml-2 px-3 py-1 text-xs text-ink rounded hover:opacity-90 transition-colors bg-okra-yellow font-medium border border-ink/10 shadow-sm"
                     title={`Download ${file.name}`}
                   >
                     Download

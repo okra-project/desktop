@@ -5,11 +5,24 @@ import MessageInput from './MessageInput';
 import { ChatMessage, OutputFile } from './types';
 import { detectTodoListInMessage, TodoItem } from './utils/todoDetection';
 
-function ChatInterface() {
+interface ChatInterfaceProps {
+  onOpenSettings: () => void;
+}
+
+function ChatInterface({ onOpenSettings }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentTodos, setCurrentTodos] = useState<TodoItem[]>([]);
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkApiKey = async () => {
+      const enabled = await window.electron.ipcRenderer.invoke('byok:is-enabled');
+      setHasApiKey(enabled);
+    };
+    checkApiKey();
+  }, []);
 
   useEffect(() => {
     // Set up listeners for Claude Code responses
@@ -178,6 +191,31 @@ function ChatInterface() {
     },
     [isLoading],
   );
+
+  // Show API key prompt if not configured
+  if (hasApiKey === false) {
+    return (
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="text-center max-w-md">
+            <div className="text-4xl mb-4">🔑</div>
+            <h2 className="text-lg font-medium text-gray-900 mb-2">
+              API Key Required
+            </h2>
+            <p className="text-gray-600 mb-4">
+              Add your Anthropic API key to start chatting with your document.
+            </p>
+            <button
+              onClick={onOpenSettings}
+              className="px-4 py-2 bg-okra-yellow text-gray-900 rounded-lg font-medium hover:bg-okra-yellow/90 transition-colors"
+            >
+              Open Settings
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">

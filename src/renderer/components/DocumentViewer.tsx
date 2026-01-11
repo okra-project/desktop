@@ -10,6 +10,7 @@ interface DocumentViewerProps {
   documentName: string;
   workspacePath: string;
   onBack: () => void;
+  onOpenSettings: () => void;
 }
 
 /**
@@ -21,6 +22,7 @@ export default function DocumentViewer({
   documentName,
   workspacePath,
   onBack,
+  onOpenSettings,
 }: DocumentViewerProps) {
   const [leftPanelWidth, setLeftPanelWidth] = useState(50); // percentage
   const [pdfPath, setPdfPath] = useState<string>('');
@@ -168,7 +170,7 @@ export default function DocumentViewer({
               Ask questions about the PDF content
             </p>
           </div>
-          <ChatInterface />
+          <ChatInterface onOpenSettings={onOpenSettings} />
         </div>
       </div>
 

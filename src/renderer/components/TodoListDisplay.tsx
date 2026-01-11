@@ -36,9 +36,9 @@ function TodoListDisplay({ todos }: TodoListDisplayProps) {
   const getPriorityColor = (priority: TodoItem['priority']) => {
     switch (priority) {
       case 'high':
-        return 'text-okra-orange border-okra-orange';
+        return 'text-red-600 border-red-200';
       case 'medium':
-        return 'text-okra-yellow-hover border-okra-yellow';
+        return 'text-amber-600 border-amber-200';
       case 'low':
         return 'text-ink border-sage';
       default:

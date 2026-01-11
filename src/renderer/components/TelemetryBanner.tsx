@@ -39,7 +39,7 @@ export default function TelemetryBanner() {
         <div className="text-2xl">📊</div>
         <div className="flex-1">
           <h3 className="font-medium text-slate-800 mb-1">
-            Help improve OkraPDF
+            Help improve <span className="font-serif">OkraPDF</span>
           </h3>
           <p className="text-sm text-slate-600 mb-3">
             Share anonymous usage data to help us understand how features are used.
@@ -55,10 +55,10 @@ export default function TelemetryBanner() {
             >
               No thanks
             </button>
-          <button
-            onClick={handleUpgrade}
-            className="px-3 py-1.5 text-sm bg-okra-yellow text-ink rounded-md hover:bg-okra-yellow-hover transition-colors font-medium border border-ink/10 shadow-sm"
-          >
+            <button
+              onClick={() => handleConsent(true)}
+              className="px-3 py-1.5 text-sm bg-okra-yellow text-ink rounded-md hover:bg-okra-yellow-hover transition-colors font-medium border border-ink/10 shadow-sm"
+            >
               Allow
             </button>
           </div>

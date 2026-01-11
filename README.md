@@ -77,6 +77,16 @@ Artifacts are written to `release/build/` (DMG, EXE, AppImage). For a manual bui
 - All processing happens locally
 - API calls go directly to Anthropic/OpenRouter
 
+## Network Dependencies
+
+The application connects to the following services:
+
+- **okrapdf.com**: Checks for application updates and provides download links.
+- **api.anthropic.com**: Chat functionality (direct connection using your API key).
+- **openrouter.ai**: Table extraction (direct connection using your API key).
+- **sentry.io**: Error reporting (if enabled).
+- **app.posthog.com**: Telemetry (if enabled).
+
 ## License
 
 MIT - see [LICENSE](LICENSE)
