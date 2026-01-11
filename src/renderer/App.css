@@ -3,27 +3,27 @@
  *        See https://github.com/webpack-contrib/sass-loader#imports
  */
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@100..900&display=swap');
-@import "tailwindcss";
+@import 'tailwindcss';
 @plugin "@tailwindcss/typography";
 
 @source "../renderer/**/*.{js,jsx,ts,tsx,ejs}";
 @source "../main/**/*.{js,jsx,ts,tsx}";
 
 @theme {
-  --color-cream: #FDFBF7;
+  --color-cream: #fdfbf7;
   --color-ink: #241c15;
-  --color-okra-yellow: #FFE01B;
-  --color-okra-yellow-hover: #E6C800;
-  --color-okra-orange: #FD4F00;
-  --color-lavender: #E7E6F8;
-  --color-sage: #D6EADF;
+  --color-okra-yellow: #ffe01b;
+  --color-okra-yellow-hover: #e6c800;
+  --color-okra-orange: #fd4f00;
+  --color-lavender: #e7e6f8;
+  --color-sage: #d6eadf;
 
   /* Sidebar specific */
-  --color-sidebar-bg: #F9FAFB;
-  --color-sidebar-text: #4B5563;
+  --color-sidebar-bg: #f9fafb;
+  --color-sidebar-text: #4b5563;
   --color-sidebar-text-hover: #111827;
-  --color-sidebar-bg-hover: #F3F4F6;
-  --color-sidebar-border: #E5E7EB;
+  --color-sidebar-bg-hover: #f3f4f6;
+  --color-sidebar-border: #e5e7eb;
 
   --font-sans: 'Inter', sans-serif;
   --font-serif: 'DM Serif Display', serif;
@@ -34,18 +34,33 @@
   --animate-slide-in-right: slide-in-right 0.2s ease-out;
 
   @keyframes shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
   }
 
   @keyframes bounce-gentle {
-    0%, 100% { transform: translateX(-50%) translateY(0); }
-    50% { transform: translateX(-50%) translateY(-6px); }
+    0%,
+    100% {
+      transform: translateX(-50%) translateY(0);
+    }
+    50% {
+      transform: translateX(-50%) translateY(-6px);
+    }
   }
 
   @keyframes slide-in-right {
-    0% { transform: translateX(100%); opacity: 0; }
-    100% { transform: translateX(0); opacity: 1; }
+    0% {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(0);
+      opacity: 1;
+    }
   }
 }
 
@@ -62,23 +77,28 @@
     color: var(--color-ink);
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     /* font-family: var(--font-serif); removed to match web app style */
   }
 
   /* Cursor pointer for clickable elements */
   button,
-  [role="button"],
+  [role='button'],
   a,
   label[for],
-  input[type="checkbox"],
-  input[type="radio"],
-  input[type="submit"],
-  input[type="button"],
+  input[type='checkbox'],
+  input[type='radio'],
+  input[type='submit'],
+  input[type='button'],
   select,
   summary,
   [onclick],
-  [tabindex]:not([tabindex="-1"]) {
+  [tabindex]:not([tabindex='-1']) {
     cursor: pointer;
   }
 
@@ -89,16 +109,16 @@
   }
 
   ::-webkit-scrollbar-track {
-    background: #FFFFFF;
+    background: #ffffff;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #E5E7EB;
+    background: #e5e7eb;
     border-radius: 4px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #D1D5DB;
+    background: #d1d5db;
   }
 }
 
@@ -134,7 +154,7 @@
     width: 8px;
   }
   .scrollbar-on-hover:hover::-webkit-scrollbar-thumb {
-    background: #E5E7EB;
+    background: #e5e7eb;
     border-radius: 4px;
   }
 }
@@ -146,15 +166,40 @@
 /* PDF.js Text Layer - enables text selection */
 .textLayer {
   position: absolute;
-  left: 0;
-  top: 0;
+  inset: 0;
   overflow: hidden;
-  line-height: 1.0;
+  line-height: 1;
   -webkit-text-size-adjust: none;
   -moz-text-size-adjust: none;
   text-size-adjust: none;
   forced-color-adjust: none;
-  z-index: 1;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.react-pdf__Page {
+  position: relative !important;
+}
+
+.react-pdf__Page__textContent {
+  position: absolute !important;
+  inset: 0 !important;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.okra-search-highlight {
+  position: absolute;
+  background: rgba(255, 213, 0, 0.5) !important;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 10;
+  mix-blend-mode: multiply;
+}
+
+.okra-search-current {
+  background: rgba(255, 140, 0, 0.7) !important;
+  box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.3);
 }
 
 .textLayer span,
