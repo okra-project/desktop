@@ -126,7 +126,7 @@ function LocalDocumentBrowser({ onSelectDocument, onOpenSettings }: LocalDocumen
     <div className="flex flex-col h-full bg-cream">
       <div className="flex items-center justify-between px-6 py-4 border-b border-sidebar-border bg-white">
         <div>
-          <h1 className="text-2xl font-semibold font-serif text-ink">Local Documents</h1>
+          <h1 className="text-2xl font-semibold text-ink">Local Documents</h1>
           <p className="text-sm text-sidebar-text">Your PDFs stay on your computer</p>
         </div>
         <div className="flex items-center gap-3">

@@ -104,7 +104,7 @@ function SettingsScreen({ onClose, onSettingsSaved }: SettingsScreenProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-cream">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-okra-orange" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-okra-yellow" />
       </div>
     );
   }
@@ -114,7 +114,7 @@ function SettingsScreen({ onClose, onSettingsSaved }: SettingsScreenProps) {
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold font-serif text-ink">Settings</h1>
+            <h1 className="text-2xl font-bold text-ink">Settings</h1>
             <p className="text-sidebar-text mt-1">Configure your API keys for local processing</p>
           </div>
           <button
@@ -130,8 +130,8 @@ function SettingsScreen({ onClose, onSettingsSaved }: SettingsScreenProps) {
         <div className="bg-white rounded-2xl shadow-lg border border-sidebar-border overflow-hidden">
           <div className="p-6 border-b border-sidebar-border">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-okra-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 bg-okra-yellow/20 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-ink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                 </svg>
               </div>
@@ -158,7 +158,7 @@ function SettingsScreen({ onClose, onSettingsSaved }: SettingsScreenProps) {
                 Required for Claude agent and table extraction. Get your key at{' '}
                 <button
                   onClick={() => window.electron.ipcRenderer.invoke('shell:open-external', 'https://console.anthropic.com/settings/keys')}
-                  className="text-okra-orange hover:underline"
+                  className="text-ink decoration-okra-yellow underline hover:opacity-80 transition-opacity"
                 >
                   console.anthropic.com
                 </button>
@@ -173,7 +173,7 @@ function SettingsScreen({ onClose, onSettingsSaved }: SettingsScreenProps) {
                       setValidationStatus((prev) => ({ ...prev, anthropic: undefined }));
                     }}
                     placeholder="sk-ant-..."
-                    className="w-full px-4 py-3 border border-sidebar-border rounded-lg focus:outline-none focus:ring-2 focus:ring-okra-orange/50 font-mono text-sm"
+                    className="w-full px-4 py-3 border border-sidebar-border rounded-lg focus:outline-none focus:ring-2 focus:ring-okra-yellow/50 font-mono text-sm"
                   />
                   <button
                     type="button"
@@ -215,7 +215,7 @@ function SettingsScreen({ onClose, onSettingsSaved }: SettingsScreenProps) {
                 For alternative models. Get your key at{' '}
                 <button
                   onClick={() => window.electron.ipcRenderer.invoke('shell:open-external', 'https://openrouter.ai/keys')}
-                  className="text-okra-orange hover:underline"
+                  className="text-ink decoration-okra-yellow underline hover:opacity-80 transition-opacity"
                 >
                   openrouter.ai
                 </button>
@@ -230,7 +230,7 @@ function SettingsScreen({ onClose, onSettingsSaved }: SettingsScreenProps) {
                       setValidationStatus((prev) => ({ ...prev, openrouter: undefined }));
                     }}
                     placeholder="sk-or-..."
-                    className="w-full px-4 py-3 border border-sidebar-border rounded-lg focus:outline-none focus:ring-2 focus:ring-okra-orange/50 font-mono text-sm"
+                    className="w-full px-4 py-3 border border-sidebar-border rounded-lg focus:outline-none focus:ring-2 focus:ring-okra-yellow/50 font-mono text-sm"
                   />
                   <button
                     type="button"
@@ -275,7 +275,7 @@ function SettingsScreen({ onClose, onSettingsSaved }: SettingsScreenProps) {
             <button
               onClick={handleSave}
               disabled={isSaving || !settings.anthropicApiKey}
-              className="px-6 py-2.5 bg-okra-orange hover:bg-okra-orange/90 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-2.5 bg-okra-yellow hover:bg-okra-yellow-hover text-ink rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {isSaving ? 'Saving...' : 'Save Settings'}
             </button>

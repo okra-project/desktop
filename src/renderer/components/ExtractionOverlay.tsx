@@ -21,10 +21,10 @@ export function ExtractionOverlay() {
 
         <div className="mb-4">
           <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-okra-orange transition-all duration-300"
-              style={{ width: `${percent}%` }}
-            />
+          <div 
+            className="h-full bg-okra-yellow transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
           </div>
           <p className="text-xs text-sidebar-text text-center mt-1">{percent}%</p>
         </div>

@@ -113,7 +113,7 @@ export default function DocumentViewer({
             </svg>
           </button>
           <div>
-            <h1 className="text-lg font-semibold text-ink font-serif truncate max-w-[400px]">
+            <h1 className="text-lg font-semibold text-ink truncate max-w-[400px]">
               {documentName}
             </h1>
             <p className="text-xs text-sidebar-text">
