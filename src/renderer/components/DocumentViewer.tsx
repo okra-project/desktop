@@ -122,11 +122,16 @@ export default function DocumentViewer({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-sage/50 text-ink">
-            <span className="w-2 h-2 bg-okra-orange rounded-full mr-1.5 animate-pulse" />
-            Connected
-          </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.electron.ipcRenderer.invoke('workspace:open-in-finder', workspacePath)}
+            className="p-2 hover:bg-sidebar-bg-hover rounded-lg transition-colors"
+            title="Open folder in Finder"
+          >
+            <svg className="w-5 h-5 text-sidebar-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            </svg>
+          </button>
         </div>
       </header>
 
