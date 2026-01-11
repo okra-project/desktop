@@ -58,7 +58,19 @@ export type Channels =
   | 'menu:open-settings'
   // Extraction channels
   | 'extraction:progress'
-  | 'extraction:table-progress';
+  | 'extraction:table-progress'
+  // OCR Provider channels
+  | 'ocr:progress'
+  | 'ocr:list-providers'
+  | 'ocr:get-provider'
+  | 'ocr:save-config'
+  | 'ocr:get-config'
+  | 'ocr:check-health'
+  | 'ocr:extract-page'
+  | 'ocr:extract-document'
+  | 'ocr:compare'
+  | 'ocr:get-results'
+  | 'ocr:get-page-bboxes';
 
 const electronHandler = {
   ipcRenderer: {

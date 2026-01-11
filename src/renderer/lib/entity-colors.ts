@@ -40,6 +40,22 @@ export const ENTITY_COLORS = {
     border: 'rgba(100, 116, 139, 0.9)',
     fill: 'rgba(100, 116, 139, 0.15)',
   },
+  // OCR-specific types (from Google Doc AI, OpenRouter, etc.)
+  heading: {
+    hex: '#8b5cf6',      // violet-500
+    border: 'rgba(139, 92, 246, 0.9)',
+    fill: 'rgba(139, 92, 246, 0.15)',
+  },
+  line: {
+    hex: '#06b6d4',      // cyan-500
+    border: 'rgba(6, 182, 212, 0.7)',
+    fill: 'rgba(6, 182, 212, 0.08)',
+  },
+  text: {
+    hex: '#94a3b8',      // slate-400
+    border: 'rgba(148, 163, 184, 0.7)',
+    fill: 'rgba(148, 163, 184, 0.08)',
+  },
 } as const;
 
 export type EntityColorType = keyof typeof ENTITY_COLORS;

@@ -7,11 +7,20 @@
  * - OpenRouter (optional, for alternative models)
  */
 
+/**
+ * BYOK Settings
+ *
+ * NOTE: API keys are now managed per-provider following n8n patterns.
+ * - OpenRouter key → OCR Providers (Settings > OCR Providers > OpenRouter)
+ * - Anthropic key → Agent Provider (kept here for Claude Agent SDK)
+ *
+ * Eventually Anthropic should also move to a provider model.
+ */
 export interface BYOKSettings {
-  /** Anthropic API key for Claude - required for agent and table extraction */
+  /** Anthropic API key for Claude Agent SDK */
   anthropicApiKey?: string;
 
-  /** OpenRouter API key - optional, for alternative models */
+  /** @deprecated Use OCR Providers settings instead */
   openrouterApiKey?: string;
 
   /** Whether BYOK mode is enabled (has at least anthropicApiKey) */

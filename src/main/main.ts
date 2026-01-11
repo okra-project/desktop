@@ -13,6 +13,7 @@ import { SENTRY_DSN, SENTRY_ENABLED, SENTRY_ENVIRONMENT } from '../config/sentry
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import { setupVerificationIpcHandlers, cleanupVerificationIpcHandlers } from './verification/ipc-handlers';
+import { setupOcrIpcHandlers, cleanupOcrIpcHandlers } from './providers';
 import { extractTextFromPDF, getPDFPageCount, generatePDFThumbnail } from './pdf-extraction';
 import type { ExtractionProgress } from './pdf-extraction';
 import { extractTablesFromPDF, getExtractedTables } from './table-extraction';
@@ -80,9 +81,24 @@ if (!fs.existsSync(WORKSPACES_DIR)) {
 
 let currentWorkspacePath: string | null = store.get('lastWorkspacePath') as string | null;
 
+/**
+ * Get environment variables for Claude agent, including API key from provider config.
+ * Uses the unified provider system (anthropic provider) instead of legacy BYOK settings.
+ */
 function getClaudeEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const byokSettings = store.get('byokSettings') as { enabled: boolean; anthropicApiKey: string | null } | null;
+  // First, try the new provider config system
+  const providerConfigs = store.get('providerConfigs') as Record<string, { apiKey?: string }> | null;
+  const anthropicConfig = providerConfigs?.['anthropic'];
 
+  if (anthropicConfig?.apiKey) {
+    return {
+      ...baseEnv,
+      ANTHROPIC_API_KEY: anthropicConfig.apiKey,
+    };
+  }
+
+  // Fallback to legacy BYOK settings for backwards compatibility
+  const byokSettings = store.get('byokSettings') as { enabled: boolean; anthropicApiKey: string | null } | null;
   if (byokSettings?.enabled && byokSettings?.anthropicApiKey) {
     return {
       ...baseEnv,
@@ -611,11 +627,18 @@ ipcMain.handle('extraction:start-tables', async (_event, workspaceId: string) =>
     return { success: false, error: 'Workspace not found' };
   }
 
-  const byokSettings = store.get('byokSettings') as { openrouterApiKey?: string } | undefined;
-  const apiKey = byokSettings?.openrouterApiKey;
+  // Get OpenRouter API key from new provider system or legacy BYOK
+  const providerConfigs = store.get('providerConfigs') as Record<string, { apiKey?: string }> | null;
+  let apiKey = providerConfigs?.['openrouter']?.apiKey;
+
+  // Fallback to legacy BYOK
+  if (!apiKey) {
+    const byokSettings = store.get('byokSettings') as { openrouterApiKey?: string } | undefined;
+    apiKey = byokSettings?.openrouterApiKey;
+  }
 
   if (!apiKey) {
-    return { success: false, error: 'OpenRouter API key not configured. Add it in Settings.' };
+    return { success: false, error: 'OpenRouter API key not configured. Add it in Settings > Vision-Language Models.' };
   }
 
   const pdfPath = findPdfInWorkspace(workspace.workspacePath);
@@ -857,9 +880,22 @@ ipcMain.handle('byok:validate-key', async (_event, provider: 'anthropic' | 'open
   }
 });
 
+/**
+ * Check if an Anthropic API key is configured (from provider config or legacy BYOK).
+ */
+function hasAnthropicApiKey(): boolean {
+  // Check new provider config system first
+  const providerConfigs = store.get('providerConfigs') as Record<string, { apiKey?: string }> | null;
+  if (providerConfigs?.['anthropic']?.apiKey) {
+    return true;
+  }
+  // Fallback to legacy BYOK
+  const byokSettings = store.get('byokSettings') as { enabled: boolean; anthropicApiKey: string | null } | null;
+  return !!byokSettings?.enabled && !!byokSettings?.anthropicApiKey;
+}
+
 ipcMain.handle('byok:is-enabled', async () => {
-  const settings = store.get('byokSettings') as { enabled: boolean; anthropicApiKey: string | null } | null;
-  return settings?.enabled && !!settings?.anthropicApiKey;
+  return hasAnthropicApiKey();
 });
 
 ipcMain.handle('shell:open-external', async (_event, url: string) => {
@@ -867,9 +903,7 @@ ipcMain.handle('shell:open-external', async (_event, url: string) => {
 });
 
 ipcMain.handle('claude:check-status', async () => {
-  const byokSettings = store.get('byokSettings') as { enabled: boolean; anthropicApiKey: string | null } | null;
-  const ready = byokSettings?.enabled && !!byokSettings?.anthropicApiKey;
-  return { ready };
+  return { ready: hasAnthropicApiKey() };
 });
 
 // Get current workspace path
@@ -930,14 +964,13 @@ ipcMain.on(
   ) => {
     const abortController = new AbortController();
     // Use current workspace if set (from OkraPDF bootstrap), otherwise default to agent directory
-    const cwd = currentWorkspacePath || DEFAULT_WORKSPACE;
+    const cwd = currentWorkspacePath || WORKSPACES_DIR;
     const problemsDir = path.join(cwd, 'problems');
     const outputDir = cwd;
     console.error('Querying in workspace:', cwd);
 
-    const byokSettings = store.get('byokSettings') as { enabled: boolean; anthropicApiKey: string | null } | null;
-    if (!byokSettings?.enabled || !byokSettings?.anthropicApiKey) {
-      event.reply('claude-code:error', 'Please configure your Anthropic API key in Settings.');
+    if (!hasAnthropicApiKey()) {
+      event.reply('claude-code:error', 'Please configure your Anthropic API key in Settings > Agent Providers.');
       return;
     }
 
@@ -1458,6 +1491,9 @@ const createWindow = async () => {
       mainWindow.show();
     }
 
+    // Set up OCR provider IPC handlers
+    setupOcrIpcHandlers(mainWindow);
+
     // Track app launch after window is ready (renderer can receive events)
     setTimeout(() => {
       sendTelemetryEvent('app_launched', {
@@ -1491,8 +1527,9 @@ const createWindow = async () => {
  */
 
 app.on('window-all-closed', () => {
-  // Clean up verification handlers
+  // Clean up handlers
   cleanupVerificationIpcHandlers();
+  cleanupOcrIpcHandlers();
 
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
