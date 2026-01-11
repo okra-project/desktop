@@ -2,7 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import * as Sentry from '@sentry/electron/renderer';
 import PDFViewer from './PDFViewer';
 import ChatInterface from './ChatInterface';
-import { ReviewTab } from './review';
+import { LocalReviewTab } from './review';
+import { ExtractionOverlay } from './ExtractionOverlay';
+import { LocalReviewDataProvider } from '../providers';
 import { SENTRY_ENABLED } from '../../config/sentry';
 
 type ViewMode = 'chat' | 'review';
@@ -200,18 +202,21 @@ export default function DocumentViewer({
           </div>
         </div>
       ) : (
-        /* Review mode: Full-width ReviewTab */
         <div className="flex-1 overflow-hidden min-h-0">
-          <ReviewTab
-            jobId={documentUuid}
-            documentName={documentName}
-            pdfPath={pdfPath}
-            currentPage={currentPage}
-            onPageChange={setCurrentPage}
-            onBack={() => setViewMode('chat')}
-          />
+          <LocalReviewDataProvider jobId={documentUuid} workspacePath={workspacePath}>
+            <LocalReviewTab
+              jobId={documentUuid}
+              documentName={documentName}
+              pdfPath={pdfPath}
+              currentPage={currentPage}
+              onPageChange={setCurrentPage}
+              onBack={() => setViewMode('chat')}
+            />
+          </LocalReviewDataProvider>
         </div>
       )}
+
+      <ExtractionOverlay />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import LocalDocumentBrowser from './components/LocalDocumentBrowser';
 import DocumentViewer from './components/DocumentViewer';
 import TelemetryBanner from './components/TelemetryBanner';
 import SettingsScreen from './components/SettingsScreen';
+import { LocalExtractionProvider } from './providers/LocalExtractionProvider';
 import './App.css';
 
 type AppScreen = 'loading' | 'settings' | 'browser' | 'viewer';
@@ -106,7 +107,10 @@ export default function App() {
 
   if (screen === 'viewer' && selectedDocument) {
     return (
-      <>
+      <LocalExtractionProvider
+        workspaceId={selectedDocument.id}
+        workspacePath={selectedDocument.workspacePath}
+      >
         <DocumentViewer
           documentUuid={selectedDocument.id}
           documentName={selectedDocument.name}
@@ -114,7 +118,7 @@ export default function App() {
           onBack={handleBackToBrowser}
         />
         <TelemetryBanner />
-      </>
+      </LocalExtractionProvider>
     );
   }
 

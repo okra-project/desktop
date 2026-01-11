@@ -18,6 +18,7 @@ interface LocalDocumentBrowserProps {
 
 function LocalDocumentBrowser({ onSelectDocument, onOpenSettings }: LocalDocumentBrowserProps) {
   const [workspaces, setWorkspaces] = useState<LocalWorkspace[]>([]);
+  const [thumbnails, setThumbnails] = useState<Record<string, string | null>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isOpening, setIsOpening] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
@@ -33,9 +34,30 @@ function LocalDocumentBrowser({ onSelectDocument, onOpenSettings }: LocalDocumen
     }
   }, []);
 
+  const loadThumbnails = useCallback(async (spaces: LocalWorkspace[]) => {
+    const thumbs: Record<string, string | null> = {};
+    await Promise.all(
+      spaces.map(async (ws) => {
+        try {
+          const url = await window.electron.ipcRenderer.invoke('workspace:get-thumbnail', ws.workspacePath);
+          thumbs[ws.id] = url;
+        } catch {
+          thumbs[ws.id] = null;
+        }
+      })
+    );
+    setThumbnails(thumbs);
+  }, []);
+
   useEffect(() => {
     loadWorkspaces();
   }, [loadWorkspaces]);
+
+  useEffect(() => {
+    if (workspaces.length > 0) {
+      loadThumbnails(workspaces);
+    }
+  }, [workspaces, loadThumbnails]);
 
   const handleOpenPDF = async () => {
     setIsOpening(true);
@@ -80,6 +102,11 @@ function LocalDocumentBrowser({ onSelectDocument, onOpenSettings }: LocalDocumen
     } catch (err) {
       console.error('Failed to delete workspace:', err);
     }
+  };
+
+  const handleOpenInFinder = async (e: React.MouseEvent, workspacePath: string) => {
+    e.stopPropagation();
+    await window.electron.ipcRenderer.invoke('workspace:open-in-finder', workspacePath);
   };
 
   const formatDate = (dateStr: string) => {
@@ -143,47 +170,65 @@ function LocalDocumentBrowser({ onSelectDocument, onOpenSettings }: LocalDocumen
               <div
                 key={workspace.id}
                 onClick={() => handleSelectWorkspace(workspace)}
-                className="bg-white rounded-xl border border-sidebar-border p-4 hover:shadow-lg hover:border-okra-orange/50 transition-all cursor-pointer group relative"
+                className="bg-white rounded-xl border border-sidebar-border overflow-hidden hover:shadow-lg hover:border-okra-orange/50 transition-all cursor-pointer group relative"
               >
                 {openingId === workspace.id && (
-                  <div className="absolute inset-0 bg-white/80 rounded-xl flex items-center justify-center">
+                  <div className="absolute inset-0 bg-white/80 z-10 flex items-center justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-okra-orange" />
                   </div>
                 )}
                 
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <span className="text-lg">📄</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-ink truncate" title={workspace.name}>
-                      {workspace.name}
-                    </h3>
-                    <p className="text-xs text-sidebar-text mt-1">
-                      {formatDate(workspace.lastOpenedAt || workspace.createdAt)}
-                    </p>
-                    {workspace.extractionStatus === 'extracting' && (
-                      <span className="inline-flex items-center gap-1 text-xs text-amber-600 mt-2">
-                        <span className="animate-pulse">●</span> Extracting...
-                      </span>
-                    )}
-                    {workspace.extractionStatus === 'completed' && (
-                      <span className="inline-flex items-center gap-1 text-xs text-green-600 mt-2">
-                        ✓ Ready
-                      </span>
-                    )}
-                  </div>
+                <div className="aspect-[3/4] bg-slate-100 flex items-center justify-center overflow-hidden">
+                  {thumbnails[workspace.id] ? (
+                    <img 
+                      src={thumbnails[workspace.id]!} 
+                      alt={workspace.name}
+                      className="w-full h-full object-cover object-top"
+                    />
+                  ) : (
+                    <span className="text-4xl">📄</span>
+                  )}
                 </div>
 
-                <button
-                  onClick={(e) => handleDeleteWorkspace(e, workspace.id)}
-                  className="absolute top-2 right-2 p-1.5 text-sidebar-text hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg hover:bg-red-50"
-                  title="Delete workspace"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                <div className="p-3">
+                  <h3 className="font-medium text-ink truncate text-sm" title={workspace.name}>
+                    {workspace.name}
+                  </h3>
+                  <p className="text-xs text-sidebar-text mt-0.5">
+                    {formatDate(workspace.lastOpenedAt || workspace.createdAt)}
+                  </p>
+                  {workspace.extractionStatus === 'extracting' && (
+                    <span className="inline-flex items-center gap-1 text-xs text-amber-600 mt-1">
+                      <span className="animate-pulse">●</span> Extracting...
+                    </span>
+                  )}
+                  {workspace.extractionStatus === 'completed' && (
+                    <span className="inline-flex items-center gap-1 text-xs text-green-600 mt-1">
+                      ✓ Ready
+                    </span>
+                  )}
+                </div>
+
+                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => handleOpenInFinder(e, workspace.workspacePath)}
+                    className="p-1.5 text-sidebar-text hover:text-ink bg-white/90 rounded-lg hover:bg-white shadow-sm"
+                    title="Show in Finder"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={(e) => handleDeleteWorkspace(e, workspace.id)}
+                    className="p-1.5 text-sidebar-text hover:text-red-500 bg-white/90 rounded-lg hover:bg-white shadow-sm"
+                    title="Delete workspace"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             ))}
           </div>

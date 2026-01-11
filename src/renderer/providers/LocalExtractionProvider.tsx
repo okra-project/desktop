@@ -25,16 +25,31 @@ export function LocalExtractionProvider({
   const progressCallbacks = useRef<Set<(event: ExtractionProgressEvent) => void>>(new Set());
 
   useEffect(() => {
-    const loadPageCount = async () => {
+    const checkAndStartExtraction = async () => {
       try {
         const count = await window.electron.ipcRenderer.invoke('extraction:get-page-count', workspacePath);
         setTotalPages(count);
+
+        if (count === 0) {
+          setStatus('idle');
+          return;
+        }
+
+        const page1Content = await window.electron.ipcRenderer.invoke('extraction:get-page-content', workspacePath, 1);
+        
+        if (page1Content) {
+          setStatus('completed');
+        } else {
+          setStatus('extracting');
+          setProgress({ phase: 'text', currentPage: 0, totalPages: count, status: 'processing' });
+          await window.electron.ipcRenderer.invoke('extraction:start-text', workspaceId);
+        }
       } catch {
         setTotalPages(0);
       }
     };
-    loadPageCount();
-  }, [workspacePath]);
+    checkAndStartExtraction();
+  }, [workspacePath, workspaceId]);
 
   useEffect(() => {
     const unsubscribe = window.electron.ipcRenderer.on('extraction:progress', (event: unknown) => {

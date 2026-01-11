@@ -13,7 +13,7 @@ import { SENTRY_DSN, SENTRY_ENABLED, SENTRY_ENVIRONMENT } from '../config/sentry
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import { setupVerificationIpcHandlers, cleanupVerificationIpcHandlers } from './verification/ipc-handlers';
-import { extractTextFromPDF, getPDFPageCount } from './pdf-extraction';
+import { extractTextFromPDF, getPDFPageCount, generatePDFThumbnail } from './pdf-extraction';
 import type { ExtractionProgress } from './pdf-extraction';
 import { extractTablesFromPDF, getExtractedTables } from './table-extraction';
 import type { TableExtractionProgress } from './table-extraction';
@@ -843,7 +843,6 @@ ipcMain.handle('workspace:get-current', async () => {
   return { workspacePath: currentWorkspacePath };
 });
 
-// List files in workspace directory
 ipcMain.handle('workspace:list-files', async (_event, workspacePath: string) => {
   try {
     if (!fs.existsSync(workspacePath)) {
@@ -858,6 +857,33 @@ ipcMain.handle('workspace:list-files', async (_event, workspacePath: string) => 
     console.error('[workspace:list-files] Error:', error);
     return [];
   }
+});
+
+ipcMain.handle('workspace:get-thumbnail', async (_event, workspacePath: string) => {
+  const thumbnailPath = path.join(workspacePath, 'thumbnail.png');
+  
+  if (fs.existsSync(thumbnailPath)) {
+    return `file://${thumbnailPath}`;
+  }
+  
+  const pdfPath = path.join(workspacePath, 'source.pdf');
+  if (!fs.existsSync(pdfPath)) {
+    return null;
+  }
+  
+  const result = await generatePDFThumbnail(pdfPath, thumbnailPath, 800);
+  if (result.success && result.path) {
+    return `file://${result.path}`;
+  }
+  return null;
+});
+
+ipcMain.handle('workspace:open-in-finder', async (_event, workspacePath: string) => {
+  if (fs.existsSync(workspacePath)) {
+    shell.showItemInFolder(workspacePath);
+    return { success: true };
+  }
+  return { success: false, error: 'Path does not exist' };
 });
 
 ipcMain.on(

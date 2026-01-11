@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import { getDocument, PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { TextContent, TextItem } from 'pdfjs-dist/types/src/display/api';
 
@@ -80,4 +81,31 @@ export async function getPDFPageCount(pdfPath: string): Promise<number> {
   const data = new Uint8Array(fs.readFileSync(pdfPath));
   const pdf: PDFDocumentProxy = await getDocument({ data }).promise;
   return pdf.numPages;
+}
+
+export async function generatePDFThumbnail(
+  pdfPath: string,
+  outputPath: string,
+  size = 400
+): Promise<{ success: boolean; path?: string; error?: string }> {
+  try {
+    const outputDir = path.dirname(outputPath);
+    const pdfName = path.basename(pdfPath, '.pdf');
+    
+    execSync(`qlmanage -t -s ${size} -o "${outputDir}" "${pdfPath}"`, { 
+      stdio: 'ignore',
+      timeout: 10000 
+    });
+    
+    const qlOutput = path.join(outputDir, `${pdfName}.pdf.png`);
+    if (fs.existsSync(qlOutput)) {
+      fs.renameSync(qlOutput, outputPath);
+      return { success: true, path: outputPath };
+    }
+    
+    return { success: false, error: 'Thumbnail not generated' };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return { success: false, error: message };
+  }
 }
