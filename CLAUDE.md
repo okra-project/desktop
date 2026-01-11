@@ -34,65 +34,25 @@ const { userId } = await auth({ acceptsToken: 'session_token' });
 
 Routes must be in middleware skip list to work with Bearer tokens.
 
-### Anthropic API Proxy (Jan 2026)
+### BYOK Mode (Bring Your Own Key) - v5.0+
 
-**Problem**: Desktop app needs to call Claude API but users shouldn't need their own API key.
-
-**Solution**: Route through okrapdf.com proxy that injects server's API key.
+**Privacy guarantee**: User API keys go **directly to Anthropic** - never through our servers.
 
 **How it works**:
-1. Desktop sets `ANTHROPIC_BASE_URL=https://okrapdf.com/api`
-2. Claude SDK appends `/v1/messages` → calls `https://okrapdf.com/api/v1/messages`
-3. Desktop passes Clerk API key as `ANTHROPIC_API_KEY` (SDK sends it as `x-api-key` header)
-4. Backend verifies API key and proxies to Anthropic with server's real API key
+1. User enters Anthropic API key in Settings
+2. Key stored locally via electron-store
+3. App sets `ANTHROPIC_API_KEY` env var when running Claude SDK
+4. Claude SDK calls `https://api.anthropic.com` directly
+5. No `ANTHROPIC_BASE_URL` override = no proxy
 
-### Clerk API Keys (NOT Session Tokens)
+**Key storage** (current):
+- Uses electron-store → stores in `~/Library/Application Support/OkraPDF/config.json`
+- Keys stored in plaintext JSON (like most Electron apps)
 
-**Problem**: Session JWTs expire in ~60 seconds. Long Claude conversations fail with "JWT expired".
-
-**Solution**: Use Clerk API Keys (30-day expiry) instead of session tokens.
-
-**CRITICAL**: Enable "User API keys" in Clerk Dashboard → Configure → API keys (beta feature)
-
-**Desktop flow**:
-1. OAuth popup → get session cookie
-2. Exchange session for 30-day API key via `POST /api/desktop/token`
-3. Store API key in electron-store
-4. Use API key for all Claude proxy calls
-
-**Backend verification**:
-```typescript
-// /api/v1/messages/route.ts
-const apiKeySecret = req.headers.get('x-api-key');
-const client = await clerkClient();
-const verifiedKey = await client.apiKeys.verifySecret(apiKeySecret);
-const userId = verifiedKey.subject;
-```
-
-**API key management**:
-```typescript
-// CRITICAL: Use unique timestamped names!
-// Clerk enforces name uniqueness even on REVOKED keys → 409 Conflict
-const keyName = `OkraPDF Desktop ${Date.now()}`;
-const apiKey = await client.apiKeys.create({
-  name: keyName,
-  subject: userId,
-  secondsUntilExpiration: 30 * 24 * 60 * 60,
-});
-
-// List keys
-const keys = await client.apiKeys.list({ subject: userId });
-
-// Revoke ALL old desktop keys before creating new one
-const desktopKeys = keys.data.filter(k => k.name.startsWith('OkraPDF Desktop'));
-for (const key of desktopKeys) {
-  await client.apiKeys.revoke({ apiKeyId: key.id });
-}
-```
-
-**Route locations** (must be in middleware skip list):
-- `/api/desktop/token` - Create/revoke API keys
-- `/api/v1/messages` - Anthropic proxy
+**Future improvement** (see Dyad's approach):
+- Use Electron's `safeStorage.encryptString()` to encrypt before storing
+- Decrypt with `safeStorage.decryptString()` when reading
+- This encrypts using OS keychain (macOS Keychain, Windows DPAPI)
 
 ### Release Process (GHA)
 
@@ -113,7 +73,7 @@ GHA workflow (`.github/workflows/release.yml`) will:
 
 Proxy: okrapdf's `next.config.ts` rewrites `/download/desktop/*` → GCS
 
-**Current stable**: v4.9.14
+**Current stable**: v5.0.2
 
 ### Auto-Updates (Jan 2026)
 
