@@ -1,18 +1,6 @@
-/**
- * RTK Query API for OkraPDF Desktop
- *
- * Fetches data from okrapdf backend via /api/desktop/* routes.
- * All routes use Bearer token auth with auto-refreshing Clerk session tokens.
- */
-
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
-// Base URL from electron's main process config
-const getBaseUrl = () => {
-  // In production, use the API base from electron store
-  // For now, default to production API
-  return 'https://app.okrapdf.com';
-};
+const getBaseUrl = () => process.env.OKRAPDF_API_URL || '';
 
 // ============================================================================
 // Types

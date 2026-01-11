@@ -4,6 +4,7 @@ import { store } from './store';
 import App from './App';
 import * as Sentry from '@sentry/electron/renderer';
 import { SENTRY_DSN, SENTRY_ENABLED, SENTRY_ENVIRONMENT } from '../config/sentry';
+import { initPostHog } from './lib/posthog';
 
 if (SENTRY_ENABLED) {
   Sentry.init({
@@ -13,6 +14,11 @@ if (SENTRY_ENABLED) {
   });
   Sentry.setTag('process', 'renderer');
 }
+
+// Initialize PostHog analytics (consent-gated)
+initPostHog().catch((err) => {
+  console.warn('[posthog] Failed to initialize:', err);
+});
 
 const container = document.getElementById('root') as HTMLElement;
 const root = createRoot(container);

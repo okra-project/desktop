@@ -1,104 +1,70 @@
 # OkraPDF Desktop
 
-AI-powered PDF and spreadsheet processing desktop application with built-in Claude AI capabilities.
-
-## What is OkraPDF Desktop?
-
-OkraPDF Desktop is a powerful desktop application that combines AI capabilities with document processing. Built with Electron and powered by Claude AI, it allows you to:
-
-- Create and manipulate Excel spreadsheets with AI assistance
-- Process and analyze PDF documents
-- Generate complex spreadsheets with formulas, formatting, and multiple sheets
-- Analyze and extract insights from existing documents
-- Work with Word documents and other office formats
+Local-first PDF processing with AI. Bring your own API keys - no cloud required.
 
 ## Features
 
-- **AI-Powered Processing**: Claude AI handles complex document tasks
-- **No API Key Required**: Pre-configured API access included
-- **Spreadsheet Generation**: Create sophisticated Excel workbooks
-- **Formula Management**: Automatic formula calculations and formatting
-- **Professional Styling**: Headers, colors, borders, and conditional formatting
-- **Multi-Sheet Workbooks**: Create complex workbooks with multiple sheets
-- **Document Analysis**: Extract insights from PDFs and spreadsheets
-- **Desktop Integration**: Native desktop application for Mac, Windows, and Linux
+- **100% Local** - PDFs never leave your computer
+- **BYOK (Bring Your Own Key)** - Use your Anthropic and OpenRouter API keys
+- **PDF Text Extraction** - Automatic OCR using pdfjs-dist
+- **Table Extraction** - Vision AI extracts tables to Markdown (via OpenRouter/Qwen)
+- **Chat with PDFs** - Ask questions about your documents using Claude
+- **Review Mode** - View and edit extracted text page-by-page
+- **No Account Required** - No signup, no cloud sync, no tracking
 
-## Installation
+## Quick Start
 
-### For End Users
+1. Download from [Releases](https://github.com/nicepkg/okrapdf-desktop/releases)
+2. Open the app and go to Settings
+3. Add your API keys:
+   - **Anthropic API Key** (required) - For Claude chat
+   - **OpenRouter API Key** (optional) - For table extraction
+4. Open a PDF and start chatting
 
-Download the installer for your platform from the releases page:
+## API Keys
 
-- **macOS**: Download the `.dmg` file
-- **Windows**: Download the `.exe` installer
-- **Linux**: Download the `.AppImage` file
+| Provider | Purpose | Get Key |
+|----------|---------|---------|
+| Anthropic | Chat with Claude | [console.anthropic.com](https://console.anthropic.com/) |
+| OpenRouter | Table extraction (Qwen Vision) | [openrouter.ai](https://openrouter.ai/) |
 
-No additional setup required - just install and run!
-
-### For Developers
-
-Prerequisites:
-- [Node.js 18+](https://nodejs.org)
-- npm or bun
-
-Installation steps:
+## Development
 
 ```bash
-# Clone the repository
-git clone https://github.com/steventsao/okrapdf-desktop.git
+# Clone
+git clone https://github.com/nicepkg/okrapdf-desktop.git
 cd okrapdf-desktop
 
-# Install dependencies
-npm install
+# Install
+pnpm install
 
-# Run in development mode
-npm start
+# Run
+pnpm start
 
-# Build for production
-npm run package
+# Build
+pnpm run package
 ```
 
-## Usage
-
-1. Launch OkraPDF Desktop
-2. Type your request in the message box (e.g., "Create a monthly budget tracker")
-3. Optionally attach files (Excel, PDF, Word) for analysis
-4. Claude AI will process your request and generate the documents
-5. Download the generated files to your preferred location
-
-## Building Installers
-
-To create distribution packages:
-
-```bash
-# Build for your current platform
-npm run package
-
-# Installers will be created in the release/build directory
-```
-
-The build process creates installers with the pre-configured API key bundled in.
-
-## Project Structure
+## Architecture
 
 ```
-okrapdf-desktop/
-├── agent/              # Working directory for document generation
-├── src/
-│   ├── main/          # Electron main process
-│   ├── renderer/      # React UI components
-│   └── config/        # API configuration
-└── package.json
+~/.okrapdf/workspaces/{id}/
+├── source.pdf          # Original PDF
+├── metadata.json       # Document info
+├── thumbnail.png       # Preview image
+├── ocr/               # Extracted text per page
+│   └── page-001.md
+└── tables/            # Extracted tables
+    └── table-p1-1.md
 ```
 
-## Support
+## Privacy
 
-For support, please contact support@okrapdf.com
+- No telemetry by default
+- No cloud backend
+- All processing happens locally
+- API calls go directly to Anthropic/OpenRouter
 
 ## License
 
-Proprietary - OkraPDF Desktop
-
----
-
-Built with [Claude AI](https://www.anthropic.com/claude) and [Electron](https://www.electronjs.org/)
+MIT - see [LICENSE](LICENSE)

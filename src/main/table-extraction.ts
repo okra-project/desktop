@@ -68,8 +68,8 @@ async function extractTablesFromImage(
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://okrapdf.com',
-      'X-Title': 'OkraPDF Desktop',
+      'HTTP-Referer': 'https://github.com/nicepkg/okrapdf-desktop',
+      'X-Title': 'OkraPDF Desktop (OSS)',
     },
     body: JSON.stringify({
       model,

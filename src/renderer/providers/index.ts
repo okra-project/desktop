@@ -4,4 +4,3 @@ export { LocalExtractionProvider } from './LocalExtractionProvider';
 
 export { ReviewDataContext, useReviewData, LocalReviewDataProvider } from './ReviewDataContext';
 export type { ReviewDataContextValue, VerificationHistoryEntry } from './ReviewDataContext';
-export { RemoteReviewDataProvider } from './RemoteReviewDataProvider';
