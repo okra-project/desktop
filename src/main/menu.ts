@@ -4,6 +4,7 @@ import {
   shell,
   BrowserWindow,
   MenuItemConstructorOptions,
+  dialog,
 } from 'electron';
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
@@ -61,6 +62,14 @@ export default class MenuBuilder {
           selector: 'orderFrontStandardAboutPanel:',
         },
         { type: 'separator' },
+        {
+          label: 'Settings...',
+          accelerator: 'Command+,',
+          click: () => {
+            this.mainWindow.webContents.send('menu:open-settings');
+          },
+        },
+        { type: 'separator' },
         { label: 'Services', submenu: [] },
         { type: 'separator' },
         {
@@ -82,6 +91,29 @@ export default class MenuBuilder {
             app.quit();
           },
         },
+      ],
+    };
+    const subMenuFile: DarwinMenuItemConstructorOptions = {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Open PDF...',
+          accelerator: 'Command+O',
+          click: async () => {
+            const result = await dialog.showOpenDialog(this.mainWindow, {
+              properties: ['openFile'],
+              filters: [{ name: 'PDF Files', extensions: ['pdf'] }],
+            });
+            if (!result.canceled && result.filePaths.length > 0) {
+              this.mainWindow.webContents.send(
+                'menu:open-pdf',
+                result.filePaths[0],
+              );
+            }
+          },
+        },
+        { type: 'separator' },
+        { label: 'Close', accelerator: 'Command+W', selector: 'performClose:' },
       ],
     };
     const subMenuEdit: DarwinMenuItemConstructorOptions = {
@@ -189,7 +221,7 @@ export default class MenuBuilder {
         ? subMenuViewDev
         : subMenuViewProd;
 
-    return [subMenuAbout, subMenuEdit, subMenuView, subMenuWindow, subMenuHelp];
+    return [subMenuAbout, subMenuFile, subMenuEdit, subMenuView, subMenuWindow, subMenuHelp];
   }
 
   buildDefaultTemplate() {
@@ -198,9 +230,30 @@ export default class MenuBuilder {
         label: '&File',
         submenu: [
           {
-            label: '&Open',
+            label: '&Open PDF...',
             accelerator: 'Ctrl+O',
+            click: async () => {
+              const result = await dialog.showOpenDialog(this.mainWindow, {
+                properties: ['openFile'],
+                filters: [{ name: 'PDF Files', extensions: ['pdf'] }],
+              });
+              if (!result.canceled && result.filePaths.length > 0) {
+                this.mainWindow.webContents.send(
+                  'menu:open-pdf',
+                  result.filePaths[0],
+                );
+              }
+            },
           },
+          { type: 'separator' as const },
+          {
+            label: '&Settings...',
+            accelerator: 'Ctrl+,',
+            click: () => {
+              this.mainWindow.webContents.send('menu:open-settings');
+            },
+          },
+          { type: 'separator' as const },
           {
             label: '&Close',
             accelerator: 'Ctrl+W',

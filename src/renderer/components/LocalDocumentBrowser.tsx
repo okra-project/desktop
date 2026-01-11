@@ -1,0 +1,196 @@
+import React, { useState, useEffect, useCallback } from 'react';
+
+interface LocalWorkspace {
+  id: string;
+  name: string;
+  pdfPath: string;
+  workspacePath: string;
+  createdAt: string;
+  lastOpenedAt: string;
+  pageCount?: number;
+  extractionStatus: 'pending' | 'extracting' | 'completed' | 'failed';
+}
+
+interface LocalDocumentBrowserProps {
+  onSelectDocument: (doc: { id: string; name: string; workspacePath: string }) => void;
+  onOpenSettings: () => void;
+}
+
+function LocalDocumentBrowser({ onSelectDocument, onOpenSettings }: LocalDocumentBrowserProps) {
+  const [workspaces, setWorkspaces] = useState<LocalWorkspace[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isOpening, setIsOpening] = useState(false);
+  const [openingId, setOpeningId] = useState<string | null>(null);
+
+  const loadWorkspaces = useCallback(async () => {
+    try {
+      const result = await window.electron.ipcRenderer.invoke('workspace:list-local');
+      setWorkspaces(result || []);
+    } catch (err) {
+      console.error('Failed to load workspaces:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadWorkspaces();
+  }, [loadWorkspaces]);
+
+  const handleOpenPDF = async () => {
+    setIsOpening(true);
+    try {
+      const result = await window.electron.ipcRenderer.invoke('workspace:open-pdf-dialog');
+      if (result?.success) {
+        await loadWorkspaces();
+        onSelectDocument({
+          id: result.workspace.id,
+          name: result.workspace.name,
+          workspacePath: result.workspace.workspacePath,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to open PDF:', err);
+    } finally {
+      setIsOpening(false);
+    }
+  };
+
+  const handleSelectWorkspace = async (workspace: LocalWorkspace) => {
+    setOpeningId(workspace.id);
+    try {
+      await window.electron.ipcRenderer.invoke('workspace:update-last-opened', workspace.id);
+      onSelectDocument({
+        id: workspace.id,
+        name: workspace.name,
+        workspacePath: workspace.workspacePath,
+      });
+    } finally {
+      setOpeningId(null);
+    }
+  };
+
+  const handleDeleteWorkspace = async (e: React.MouseEvent, workspaceId: string) => {
+    e.stopPropagation();
+    if (!confirm('Delete this workspace? The original PDF will not be affected.')) return;
+    
+    try {
+      await window.electron.ipcRenderer.invoke('workspace:delete-local', workspaceId);
+      await loadWorkspaces();
+    } catch (err) {
+      console.error('Failed to delete workspace:', err);
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full bg-cream">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-okra-orange" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full bg-cream">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-sidebar-border bg-white">
+        <div>
+          <h1 className="text-2xl font-semibold font-serif text-ink">Local Documents</h1>
+          <p className="text-sm text-sidebar-text">Your PDFs stay on your computer</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleOpenPDF}
+            disabled={isOpening}
+            className="px-4 py-2 bg-okra-orange hover:bg-okra-orange/90 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+          >
+            {isOpening ? 'Opening...' : 'Open PDF'}
+          </button>
+          <button
+            onClick={onOpenSettings}
+            className="p-2 text-sidebar-text hover:text-ink hover:bg-sidebar-hover rounded-lg transition-colors"
+            title="Settings"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-auto p-6">
+        {workspaces.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="text-6xl mb-4">📄</div>
+            <h3 className="text-xl font-medium text-ink mb-2">No documents yet</h3>
+            <p className="text-sidebar-text mb-6">Open a PDF to get started</p>
+            <button
+              onClick={handleOpenPDF}
+              disabled={isOpening}
+              className="px-6 py-3 bg-okra-orange hover:bg-okra-orange/90 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+            >
+              {isOpening ? 'Opening...' : 'Open PDF'}
+            </button>
+          </div>
+        ) : (
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {workspaces.map((workspace) => (
+              <div
+                key={workspace.id}
+                onClick={() => handleSelectWorkspace(workspace)}
+                className="bg-white rounded-xl border border-sidebar-border p-4 hover:shadow-lg hover:border-okra-orange/50 transition-all cursor-pointer group relative"
+              >
+                {openingId === workspace.id && (
+                  <div className="absolute inset-0 bg-white/80 rounded-xl flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-okra-orange" />
+                  </div>
+                )}
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <span className="text-lg">📄</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-ink truncate" title={workspace.name}>
+                      {workspace.name}
+                    </h3>
+                    <p className="text-xs text-sidebar-text mt-1">
+                      {formatDate(workspace.lastOpenedAt || workspace.createdAt)}
+                    </p>
+                    {workspace.extractionStatus === 'extracting' && (
+                      <span className="inline-flex items-center gap-1 text-xs text-amber-600 mt-2">
+                        <span className="animate-pulse">●</span> Extracting...
+                      </span>
+                    )}
+                    {workspace.extractionStatus === 'completed' && (
+                      <span className="inline-flex items-center gap-1 text-xs text-green-600 mt-2">
+                        ✓ Ready
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={(e) => handleDeleteWorkspace(e, workspace.id)}
+                  className="absolute top-2 right-2 p-1.5 text-sidebar-text hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg hover:bg-red-50"
+                  title="Delete workspace"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default LocalDocumentBrowser;

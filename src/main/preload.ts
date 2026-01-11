@@ -47,7 +47,18 @@ export type Channels =
   | 'review-agent:response'
   | 'review-agent:error'
   | 'review-agent:done'
-  | 'review-agent:abort';
+  | 'review-agent:abort'
+  // Telemetry channels (PostHog)
+  | 'telemetry:event'
+  | 'telemetry:get-consent'
+  | 'telemetry:set-consent'
+  | 'telemetry:get-user-id'
+  // Menu channels
+  | 'menu:open-pdf'
+  | 'menu:open-settings'
+  // Extraction channels
+  | 'extraction:progress'
+  | 'extraction:table-progress';
 
 const electronHandler = {
   ipcRenderer: {

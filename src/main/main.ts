@@ -1,14 +1,4 @@
 /* eslint global-require: off, no-console: off, promise/always-return: off */
-
-/**
- * This module executes inside of electron's main process. You can start
- * electron renderer process from here and communicate with the other processes
- * through IPC.
- *
- * When running `npm run build` or `npm run build:main`, this file is compiled to
- * `./src/main.js` using webpack. This gives us some performance wins.
- */
-// Note: @anthropic-ai/claude-agent-sdk is ESM-only, use dynamic import
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
@@ -16,20 +6,32 @@ import Store from 'electron-store';
 import fixPath from 'fix-path';
 import fs from 'fs';
 import path from 'path';
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
 import * as Sentry from '@sentry/electron/main';
-import { initializeAPIConfig, API_CONFIG } from '../config/api-config';
+import { nanoid } from 'nanoid';
 import { SENTRY_DSN, SENTRY_ENABLED, SENTRY_ENVIRONMENT } from '../config/sentry';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import { setupVerificationIpcHandlers, cleanupVerificationIpcHandlers } from './verification/ipc-handlers';
+import { extractTextFromPDF, getPDFPageCount } from './pdf-extraction';
+import type { ExtractionProgress } from './pdf-extraction';
+import { extractTablesFromPDF, getExtractedTables } from './table-extraction';
+import type { TableExtractionProgress } from './table-extraction';
+import {
+  initializeState,
+  loadState,
+  getPageState,
+  updatePageState,
+  resolvePageStatus,
+  getTableState,
+  updateTableStatus,
+  updateTableMarkdown,
+  getVerificationSummary,
+  syncTablesFromManifest,
+} from './local-state';
 
-// Fix PATH for Electron - GUI apps don't inherit shell PATH
-// This is required for spawning node/claude processes
 fixPath();
 
-// Initialize API configuration (BYOA mode - no bundled key)
-initializeAPIConfig();
 if (SENTRY_ENABLED) {
   Sentry.init({
     dsn: SENTRY_DSN,
@@ -39,124 +41,50 @@ if (SENTRY_ENABLED) {
   Sentry.setTag('process', 'main');
 }
 
-// OAuth popup window reference
-let authWindow: BrowserWindow | null = null;
-
-// Handle OAuth popup login
-ipcMain.handle('auth:oauth-popup', async () => {
-  return new Promise((resolve, reject) => {
-    // Create popup window for OAuth
-    authWindow = new BrowserWindow({
-      width: 500,
-      height: 700,
-      show: true,
-      modal: true,
-      parent: mainWindow!,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-      },
-    });
-
-    // Load Clerk sign-in page
-    authWindow.loadURL('https://accounts.okrapdf.com/sign-in');
-
-    // Monitor for successful authentication
-    const checkAuth = async () => {
-      try {
-        // Check if we're on the app page (signed in)
-        const currentUrl = authWindow?.webContents.getURL() || '';
-
-        if (currentUrl.includes('app.okrapdf.com') && !currentUrl.includes('sign-in')) {
-          // User is signed in, get the session token from cookies
-          const cookies = await authWindow?.webContents.session.cookies.get({
-            domain: '.okrapdf.com'
-          });
-
-          const sessionCookie = cookies?.find(c => c.name === '__session');
-
-          if (sessionCookie) {
-            authWindow?.close();
-            authWindow = null;
-            resolve({ success: true, token: sessionCookie.value });
-            return;
-          }
-        }
-      } catch (err) {
-        console.error('Auth check error:', err);
-      }
-    };
-
-    // Check auth state on navigation
-    authWindow.webContents.on('did-navigate', checkAuth);
-    authWindow.webContents.on('did-navigate-in-page', checkAuth);
-
-    // Handle window close
-    authWindow.on('closed', () => {
-      authWindow = null;
-      resolve({ success: false, error: 'Authentication cancelled' });
-    });
-  });
-});
-
-// Persistent store for auth tokens and settings (like Jan, OpenHands, Dyad)
 const store = new Store({
   name: 'okrapdf-settings',
   defaults: {
-    okrapdfToken: null as string | null,
-    desktopApiKey: null as string | null, // Long-lived Clerk API key (30 days)
     lastWorkspacePath: null as string | null,
+    telemetryConsent: null as boolean | null,
+    telemetryUserId: null as string | null,
+    byokSettings: {
+      enabled: false,
+      anthropicApiKey: null as string | null,
+      openrouterApiKey: null as string | null,
+      lastValidated: null as string | null,
+    },
+    localWorkspaces: [] as Array<{
+      id: string;
+      name: string;
+      pdfPath: string;
+      workspacePath: string;
+      createdAt: string;
+      lastOpenedAt: string;
+      pageCount?: number;
+      extractionStatus: string;
+    }>,
   },
 });
 
-// OkraPDF API configuration
-const OKRAPDF_API_BASE = API_CONFIG.OKRAPDF_API_BASE;
-const OKRAPDF_DESKTOP_TOKEN_URL = `${OKRAPDF_API_BASE}/api/desktop/token`;
-
-function formatKeyPrefix(key: string | null): string {
-  if (!key) return 'missing';
-  return `${key.slice(0, 12)}...`;
+const WORKSPACES_DIR = path.join(app.getPath('home'), '.okrapdf', 'workspaces');
+if (!fs.existsSync(WORKSPACES_DIR)) {
+  fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 }
 
-// Default workspace directory (accessible to user for collaboration)
-const DEFAULT_WORKSPACE = path.join(app.getPath('desktop'), 'okrapdf');
-
-// Ensure default workspace exists on first launch
-if (!fs.existsSync(DEFAULT_WORKSPACE)) {
-  fs.mkdirSync(DEFAULT_WORKSPACE, { recursive: true });
-  console.error(`[workspace] Created default workspace at ${DEFAULT_WORKSPACE}`);
-}
-
-// Load persisted auth token (session token for API calls)
-let authToken: string | null = store.get('okrapdfToken') as string | null;
-// Long-lived API key for Claude proxy (30 days, from Clerk)
-let desktopApiKey: string | null = store.get('desktopApiKey') as string | null;
-
-// Current workspace path (defaults to ~/Desktop/okrapdf)
 let currentWorkspacePath: string | null = store.get('lastWorkspacePath') as string | null;
-if (!currentWorkspacePath) {
-  currentWorkspacePath = DEFAULT_WORKSPACE;
-}
 
-// Proxy URL - routes through okrapdf.com which adds server's API key
-// SDK appends /v1/messages, so this becomes https://okrapdf.com/api/v1/messages
-const CLAUDE_PROXY_URL = 'https://okrapdf.com/api';
-
-/**
- * Get environment variables for Claude SDK
- * Routes through okrapdf.com proxy with auth token
- */
 function getClaudeEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  if (!desktopApiKey) {
-    console.error('[config] WARNING: No desktop API key for proxy mode');
+  const byokSettings = store.get('byokSettings') as { enabled: boolean; anthropicApiKey: string | null } | null;
+
+  if (byokSettings?.enabled && byokSettings?.anthropicApiKey) {
+    return {
+      ...baseEnv,
+      ANTHROPIC_API_KEY: byokSettings.anthropicApiKey,
+    };
   }
 
-  return {
-    ...baseEnv,
-    ANTHROPIC_BASE_URL: CLAUDE_PROXY_URL,
-    // Long-lived Clerk API key - proxy verifies via clerkClient.apiKeys.verifySecret()
-    ANTHROPIC_API_KEY: desktopApiKey || 'missing-api-key',
-  };
+  console.error('[config] WARNING: No API key configured');
+  return baseEnv;
 }
 
 class AppUpdater {
@@ -420,336 +348,495 @@ ipcMain.handle('trajectory:list', async () => {
   }
 });
 
+ipcMain.handle('workspace:list-local', async () => {
+  return store.get('localWorkspaces') || [];
+});
+
+ipcMain.handle('workspace:open-pdf-dialog', async () => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ['openFile'],
+    filters: [{ name: 'PDF Files', extensions: ['pdf'] }],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return { success: false };
+  }
+
+  const pdfPath = result.filePaths[0];
+  const fileName = path.basename(pdfPath, '.pdf');
+  const workspaceId = `local-${nanoid(12)}`;
+  const workspacePath = path.join(WORKSPACES_DIR, workspaceId);
+
+  fs.mkdirSync(workspacePath, { recursive: true });
+  fs.mkdirSync(path.join(workspacePath, 'ocr'));
+  fs.mkdirSync(path.join(workspacePath, 'tables'));
+
+  fs.copyFileSync(pdfPath, path.join(workspacePath, 'source.pdf'));
+
+  const metadata = {
+    id: workspaceId,
+    fileName,
+    originalPath: pdfPath,
+    createdAt: new Date().toISOString(),
+    mode: 'local',
+    extractionStatus: 'pending',
+  };
+  fs.writeFileSync(path.join(workspacePath, 'metadata.json'), JSON.stringify(metadata, null, 2));
+
+  const workspace = {
+    id: workspaceId,
+    name: fileName,
+    pdfPath,
+    workspacePath,
+    createdAt: new Date().toISOString(),
+    lastOpenedAt: new Date().toISOString(),
+    extractionStatus: 'pending',
+  };
+
+  const workspaces = (store.get('localWorkspaces') || []) as typeof workspace[];
+  workspaces.unshift(workspace);
+  store.set('localWorkspaces', workspaces);
+
+  currentWorkspacePath = workspacePath;
+  store.set('lastWorkspacePath', workspacePath);
+
+  return { success: true, workspace };
+});
+
+ipcMain.handle('workspace:create-from-path', async (_event, pdfPath: string) => {
+  const fileName = path.basename(pdfPath, '.pdf');
+  const workspaceId = `local-${nanoid(12)}`;
+  const workspacePath = path.join(WORKSPACES_DIR, workspaceId);
+
+  fs.mkdirSync(workspacePath, { recursive: true });
+  fs.mkdirSync(path.join(workspacePath, 'ocr'));
+  fs.mkdirSync(path.join(workspacePath, 'tables'));
+
+  fs.copyFileSync(pdfPath, path.join(workspacePath, 'source.pdf'));
+
+  const metadata = {
+    id: workspaceId,
+    fileName,
+    originalPath: pdfPath,
+    createdAt: new Date().toISOString(),
+    mode: 'local',
+    extractionStatus: 'pending',
+  };
+  fs.writeFileSync(path.join(workspacePath, 'metadata.json'), JSON.stringify(metadata, null, 2));
+
+  const workspace = {
+    id: workspaceId,
+    name: fileName,
+    path: workspacePath,
+    pdfPath,
+    createdAt: new Date().toISOString(),
+    lastOpenedAt: new Date().toISOString(),
+    extractionStatus: 'pending',
+  };
+
+  const workspaces = (store.get('localWorkspaces') || []) as typeof workspace[];
+  workspaces.unshift(workspace);
+  store.set('localWorkspaces', workspaces);
+
+  currentWorkspacePath = workspacePath;
+  store.set('lastWorkspacePath', workspacePath);
+
+  return workspace;
+});
+
+ipcMain.handle('workspace:update-last-opened', async (_event, workspaceId: string) => {
+  const workspaces = (store.get('localWorkspaces') || []) as Array<{ id: string; lastOpenedAt: string; workspacePath: string }>;
+  const idx = workspaces.findIndex((w) => w.id === workspaceId);
+  if (idx >= 0) {
+    workspaces[idx].lastOpenedAt = new Date().toISOString();
+    currentWorkspacePath = workspaces[idx].workspacePath;
+    store.set('lastWorkspacePath', currentWorkspacePath);
+    store.set('localWorkspaces', workspaces);
+  }
+  return { success: true };
+});
+
+ipcMain.handle('workspace:delete-local', async (_event, workspaceId: string) => {
+  const workspaces = (store.get('localWorkspaces') || []) as Array<{ id: string; workspacePath: string }>;
+  const workspace = workspaces.find((w) => w.id === workspaceId);
+  
+  if (workspace) {
+    try {
+      fs.rmSync(workspace.workspacePath, { recursive: true, force: true });
+    } catch (err) {
+      console.error('Failed to delete workspace dir:', err);
+    }
+    store.set('localWorkspaces', workspaces.filter((w) => w.id !== workspaceId));
+  }
+  return { success: true };
+});
+
 // ============================================
-// OkraPDF Integration: Auth & Workspace
+// Extraction IPC Handlers (BYOK local processing)
 // ============================================
 
-// Auth token management (persisted with electron-store)
-ipcMain.handle('auth:set-token', async (_event, token: string) => {
-  authToken = token;
-  store.set('okrapdfToken', token);
-  console.error('[auth] Session token set and persisted');
+let extractionAbortController: AbortController | null = null;
 
-  // Exchange session token for long-lived API key (30 days)
+ipcMain.handle('extraction:start-text', async (_event, workspaceId: string) => {
+  const workspaces = (store.get('localWorkspaces') || []) as Array<{ id: string; workspacePath: string; extractionStatus: string }>;
+  const workspace = workspaces.find((w) => w.id === workspaceId);
+
+  if (!workspace) {
+    return { success: false, error: 'Workspace not found' };
+  }
+
+  const pdfPath = path.join(workspace.workspacePath, 'source.pdf');
+  const ocrDir = path.join(workspace.workspacePath, 'ocr');
+
+  const updateWorkspaceStatus = (status: string, progress?: number) => {
+    const ws = (store.get('localWorkspaces') || []) as Array<{ id: string; extractionStatus: string; extractionProgress?: number }>;
+    const idx = ws.findIndex((w) => w.id === workspaceId);
+    if (idx >= 0) {
+      ws[idx].extractionStatus = status;
+      if (progress !== undefined) ws[idx].extractionProgress = progress;
+      store.set('localWorkspaces', ws);
+    }
+  };
+
+  updateWorkspaceStatus('extracting', 0);
+
+  extractionAbortController = new AbortController();
+
+  const onProgress = (progress: ExtractionProgress) => {
+    const pct = Math.round((progress.currentPage / progress.totalPages) * 100);
+    updateWorkspaceStatus('extracting', pct);
+    mainWindow?.webContents.send('extraction:progress', {
+      workspaceId,
+      ...progress,
+      status: 'processing',
+    });
+  };
+
   try {
-    console.error(`[auth] Requesting desktop API key from ${OKRAPDF_DESKTOP_TOKEN_URL}`);
-    const response = await fetch(OKRAPDF_DESKTOP_TOKEN_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+    const result = await extractTextFromPDF(pdfPath, ocrDir, onProgress);
+
+    if (result.success) {
+      updateWorkspaceStatus('completed', 100);
+      const metadataPath = path.join(workspace.workspacePath, 'metadata.json');
+      const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+      metadata.textExtractionComplete = true;
+      metadata.pageCount = result.totalPages;
+      fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+    } else {
+      updateWorkspaceStatus('failed');
+    }
+
+    mainWindow?.webContents.send('extraction:progress', {
+      workspaceId,
+      phase: 'text',
+      currentPage: result.totalPages,
+      totalPages: result.totalPages,
+      status: result.success ? 'completed' : 'failed',
+      error: result.error,
     });
 
-    if (response.ok) {
-      const data = await response.json();
-      if (data.token) {
-        desktopApiKey = data.token;
-        store.set('desktopApiKey', data.token);
-        console.error(`[auth] Desktop API key obtained (30-day expiry), prefix=${formatKeyPrefix(desktopApiKey)}`);
-      } else if (data.hasExistingKey) {
-        // Check if we actually have the cached key
-        const cachedKey = store.get('desktopApiKey') as string | null;
-        if (cachedKey) {
-          desktopApiKey = cachedKey;
-          console.error(`[auth] Desktop API key already exists, using cached prefix=${formatKeyPrefix(desktopApiKey)}`);
-        } else {
-          // Key exists on server but we lost it locally - revoke and recreate
-          console.error('[auth] API key exists but not cached locally, revoking and recreating...');
-          const deleteResp = await fetch(OKRAPDF_DESKTOP_TOKEN_URL, {
-            method: 'DELETE',
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          });
-          if (deleteResp.ok) {
-            // Now create a new key
-            const createResp = await fetch(OKRAPDF_DESKTOP_TOKEN_URL, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-            });
-            if (createResp.ok) {
-              const newData = await createResp.json();
-              if (newData.token) {
-                desktopApiKey = newData.token;
-                store.set('desktopApiKey', newData.token);
-                console.error(`[auth] New desktop API key obtained after revoke, prefix=${formatKeyPrefix(desktopApiKey)}`);
-              }
-            }
-          }
-        }
-      }
-    } else {
-      console.error('[auth] Failed to get desktop API key:', response.status);
-    }
+    return result;
   } catch (error) {
-    console.error('[auth] Error exchanging token for API key:', error);
+    updateWorkspaceStatus('failed');
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return { success: false, error: message };
+  }
+});
+
+ipcMain.handle('extraction:cancel', async () => {
+  extractionAbortController?.abort();
+  extractionAbortController = null;
+  return { success: true };
+});
+
+ipcMain.handle('extraction:get-page-content', async (_event, workspacePath: string, pageNum: number) => {
+  const filePath = path.join(workspacePath, 'ocr', `page-${String(pageNum).padStart(3, '0')}.md`);
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+  const content = fs.readFileSync(filePath, 'utf-8');
+  return { page: pageNum, content };
+});
+
+ipcMain.handle('extraction:save-page-content', async (_event, workspacePath: string, pageNum: number, content: string) => {
+  const filePath = path.join(workspacePath, 'ocr', `page-${String(pageNum).padStart(3, '0')}.md`);
+  fs.writeFileSync(filePath, content);
+  return { success: true, page: pageNum };
+});
+
+ipcMain.handle('extraction:get-page-count', async (_event, workspacePath: string) => {
+  const pdfPath = path.join(workspacePath, 'source.pdf');
+  if (!fs.existsSync(pdfPath)) {
+    return 0;
+  }
+  return getPDFPageCount(pdfPath);
+});
+
+ipcMain.handle('extraction:start-tables', async (_event, workspaceId: string) => {
+  const workspaces = (store.get('localWorkspaces') || []) as Array<{ id: string; workspacePath: string }>;
+  const workspace = workspaces.find((w) => w.id === workspaceId);
+
+  if (!workspace) {
+    return { success: false, error: 'Workspace not found' };
+  }
+
+  const byokSettings = store.get('byokSettings') as { openrouterApiKey?: string } | undefined;
+  const apiKey = byokSettings?.openrouterApiKey;
+
+  if (!apiKey) {
+    return { success: false, error: 'OpenRouter API key not configured. Add it in Settings.' };
+  }
+
+  const pdfPath = path.join(workspace.workspacePath, 'source.pdf');
+  const tablesDir = path.join(workspace.workspacePath, 'tables');
+
+  const onProgress = (progress: TableExtractionProgress) => {
+    mainWindow?.webContents.send('extraction:table-progress', {
+      workspaceId,
+      ...progress,
+      status: 'processing',
+    });
+  };
+
+  try {
+    const result = await extractTablesFromPDF(pdfPath, tablesDir, apiKey, onProgress);
+
+    if (result.success) {
+      const metadataPath = path.join(workspace.workspacePath, 'metadata.json');
+      const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+      metadata.tableExtractionComplete = true;
+      metadata.tablesCount = result.tables.length;
+      fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+    }
+
+    mainWindow?.webContents.send('extraction:table-progress', {
+      workspaceId,
+      phase: 'analyzing',
+      currentPage: result.totalPages,
+      totalPages: result.totalPages,
+      tablesFound: result.tables.length,
+      status: result.success ? 'completed' : 'failed',
+      error: result.error,
+    });
+
+    return result;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return { success: false, tables: [], totalPages: 0, error: message };
+  }
+});
+
+ipcMain.handle('extraction:get-tables', async (_event, workspacePath: string) => {
+  const tablesDir = path.join(workspacePath, 'tables');
+  return getExtractedTables(tablesDir);
+});
+
+ipcMain.handle('extraction:get-table', async (_event, workspacePath: string, tableId: string) => {
+  const tablePath = path.join(workspacePath, 'tables', `${tableId}.md`);
+  if (!fs.existsSync(tablePath)) {
+    return null;
+  }
+  return { id: tableId, markdown: fs.readFileSync(tablePath, 'utf-8') };
+});
+
+ipcMain.handle('extraction:save-table', async (_event, workspacePath: string, tableId: string, markdown: string) => {
+  const tablePath = path.join(workspacePath, 'tables', `${tableId}.md`);
+  fs.writeFileSync(tablePath, markdown);
+
+  const manifestPath = path.join(workspacePath, 'tables', 'manifest.json');
+  if (fs.existsSync(manifestPath)) {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    const tableIdx = manifest.tables.findIndex((t: { id: string }) => t.id === tableId);
+    if (tableIdx >= 0) {
+      manifest.tables[tableIdx].markdown = markdown;
+      manifest.tables[tableIdx].was_corrected = true;
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    }
   }
 
   return { success: true };
 });
 
-// Hidden window for token refresh
-let tokenRefreshWindow: BrowserWindow | null = null;
+// ============================================
+// Local Verification State IPC Handlers
+// ============================================
 
-async function refreshClerkToken(): Promise<string | null> {
-  return new Promise((resolve) => {
-    // Create hidden window to trigger Clerk token refresh
-    tokenRefreshWindow = new BrowserWindow({
-      width: 400,
-      height: 300,
-      show: false, // Hidden
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-      },
-    });
+ipcMain.handle('state:initialize', async (_event, workspacePath: string, documentName: string, totalPages: number) => {
+  return initializeState(workspacePath, documentName, totalPages);
+});
 
-    const timeout = setTimeout(() => {
-      tokenRefreshWindow?.close();
-      tokenRefreshWindow = null;
-      resolve(null);
-    }, 10000); // 10s timeout
+ipcMain.handle('state:load', async (_event, workspacePath: string) => {
+  return loadState(workspacePath);
+});
 
-    tokenRefreshWindow.webContents.on('did-finish-load', async () => {
-      // Wait a bit for Clerk to refresh token
-      await new Promise((r) => setTimeout(r, 1000));
+ipcMain.handle('state:get-page', async (_event, workspacePath: string, pageNum: number) => {
+  return getPageState(workspacePath, pageNum);
+});
 
-      try {
-        const cookies = await tokenRefreshWindow?.webContents.session.cookies.get({
-          domain: '.okrapdf.com',
-          name: '__session',
-        });
-        const sessionCookie = cookies?.[0];
-        clearTimeout(timeout);
-        tokenRefreshWindow?.close();
-        tokenRefreshWindow = null;
+ipcMain.handle('state:update-page', async (_event, workspacePath: string, pageNum: number, updates: Record<string, unknown>) => {
+  return updatePageState(workspacePath, pageNum, updates);
+});
 
-        if (sessionCookie?.value) {
-          authToken = sessionCookie.value;
-          store.set('okrapdfToken', authToken);
-          resolve(sessionCookie.value);
-        } else {
-          resolve(null);
-        }
-      } catch (err) {
-        console.error('[auth] Token refresh failed:', err);
-        clearTimeout(timeout);
-        tokenRefreshWindow?.close();
-        tokenRefreshWindow = null;
-        resolve(null);
-      }
-    });
+ipcMain.handle('state:resolve-page', async (
+  _event,
+  workspacePath: string,
+  pageNum: number,
+  status: 'pending' | 'verified' | 'flagged' | 'rejected',
+  resolution?: string,
+  classification?: string
+) => {
+  resolvePageStatus(workspacePath, pageNum, status, resolution, classification);
+  return { success: true };
+});
 
-    // Load app.okrapdf.com to trigger Clerk session refresh
-    tokenRefreshWindow.loadURL('https://app.okrapdf.com');
-  });
+ipcMain.handle('state:get-table', async (_event, workspacePath: string, tableId: string) => {
+  return getTableState(workspacePath, tableId);
+});
+
+ipcMain.handle('state:update-table-status', async (
+  _event,
+  workspacePath: string,
+  tableId: string,
+  status: 'pending' | 'verified' | 'flagged' | 'rejected'
+) => {
+  updateTableStatus(workspacePath, tableId, status);
+  return { success: true };
+});
+
+ipcMain.handle('state:update-table-markdown', async (
+  _event,
+  workspacePath: string,
+  tableId: string,
+  markdown: string
+) => {
+  updateTableMarkdown(workspacePath, tableId, markdown, 'user_edit');
+  return { success: true };
+});
+
+ipcMain.handle('state:get-summary', async (_event, workspacePath: string) => {
+  return getVerificationSummary(workspacePath);
+});
+
+ipcMain.handle('state:sync-tables', async (_event, workspacePath: string) => {
+  syncTablesFromManifest(workspacePath);
+  return { success: true };
+});
+
+// ============================================
+// Telemetry IPC Handlers (PostHog)
+// Pattern: Main process events forwarded via IPC to renderer
+// ============================================
+
+ipcMain.handle('telemetry:get-consent', async () => {
+  return store.get('telemetryConsent') as boolean | null;
+});
+
+ipcMain.handle('telemetry:set-consent', async (_event, consent: boolean) => {
+  store.set('telemetryConsent', consent);
+  console.error(`[telemetry] Consent set to ${consent}`);
+  return { success: true };
+});
+
+ipcMain.handle('telemetry:get-user-id', async () => {
+  let userId = store.get('telemetryUserId') as string | null;
+  if (!userId) {
+    // Generate anonymous ID on first use
+    const { randomUUID } = require('crypto');
+    userId = `desktop_${randomUUID()}`;
+    store.set('telemetryUserId', userId);
+    console.error(`[telemetry] Generated new user ID: ${userId.slice(0, 20)}...`);
+  }
+  return userId;
+});
+
+function sendTelemetryEvent(eventName: string, properties?: Record<string, unknown>) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('telemetry:event', { eventName, properties });
+  }
 }
 
-ipcMain.handle('auth:get-token', async () => {
-  // Use long-lived desktop API key (30-day expiry) instead of session token
-  // Session tokens expire in ~60s which breaks API calls during long operations
-  if (desktopApiKey) {
-    return { token: desktopApiKey };
-  }
-
-  // No API key available - user needs to re-login
-  console.error('[auth:get-token] No desktop API key available');
-  return { token: null };
+ipcMain.handle('byok:get-settings', async () => {
+  return store.get('byokSettings');
 });
 
-ipcMain.handle('auth:clear-token', async () => {
-  authToken = null;
-  desktopApiKey = null;
-  store.delete('okrapdfToken');
-  store.delete('desktopApiKey');
-  console.error('[auth] Session token and API key cleared');
+ipcMain.handle('byok:set-settings', async (_event, settings: {
+  enabled: boolean;
+  anthropicApiKey?: string;
+  openrouterApiKey?: string;
+}) => {
+  store.set('byokSettings', {
+    ...settings,
+    lastValidated: new Date().toISOString(),
+  });
+  console.error(`[byok] Settings updated, enabled=${settings.enabled}`);
   return { success: true };
 });
 
-// Check if logged into okrapdf (enables proxy mode)
-ipcMain.handle('claude:check-status', async () => {
+ipcMain.handle('byok:validate-key', async (_event, provider: 'anthropic' | 'openrouter', apiKey: string) => {
   try {
-    // Check if logged into okrapdf (enables proxy mode via long-lived API key)
-    const hasProxyAuth = !!desktopApiKey;
-
-    return {
-      hasProxyAuth,
-      ready: hasProxyAuth,
-    };
-  } catch (error) {
-    console.error('[claude:check-status] Error:', error);
-    return {
-      hasProxyAuth: false,
-      ready: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
-});
-
-// Fetch library from OkraPDF
-ipcMain.handle('library:fetch', async () => {
-  // Use long-lived API key (30 days), not short-lived session token
-  if (!desktopApiKey) {
-    return { success: false, error: 'Not authenticated' };
-  }
-
-  try {
-    console.error(`[library] Using API key prefix=${formatKeyPrefix(desktopApiKey)}`);
-    const response = await fetch(`${OKRAPDF_API_BASE}/api/desktop/library`, {
-      headers: {
-        Authorization: `Bearer ${desktopApiKey}`,
-      },
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        // API key expired or invalid - clear it so user re-auths
-        desktopApiKey = null;
-        store.delete('desktopApiKey');
-        return { success: false, error: 'API key expired. Please login again.' };
-      }
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return { success: true, documents: data.documents || [] };
-  } catch (error) {
-    console.error('[library] Fetch error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
-});
-
-// Bootstrap workspace from OkraPDF document
-ipcMain.handle(
-  'workspace:bootstrap',
-  async (event, documentUuid: string, documentName: string) => {
-    // Use long-lived API key (30 days), not short-lived session token
-    if (!desktopApiKey) {
-      return { success: false, error: 'Not authenticated' };
-    }
-
-    try {
-      console.error(`[workspace] Bootstrapping ${documentUuid}...`);
-
-      // Create workspace directory in user's home
-      const workspacesDir = path.join(app.getPath('home'), '.okrapdf', 'workspaces');
-      const workspaceDir = path.join(workspacesDir, documentUuid);
-
-      // Clean and create workspace directory
-      if (fs.existsSync(workspaceDir)) {
-        fs.rmSync(workspaceDir, { recursive: true });
-      }
-      fs.mkdirSync(workspaceDir, { recursive: true });
-
-      // Download bootstrap zip from OkraPDF
-      console.error(`[workspace] Downloading bootstrap zip...`);
-      console.error(`[workspace] URL: ${OKRAPDF_API_BASE}/api/desktop/bootstrap/${documentUuid}`);
-      console.error(`[workspace] Token prefix: ${desktopApiKey?.substring(0, 20)}...`);
-      const response = await fetch(
-        `${OKRAPDF_API_BASE}/api/desktop/bootstrap/${documentUuid}`,
-        {
-          headers: {
-            Authorization: `Bearer ${desktopApiKey}`,
-          },
+    if (provider === 'anthropic') {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
         },
-      );
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 10,
+          messages: [{ role: 'user', content: 'Hi' }],
+        }),
+      });
 
-      if (!response.ok) {
-        const errorBody = await response.text().catch(() => 'no body');
-        console.error(`[workspace] Response body: ${errorBody}`);
-        throw new Error(`Failed to download workspace: ${response.status}`);
+      if (response.ok || response.status === 400) {
+        return { valid: true, provider };
       }
 
-      // Save and extract zip
-      const zipBuffer = await response.arrayBuffer();
-      const zipPath = path.join(workspaceDir, 'bootstrap.zip');
-      fs.writeFileSync(zipPath, Buffer.from(zipBuffer));
-
-      // Extract zip using system unzip (cross-platform)
-      console.error(`[workspace] Extracting zip...`);
-      try {
-        if (process.platform === 'win32') {
-          execSync(`powershell -command "Expand-Archive -Path '${zipPath}' -DestinationPath '${workspaceDir}' -Force"`, {
-            cwd: workspaceDir,
-          });
-        } else {
-          execSync(`unzip -o "${zipPath}" -d "${workspaceDir}"`, {
-            cwd: workspaceDir,
-          });
-        }
-      } catch (unzipError) {
-        console.error('[workspace] Unzip error:', unzipError);
-        // Try using adm-zip as fallback (need to install)
-        throw new Error('Failed to extract workspace files');
-      }
-
-      // Clean up zip file
-      fs.unlinkSync(zipPath);
-
-      // Download source PDF
-      console.error(`[workspace] Downloading source PDF...`);
-      try {
-        const pdfResponse = await fetch(
-          `${OKRAPDF_API_BASE}/api/desktop/pdf/${documentUuid}`,
-          {
-            headers: {
-              Authorization: `Bearer ${desktopApiKey}`,
-            },
-          },
-        );
-
-        if (pdfResponse.ok) {
-          const pdfBuffer = await pdfResponse.arrayBuffer();
-          const pdfPath = path.join(workspaceDir, 'source.pdf');
-          fs.writeFileSync(pdfPath, Buffer.from(pdfBuffer));
-          console.error(`[workspace] PDF saved to ${pdfPath}`);
-        } else {
-          console.warn(`[workspace] Could not download PDF: ${pdfResponse.status}`);
-          if (SENTRY_ENABLED) {
-            Sentry.captureMessage('[workspace] PDF download failed', {
-              level: 'error',
-              extra: {
-                documentUuid,
-                status: pdfResponse.status,
-                apiBase: OKRAPDF_API_BASE,
-              },
-            });
-          }
-        }
-      } catch (pdfError) {
-        console.warn('[workspace] PDF download failed:', pdfError);
-        if (SENTRY_ENABLED) {
-          Sentry.captureException(pdfError);
-        }
-        // Non-fatal - workspace can still work without PDF viewer
-      }
-
-      currentWorkspacePath = workspaceDir;
-      store.set('lastWorkspacePath', workspaceDir);
-      console.error(`[workspace] Ready at ${workspaceDir}`);
-
+      const errorData = await response.json().catch(() => ({}));
       return {
-        success: true,
-        workspacePath: workspaceDir,
-        documentName,
-      };
-    } catch (error) {
-      console.error('[workspace] Bootstrap error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        valid: false,
+        provider,
+        error: errorData.error?.message || `HTTP ${response.status}`,
       };
     }
-  },
-);
+
+    if (provider === 'openrouter') {
+      const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+
+      if (response.ok) {
+        return { valid: true, provider };
+      }
+
+      return { valid: false, provider, error: `HTTP ${response.status}` };
+    }
+
+    return { valid: false, provider, error: 'Unknown provider' };
+  } catch (error) {
+    return {
+      valid: false,
+      provider,
+      error: error instanceof Error ? error.message : 'Validation failed',
+    };
+  }
+});
+
+ipcMain.handle('byok:is-enabled', async () => {
+  const settings = store.get('byokSettings') as { enabled: boolean; anthropicApiKey: string | null } | null;
+  return settings?.enabled && !!settings?.anthropicApiKey;
+});
+
+ipcMain.handle('shell:open-external', async (_event, url: string) => {
+  shell.openExternal(url);
+});
+
+ipcMain.handle('claude:check-status', async () => {
+  const byokSettings = store.get('byokSettings') as { enabled: boolean; anthropicApiKey: string | null } | null;
+  const ready = byokSettings?.enabled && !!byokSettings?.anthropicApiKey;
+  return { ready };
+});
 
 // Get current workspace path
 ipcMain.handle('workspace:get-current', async () => {
@@ -785,15 +872,21 @@ ipcMain.on(
     // Use current workspace if set (from OkraPDF bootstrap), otherwise default to agent directory
     const cwd = currentWorkspacePath || DEFAULT_WORKSPACE;
     const problemsDir = path.join(cwd, 'problems');
-    const outputDir = cwd; // Watch the agent directory itself, not a subdirectory
+    const outputDir = cwd;
     console.error('Querying in workspace:', cwd);
 
-    // Guard: ensure logged into okrapdf (proxy mode)
-    if (!desktopApiKey) {
-      console.error('[query] Not logged in - no desktop API key');
-      event.reply('claude-code:error', 'Please log in to OkraPDF to use the agent.');
+    const byokSettings = store.get('byokSettings') as { enabled: boolean; anthropicApiKey: string | null } | null;
+    if (!byokSettings?.enabled || !byokSettings?.anthropicApiKey) {
+      event.reply('claude-code:error', 'Please configure your Anthropic API key in Settings.');
       return;
     }
+
+    // Track agent query start
+    const queryStartTime = Date.now();
+    sendTelemetryEvent('agent_query_started', {
+      hasFiles: !!(typeof data !== 'string' && data.files?.length),
+      workspacePath: cwd,
+    });
 
     // Track files in output directory before starting
     let initialOutputFiles: string[] = [];
@@ -1040,8 +1133,24 @@ User query: `;
       }
 
       console.error('FINISHED CLAUDE CODE EVALUATION!');
+
+      // Track agent query completion
+      sendTelemetryEvent('agent_query_completed', {
+        durationMs: Date.now() - queryStartTime,
+        messageCount: messages.length,
+        outputFilesCount: fs.existsSync(outputDir)
+          ? fs.readdirSync(outputDir).filter(f => ['.xlsx', '.csv'].includes(path.extname(f).toLowerCase())).length
+          : 0,
+      });
     } catch (error) {
       console.error('Claude Code SDK error:', error);
+
+      // Track agent query error
+      sendTelemetryEvent('agent_query_error', {
+        durationMs: Date.now() - queryStartTime,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
       event.reply(
         'claude-code:error',
         error instanceof Error ? error.message : 'Unknown error',
@@ -1288,6 +1397,15 @@ const createWindow = async () => {
     } else {
       mainWindow.show();
     }
+
+    // Track app launch after window is ready (renderer can receive events)
+    setTimeout(() => {
+      sendTelemetryEvent('app_launched', {
+        version: app.getVersion(),
+        platform: process.platform,
+        arch: process.arch,
+      });
+    }, 1000);
   });
 
   mainWindow.on('closed', () => {
