@@ -32,6 +32,13 @@ import {
 
 fixPath();
 
+if (typeof (global as typeof globalThis).DOMMatrix === 'undefined') {
+  const { DOMMatrix, DOMPoint, DOMRect } = require('@napi-rs/canvas');
+  (global as typeof globalThis).DOMMatrix = DOMMatrix;
+  (global as typeof globalThis).DOMPoint = DOMPoint;
+  (global as typeof globalThis).DOMRect = DOMRect;
+}
+
 if (SENTRY_ENABLED) {
   Sentry.init({
     dsn: SENTRY_DSN,

@@ -142,6 +142,13 @@ const configuration: webpack.Configuration = {
      */
     new webpack.EnvironmentPlugin({
       NODE_ENV: 'development',
+      OKRAPDF_API_URL: '',
+      POSTHOG_KEY: '',
+      POSTHOG_HOST: 'https://us.i.posthog.com',
+    }),
+
+    new webpack.DefinePlugin({
+      'process.platform': JSON.stringify(process.platform),
     }),
 
     new webpack.LoaderOptionsPlugin({

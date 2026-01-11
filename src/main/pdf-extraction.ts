@@ -1,8 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { getDocument, PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import type { TextContent, TextItem } from 'pdfjs-dist/types/src/display/api';
+import type { PDFDocumentProxy, PDFPageProxy, TextContent, TextItem } from 'pdfjs-dist/types/src/display/api';
 
 export interface ExtractionProgress {
   currentPage: number;
@@ -18,6 +17,15 @@ export interface ExtractionResult {
 }
 
 type ProgressCallback = (progress: ExtractionProgress) => void;
+
+function ensureDomMatrix(): void {
+  if (typeof (global as typeof globalThis).DOMMatrix === 'undefined') {
+    const { DOMMatrix, DOMPoint, DOMRect } = require('@napi-rs/canvas');
+    (global as typeof globalThis).DOMMatrix = DOMMatrix;
+    (global as typeof globalThis).DOMPoint = DOMPoint;
+    (global as typeof globalThis).DOMRect = DOMRect;
+  }
+}
 
 async function extractPageText(page: PDFPageProxy): Promise<string> {
   const textContent: TextContent = await page.getTextContent();
@@ -54,6 +62,8 @@ export async function extractTextFromPDF(
   onProgress?: ProgressCallback
 ): Promise<ExtractionResult> {
   try {
+    ensureDomMatrix();
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const data = new Uint8Array(fs.readFileSync(pdfPath));
     const pdf: PDFDocumentProxy = await getDocument({ data }).promise;
     const totalPages = pdf.numPages;
@@ -78,6 +88,8 @@ export async function extractTextFromPDF(
 }
 
 export async function getPDFPageCount(pdfPath: string): Promise<number> {
+  ensureDomMatrix();
+  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const data = new Uint8Array(fs.readFileSync(pdfPath));
   const pdf: PDFDocumentProxy = await getDocument({ data }).promise;
   return pdf.numPages;

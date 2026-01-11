@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 
 export interface TableExtractionProgress {
@@ -42,11 +41,20 @@ Example output format:
 | Data 1   | Data 2   |
 `;
 
+function ensureDomMatrix(): void {
+  if (typeof (global as typeof globalThis).DOMMatrix === 'undefined') {
+    const { DOMMatrix, DOMPoint, DOMRect } = require('@napi-rs/canvas');
+    (global as typeof globalThis).DOMMatrix = DOMMatrix;
+    (global as typeof globalThis).DOMPoint = DOMPoint;
+    (global as typeof globalThis).DOMRect = DOMRect;
+  }
+}
+
 async function renderPageToBase64(pdf: PDFDocumentProxy, pageNum: number, scale = 2.0): Promise<string> {
   const page = await pdf.getPage(pageNum);
   const viewport = page.getViewport({ scale });
 
-  const { createCanvas } = await import('canvas');
+  const { createCanvas } = await import('@napi-rs/canvas');
   const canvas = createCanvas(viewport.width, viewport.height);
   const context = canvas.getContext('2d');
 
@@ -118,6 +126,8 @@ export async function extractTablesFromPDF(
   onProgress?: ProgressCallback
 ): Promise<TableExtractionResult> {
   try {
+    ensureDomMatrix();
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const data = new Uint8Array(fs.readFileSync(pdfPath));
     const pdf: PDFDocumentProxy = await getDocument({ data }).promise;
     const totalPages = pdf.numPages;

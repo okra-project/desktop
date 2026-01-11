@@ -1,5 +1,5 @@
 import { spawnSync } from 'child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, symlinkSync, unlinkSync } from 'fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -49,36 +49,39 @@ export default async function beforeBuild(_context) {
   const runtimeDeps = new Set(Object.keys(pkgJson.dependencies ?? {}));
 
   const nodeModulesDir = join(projectDir, 'release/app/node_modules');
-  const outNodeModulesDir = join(projectDir, 'release/app/dist/node_modules');
-
-  // Ensure output directory exists
-  if (!existsSync(outNodeModulesDir)) {
-    mkdirSync(outNodeModulesDir, { recursive: true });
-  }
+  // Copy directly to node_modules (overwriting pnpm symlinks with dereferenced content)
+  const outNodeModulesDir = nodeModulesDir;
 
   // Track which dependencies we've already copied to avoid duplicates
   const copiedDeps = new Set();
 
-  // Recursively copy a dependency and its transitive dependencies
   function copyDependency(depName, isOptional = false) {
     if (copiedDeps.has(depName)) {
       return;
     }
 
-    const sourceDir = join(nodeModulesDir, depName);
     const targetDir = join(outNodeModulesDir, depName);
+    const sourceDir = join(nodeModulesDir, depName);
 
     if (!existsSync(sourceDir)) {
       if (isOptional) {
         console.log(`- Skipping optional dependency ${depName} (not installed on this platform)`);
         return;
       }
-      // Not all deps need to be copied - some are bundled by webpack
       return;
     }
 
+    const stat = lstatSync(sourceDir);
+    if (!stat.isSymbolicLink()) {
+      copiedDeps.add(depName);
+      return;
+    }
+
+    const realSourceDir = realpathSync(sourceDir);
+    rmSync(sourceDir, { recursive: true, force: true });
+
     mkdirSync(dirname(targetDir), { recursive: true });
-    cpSync(sourceDir, targetDir, {
+    cpSync(realSourceDir, targetDir, {
       recursive: true,
       dereference: true,
       force: true
@@ -108,12 +111,23 @@ export default async function beforeBuild(_context) {
     }
   }
 
-  // Copy SDK dependencies that need to be unpacked from asar
-  const sdkDeps = ['@anthropic-ai/claude-agent-sdk', '@anthropic-ai/claude-code'];
+  const sdkDeps = [
+    '@anthropic-ai/claude-agent-sdk',
+    '@anthropic-ai/claude-code',
+    '@napi-rs/canvas',
+    '@napi-rs/canvas-darwin-arm64',
+    '@napi-rs/canvas-darwin-x64',
+  ];
   for (const depName of sdkDeps) {
     if (existsSync(join(nodeModulesDir, depName))) {
       copyDependency(depName, false);
     }
+  }
+
+  const pnpmDir = join(nodeModulesDir, '.pnpm');
+  if (existsSync(pnpmDir)) {
+    rmSync(pnpmDir, { recursive: true, force: true });
+    console.log('- Removed .pnpm directory');
   }
 
   // Step 4: Compile skills from project root

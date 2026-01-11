@@ -115,6 +115,13 @@ const configuration: webpack.Configuration = {
     new webpack.EnvironmentPlugin({
       NODE_ENV: 'production',
       DEBUG_PROD: false,
+      OKRAPDF_API_URL: '',
+      POSTHOG_KEY: '',
+      POSTHOG_HOST: 'https://us.i.posthog.com',
+    }),
+
+    new webpack.DefinePlugin({
+      'process.platform': JSON.stringify(process.platform),
     }),
 
     new MiniCssExtractPlugin({

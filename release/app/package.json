@@ -1,6 +1,6 @@
 {
   "name": "electron-react-boilerplate",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "A foundation for scalable desktop apps",
   "license": "MIT",
   "author": {
@@ -16,6 +16,9 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.76",
-    "@anthropic-ai/claude-code": "^2.0.76"
+    "@anthropic-ai/claude-code": "^2.0.76",
+    "@napi-rs/canvas": "^0.1.88",
+    "@napi-rs/canvas-darwin-arm64": "^0.1.88",
+    "@napi-rs/canvas-darwin-x64": "^0.1.88"
   }
 }

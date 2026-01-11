@@ -193,7 +193,8 @@
     "afterSign": ".erb/scripts/notarize.js",
     "asarUnpack": [
       "**/*.{node,dll}",
-      "node_modules/@anthropic-ai/**"
+      "node_modules/@anthropic-ai/**",
+      "node_modules/@napi-rs/**"
     ],
     "files": [
       "dist",

@@ -8,7 +8,7 @@ import webpackPaths from './webpack.paths';
 import { dependencies as externals } from '../../release/app/package.json';
 
 const configuration: webpack.Configuration = {
-  externals: [...Object.keys(externals || {}), 'canvas'],
+  externals: [...Object.keys(externals || {}), '@napi-rs/canvas'],
 
   stats: 'errors-only',
 
