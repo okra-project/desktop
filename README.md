@@ -23,10 +23,10 @@ Local-first PDF processing with AI. Bring your own API keys - no cloud required.
 
 ## API Keys
 
-| Provider | Purpose | Get Key |
-|----------|---------|---------|
-| Anthropic | Chat with Claude | [console.anthropic.com](https://console.anthropic.com/) |
-| OpenRouter | Table extraction (Qwen Vision) | [openrouter.ai](https://openrouter.ai/) |
+| Provider   | Purpose                        | Get Key                                                 |
+| ---------- | ------------------------------ | ------------------------------------------------------- |
+| Anthropic  | Chat with Claude               | [console.anthropic.com](https://console.anthropic.com/) |
+| OpenRouter | Table extraction (Qwen Vision) | [openrouter.ai](https://openrouter.ai/)                 |
 
 ## Development
 
@@ -89,4 +89,10 @@ The application connects to the following services:
 
 ## License
 
-MIT - see [LICENSE](LICENSE)
+**Source Available** under the [Functional Source License (FSL-1.1-ALv2)](LICENSE).
+
+- You can use, modify, and self-host freely
+- You cannot offer OkraPDF as a competing hosted service
+- Converts to Apache 2.0 on January 2028
+
+See [fsl.software](https://fsl.software/) for details.
