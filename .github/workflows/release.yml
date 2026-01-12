@@ -10,10 +10,29 @@ on:
         description: 'Version (without v prefix, e.g., 4.6.1)'
         required: true
         type: string
+      arch:
+        description: 'Architecture to build'
+        required: false
+        type: choice
+        options:
+          - arm64
+          - universal
+        default: arm64
+      skip_notarization:
+        description: 'Skip notarization (faster, for testing)'
+        required: false
+        type: boolean
+        default: false
+
+# Cancel redundant builds on same ref
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    # Use M1 runner - faster for arm64 builds
+    runs-on: macos-14
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -29,24 +48,27 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Cache Electron
+      # Cache electron binaries AND node_modules together
+      - name: Cache dependencies
         uses: actions/cache@v4
+        id: cache-deps
         with:
           path: |
+            node_modules
+            release/app/node_modules
             ~/Library/Caches/electron
             ~/Library/Caches/electron-builder
-          key: electron-macos-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: electron-macos-
+          key: deps-macos-${{ hashFiles('package-lock.json', 'release/app/package-lock.json') }}
+          restore-keys: deps-macos-
 
       - name: Install dependencies
-        run: npm install --ignore-scripts
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          npm install --ignore-scripts
+          cd release/app && npm install
 
-      - name: Install app dependencies
-        run: npm install
-        working-directory: release/app
-
-      - name: Build DLL
-        run: npm run build:dll
+      # Skip DLL build in CI - not needed for production builds
+      # DLL is only for dev hot-reload optimization
 
       - name: Determine version
         id: version
@@ -57,18 +79,35 @@ jobs:
             echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Determine arch flag
+        id: arch
+        run: |
+          ARCH="${{ inputs.arch || 'arm64' }}"
+          if [ "$ARCH" = "arm64" ]; then
+            echo "flag=--arm64" >> $GITHUB_OUTPUT
+          else
+            echo "flag=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and Package
         env:
           CI: true
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Code signing certificate (base64-encoded .p12)
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # Skip notarization if requested (saves ~3-5 min)
+          SKIP_NOTARIZATION: ${{ inputs.skip_notarization || 'false' }}
         run: |
           npm run build
-          npx electron-builder build --publish always
+
+          if [ "$SKIP_NOTARIZATION" = "true" ]; then
+            echo "Skipping notarization..."
+            npx electron-builder build ${{ steps.arch.outputs.flag }} --publish never
+          else
+            npx electron-builder build ${{ steps.arch.outputs.flag }} --publish always
+          fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -78,6 +117,7 @@ jobs:
             release/build/*.dmg
             release/build/*.zip
             release/build/*.yml
+            release/build/*.blockmap
           retention-days: 30
 
       - name: Setup GCS
@@ -96,7 +136,6 @@ jobs:
       - name: Fix paths in auto-update manifest
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          # Update paths in latest-mac.yml to include version prefix
           sed -i '' "s|url: OkraPDF-|url: v${VERSION}/OkraPDF-|g" release/build/latest-mac.yml
           sed -i '' "s|path: OkraPDF-|path: v${VERSION}/OkraPDF-|g" release/build/latest-mac.yml
           cat release/build/latest-mac.yml
@@ -121,7 +160,7 @@ jobs:
           echo "| Intel | https://okrapdf.com/download/desktop/v${VERSION}/OkraPDF-${VERSION}.dmg |" >> $GITHUB_STEP_SUMMARY
 
   build-windows:
-    if: false  # Disabled - no Windows users yet. Remove this line when needed.
+    if: false  # Disabled - no Windows users yet
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -138,24 +177,23 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Cache Electron
+      - name: Cache dependencies
         uses: actions/cache@v4
+        id: cache-deps
         with:
           path: |
+            node_modules
+            release/app/node_modules
             ~/AppData/Local/electron/Cache
             ~/AppData/Local/electron-builder/Cache
-          key: electron-windows-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: electron-windows-
+          key: deps-windows-${{ hashFiles('package-lock.json', 'release/app/package-lock.json') }}
+          restore-keys: deps-windows-
 
       - name: Install dependencies
-        run: npm install --ignore-scripts
-
-      - name: Install app dependencies
-        run: npm install
-        working-directory: release/app
-
-      - name: Build DLL
-        run: npm run build:dll
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          npm install --ignore-scripts
+          cd release/app && npm install
 
       - name: Determine version
         id: version
