@@ -1,4 +1,4 @@
-import { useExtraction } from '../providers/ExtractionContext';
+import { useExtraction } from '../hooks/useExtractionRedux';
 
 export function ExtractionOverlay() {
   const { status, progress, totalPages, cancelExtraction } = useExtraction();

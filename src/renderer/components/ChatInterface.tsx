@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import { selectIsAnthropicConfigured, selectIsHydrated } from '@okrapdf/redux';
+import { useAppSelector } from '../store';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 import { ChatMessage, OutputFile } from './types';
@@ -14,15 +16,9 @@ function ChatInterface({ onOpenSettings }: ChatInterfaceProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentTodos, setCurrentTodos] = useState<TodoItem[]>([]);
-  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    const checkApiKey = async () => {
-      const enabled = await window.electron.ipcRenderer.invoke('byok:is-enabled');
-      setHasApiKey(enabled);
-    };
-    checkApiKey();
-  }, []);
+  const isHydrated = useAppSelector(selectIsHydrated);
+  const hasApiKey = useAppSelector(selectIsAnthropicConfigured);
 
   useEffect(() => {
     // Set up listeners for Claude Code responses
@@ -192,8 +188,17 @@ function ChatInterface({ onOpenSettings }: ChatInterfaceProps) {
     [isLoading],
   );
 
-  // Show API key prompt if not configured
-  if (hasApiKey === false) {
+  if (!isHydrated) {
+    return (
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-okra-yellow" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasApiKey) {
     return (
       <div className="flex flex-col flex-1 overflow-hidden">
         <div className="flex-1 flex items-center justify-center p-8">

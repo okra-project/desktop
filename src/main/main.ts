@@ -9,12 +9,24 @@ import path from 'path';
 import { execSync } from 'child_process';
 import * as Sentry from '@sentry/electron/main';
 import { nanoid } from 'nanoid';
-import { SENTRY_DSN, SENTRY_ENABLED, SENTRY_ENVIRONMENT } from '../config/sentry';
+import {
+  SENTRY_DSN,
+  SENTRY_ENABLED,
+  SENTRY_ENVIRONMENT,
+} from '../config/sentry';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
-import { setupVerificationIpcHandlers, cleanupVerificationIpcHandlers } from './verification/ipc-handlers';
+import {
+  setupVerificationIpcHandlers,
+  cleanupVerificationIpcHandlers,
+} from './verification/ipc-handlers';
 import { setupOcrIpcHandlers, cleanupOcrIpcHandlers } from './providers';
-import { extractTextFromPDF, getPDFPageCount, generatePDFThumbnail } from './pdf-extraction';
+import { registerCodingAgentHandlers } from './coding-agents';
+import {
+  extractTextFromPDF,
+  getPDFPageCount,
+  generatePDFThumbnail,
+} from './pdf-extraction';
 import type { ExtractionProgress } from './pdf-extraction';
 import { extractTablesFromPDF, getExtractedTables } from './table-extraction';
 import type { TableExtractionProgress } from './table-extraction';
@@ -74,12 +86,21 @@ const store = new Store({
   },
 });
 
+const providerStore = new Store({
+  name: 'okrapdf-ocr-providers',
+  defaults: {
+    providerConfigs: {} as Record<string, { apiKey?: string }>,
+  },
+});
+
 const WORKSPACES_DIR = path.join(app.getPath('home'), '.okrapdf', 'workspaces');
 if (!fs.existsSync(WORKSPACES_DIR)) {
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 }
 
-let currentWorkspacePath: string | null = store.get('lastWorkspacePath') as string | null;
+let currentWorkspacePath: string | null = store.get('lastWorkspacePath') as
+  | string
+  | null;
 
 /**
  * Get environment variables for Claude agent, including API key from provider config.
@@ -87,7 +108,10 @@ let currentWorkspacePath: string | null = store.get('lastWorkspacePath') as stri
  */
 function getClaudeEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   // First, try the new provider config system
-  const providerConfigs = store.get('providerConfigs') as Record<string, { apiKey?: string }> | null;
+  const providerConfigs = providerStore.get('providerConfigs') as Record<
+    string,
+    { apiKey?: string }
+  > | null;
   const anthropicConfig = providerConfigs?.['anthropic'];
 
   if (anthropicConfig?.apiKey) {
@@ -98,7 +122,10 @@ function getClaudeEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   }
 
   // Fallback to legacy BYOK settings for backwards compatibility
-  const byokSettings = store.get('byokSettings') as { enabled: boolean; anthropicApiKey: string | null } | null;
+  const byokSettings = store.get('byokSettings') as {
+    enabled: boolean;
+    anthropicApiKey: string | null;
+  } | null;
   if (byokSettings?.enabled && byokSettings?.anthropicApiKey) {
     return {
       ...baseEnv,
@@ -276,7 +303,11 @@ ipcMain.handle(
 // Trajectory Management (OpenHands-style Replay)
 // ============================================
 
-const TRAJECTORIES_DIR = path.join(app.getPath('home'), '.okrapdf', 'trajectories');
+const TRAJECTORIES_DIR = path.join(
+  app.getPath('home'),
+  '.okrapdf',
+  'trajectories',
+);
 
 // Ensure trajectories directory exists
 if (!fs.existsSync(TRAJECTORIES_DIR)) {
@@ -293,7 +324,7 @@ ipcMain.handle(
       documentName?: string;
       trajectory: object[];
       metrics?: object;
-    }
+    },
   ) => {
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -322,7 +353,7 @@ ipcMain.handle(
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
-  }
+  },
 );
 
 ipcMain.handle('trajectory:load', async (_event, fileName: string) => {
@@ -373,7 +404,9 @@ ipcMain.handle('trajectory:list', async () => {
         }
       })
       .filter((t): t is NonNullable<typeof t> => t !== null)
-      .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+      .sort(
+        (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime(),
+      );
 
     return { success: true, trajectories };
   } catch (error) {
@@ -420,7 +453,10 @@ ipcMain.handle('workspace:open-pdf-dialog', async () => {
     mode: 'local',
     extractionStatus: 'pending',
   };
-  fs.writeFileSync(path.join(workspacePath, 'metadata.json'), JSON.stringify(metadata, null, 2));
+  fs.writeFileSync(
+    path.join(workspacePath, 'metadata.json'),
+    JSON.stringify(metadata, null, 2),
+  );
 
   const workspace = {
     id: workspaceId,
@@ -433,7 +469,8 @@ ipcMain.handle('workspace:open-pdf-dialog', async () => {
     extractionStatus: 'pending',
   };
 
-  const workspaces = (store.get('localWorkspaces') || []) as typeof workspace[];
+  const workspaces = (store.get('localWorkspaces') ||
+    []) as (typeof workspace)[];
   workspaces.unshift(workspace);
   store.set('localWorkspaces', workspaces);
 
@@ -443,77 +480,100 @@ ipcMain.handle('workspace:open-pdf-dialog', async () => {
   return { success: true, workspace };
 });
 
-ipcMain.handle('workspace:create-from-path', async (_event, pdfPath: string) => {
-  const fileName = path.basename(pdfPath, '.pdf');
-  const pdfFileName = path.basename(pdfPath);
-  const workspaceId = `local-${nanoid(12)}`;
-  const workspacePath = path.join(WORKSPACES_DIR, workspaceId);
+ipcMain.handle(
+  'workspace:create-from-path',
+  async (_event, pdfPath: string) => {
+    const fileName = path.basename(pdfPath, '.pdf');
+    const pdfFileName = path.basename(pdfPath);
+    const workspaceId = `local-${nanoid(12)}`;
+    const workspacePath = path.join(WORKSPACES_DIR, workspaceId);
 
-  fs.mkdirSync(workspacePath, { recursive: true });
-  fs.mkdirSync(path.join(workspacePath, 'ocr'));
-  fs.mkdirSync(path.join(workspacePath, 'tables'));
+    fs.mkdirSync(workspacePath, { recursive: true });
+    fs.mkdirSync(path.join(workspacePath, 'ocr'));
+    fs.mkdirSync(path.join(workspacePath, 'tables'));
 
-  fs.copyFileSync(pdfPath, path.join(workspacePath, pdfFileName));
+    fs.copyFileSync(pdfPath, path.join(workspacePath, pdfFileName));
 
-  const metadata = {
-    id: workspaceId,
-    fileName,
-    pdfFileName,
-    originalPath: pdfPath,
-    createdAt: new Date().toISOString(),
-    mode: 'local',
-    extractionStatus: 'pending',
-  };
-  fs.writeFileSync(path.join(workspacePath, 'metadata.json'), JSON.stringify(metadata, null, 2));
+    const metadata = {
+      id: workspaceId,
+      fileName,
+      pdfFileName,
+      originalPath: pdfPath,
+      createdAt: new Date().toISOString(),
+      mode: 'local',
+      extractionStatus: 'pending',
+    };
+    fs.writeFileSync(
+      path.join(workspacePath, 'metadata.json'),
+      JSON.stringify(metadata, null, 2),
+    );
 
-  const workspace = {
-    id: workspaceId,
-    name: fileName,
-    path: workspacePath,
-    pdfPath,
-    pdfFileName,
-    workspacePath,
-    createdAt: new Date().toISOString(),
-    lastOpenedAt: new Date().toISOString(),
-    extractionStatus: 'pending',
-  };
+    const workspace = {
+      id: workspaceId,
+      name: fileName,
+      path: workspacePath,
+      pdfPath,
+      pdfFileName,
+      workspacePath,
+      createdAt: new Date().toISOString(),
+      lastOpenedAt: new Date().toISOString(),
+      extractionStatus: 'pending',
+    };
 
-  const workspaces = (store.get('localWorkspaces') || []) as typeof workspace[];
-  workspaces.unshift(workspace);
-  store.set('localWorkspaces', workspaces);
-
-  currentWorkspacePath = workspacePath;
-  store.set('lastWorkspacePath', workspacePath);
-
-  return workspace;
-});
-
-ipcMain.handle('workspace:update-last-opened', async (_event, workspaceId: string) => {
-  const workspaces = (store.get('localWorkspaces') || []) as Array<{ id: string; lastOpenedAt: string; workspacePath: string }>;
-  const idx = workspaces.findIndex((w) => w.id === workspaceId);
-  if (idx >= 0) {
-    workspaces[idx].lastOpenedAt = new Date().toISOString();
-    currentWorkspacePath = workspaces[idx].workspacePath;
-    store.set('lastWorkspacePath', currentWorkspacePath);
+    const workspaces = (store.get('localWorkspaces') ||
+      []) as (typeof workspace)[];
+    workspaces.unshift(workspace);
     store.set('localWorkspaces', workspaces);
-  }
-  return { success: true };
-});
 
-ipcMain.handle('workspace:delete-local', async (_event, workspaceId: string) => {
-  const workspaces = (store.get('localWorkspaces') || []) as Array<{ id: string; workspacePath: string }>;
-  const workspace = workspaces.find((w) => w.id === workspaceId);
-  
-  if (workspace) {
-    try {
-      fs.rmSync(workspace.workspacePath, { recursive: true, force: true });
-    } catch (err) {
-      console.error('Failed to delete workspace dir:', err);
+    currentWorkspacePath = workspacePath;
+    store.set('lastWorkspacePath', workspacePath);
+
+    return workspace;
+  },
+);
+
+ipcMain.handle(
+  'workspace:update-last-opened',
+  async (_event, workspaceId: string) => {
+    const workspaces = (store.get('localWorkspaces') || []) as Array<{
+      id: string;
+      lastOpenedAt: string;
+      workspacePath: string;
+    }>;
+    const idx = workspaces.findIndex((w) => w.id === workspaceId);
+    if (idx >= 0) {
+      workspaces[idx].lastOpenedAt = new Date().toISOString();
+      currentWorkspacePath = workspaces[idx].workspacePath;
+      store.set('lastWorkspacePath', currentWorkspacePath);
+      store.set('localWorkspaces', workspaces);
     }
-    store.set('localWorkspaces', workspaces.filter((w) => w.id !== workspaceId));
-  }
-  return { success: true };
-});
+    return { success: true };
+  },
+);
+
+ipcMain.handle(
+  'workspace:delete-local',
+  async (_event, workspaceId: string) => {
+    const workspaces = (store.get('localWorkspaces') || []) as Array<{
+      id: string;
+      workspacePath: string;
+    }>;
+    const workspace = workspaces.find((w) => w.id === workspaceId);
+
+    if (workspace) {
+      try {
+        fs.rmSync(workspace.workspacePath, { recursive: true, force: true });
+      } catch (err) {
+        console.error('Failed to delete workspace dir:', err);
+      }
+      store.set(
+        'localWorkspaces',
+        workspaces.filter((w) => w.id !== workspaceId),
+      );
+    }
+    return { success: true };
+  },
+);
 
 // ============================================
 // Extraction IPC Handlers (BYOK local processing)
@@ -522,7 +582,11 @@ ipcMain.handle('workspace:delete-local', async (_event, workspaceId: string) => 
 let extractionAbortController: AbortController | null = null;
 
 ipcMain.handle('extraction:start-text', async (_event, workspaceId: string) => {
-  const workspaces = (store.get('localWorkspaces') || []) as Array<{ id: string; workspacePath: string; extractionStatus: string }>;
+  const workspaces = (store.get('localWorkspaces') || []) as Array<{
+    id: string;
+    workspacePath: string;
+    extractionStatus: string;
+  }>;
   const workspace = workspaces.find((w) => w.id === workspaceId);
 
   if (!workspace) {
@@ -536,7 +600,11 @@ ipcMain.handle('extraction:start-text', async (_event, workspaceId: string) => {
   const ocrDir = path.join(workspace.workspacePath, 'ocr');
 
   const updateWorkspaceStatus = (status: string, progress?: number) => {
-    const ws = (store.get('localWorkspaces') || []) as Array<{ id: string; extractionStatus: string; extractionProgress?: number }>;
+    const ws = (store.get('localWorkspaces') || []) as Array<{
+      id: string;
+      extractionStatus: string;
+      extractionProgress?: number;
+    }>;
     const idx = ws.findIndex((w) => w.id === workspaceId);
     if (idx >= 0) {
       ws[idx].extractionStatus = status;
@@ -596,179 +664,262 @@ ipcMain.handle('extraction:cancel', async () => {
   return { success: true };
 });
 
-ipcMain.handle('extraction:get-page-content', async (_event, workspacePath: string, pageNum: number) => {
-  const filePath = path.join(workspacePath, 'ocr', `page-${String(pageNum).padStart(3, '0')}.md`);
-  if (!fs.existsSync(filePath)) {
-    return null;
-  }
-  const content = fs.readFileSync(filePath, 'utf-8');
-  return { page: pageNum, content };
-});
+ipcMain.handle(
+  'extraction:get-page-content',
+  async (_event, workspacePath: string, pageNum: number) => {
+    const filePath = path.join(
+      workspacePath,
+      'ocr',
+      `page-${String(pageNum).padStart(3, '0')}.md`,
+    );
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return { page: pageNum, content };
+  },
+);
 
-ipcMain.handle('extraction:save-page-content', async (_event, workspacePath: string, pageNum: number, content: string) => {
-  const filePath = path.join(workspacePath, 'ocr', `page-${String(pageNum).padStart(3, '0')}.md`);
-  fs.writeFileSync(filePath, content);
-  return { success: true, page: pageNum };
-});
+ipcMain.handle(
+  'extraction:save-page-content',
+  async (_event, workspacePath: string, pageNum: number, content: string) => {
+    const filePath = path.join(
+      workspacePath,
+      'ocr',
+      `page-${String(pageNum).padStart(3, '0')}.md`,
+    );
+    fs.writeFileSync(filePath, content);
+    return { success: true, page: pageNum };
+  },
+);
 
-ipcMain.handle('extraction:get-page-count', async (_event, workspacePath: string) => {
-  const pdfPath = findPdfInWorkspace(workspacePath);
-  if (!pdfPath) {
-    return 0;
-  }
-  return getPDFPageCount(pdfPath);
-});
+ipcMain.handle(
+  'extraction:get-page-count',
+  async (_event, workspacePath: string) => {
+    const pdfPath = findPdfInWorkspace(workspacePath);
+    if (!pdfPath) {
+      return 0;
+    }
+    return getPDFPageCount(pdfPath);
+  },
+);
 
-ipcMain.handle('extraction:start-tables', async (_event, workspaceId: string) => {
-  const workspaces = (store.get('localWorkspaces') || []) as Array<{ id: string; workspacePath: string }>;
-  const workspace = workspaces.find((w) => w.id === workspaceId);
+ipcMain.handle(
+  'extraction:start-tables',
+  async (_event, workspaceId: string) => {
+    const workspaces = (store.get('localWorkspaces') || []) as Array<{
+      id: string;
+      workspacePath: string;
+    }>;
+    const workspace = workspaces.find((w) => w.id === workspaceId);
 
-  if (!workspace) {
-    return { success: false, error: 'Workspace not found' };
-  }
-
-  // Get OpenRouter API key from new provider system or legacy BYOK
-  const providerConfigs = store.get('providerConfigs') as Record<string, { apiKey?: string }> | null;
-  let apiKey = providerConfigs?.['openrouter']?.apiKey;
-
-  // Fallback to legacy BYOK
-  if (!apiKey) {
-    const byokSettings = store.get('byokSettings') as { openrouterApiKey?: string } | undefined;
-    apiKey = byokSettings?.openrouterApiKey;
-  }
-
-  if (!apiKey) {
-    return { success: false, error: 'OpenRouter API key not configured. Add it in Settings > Vision-Language Models.' };
-  }
-
-  const pdfPath = findPdfInWorkspace(workspace.workspacePath);
-  if (!pdfPath) {
-    return { success: false, error: 'PDF not found in workspace' };
-  }
-  const tablesDir = path.join(workspace.workspacePath, 'tables');
-
-  const onProgress = (progress: TableExtractionProgress) => {
-    mainWindow?.webContents.send('extraction:table-progress', {
-      workspaceId,
-      ...progress,
-      status: 'processing',
-    });
-  };
-
-  try {
-    const result = await extractTablesFromPDF(pdfPath, tablesDir, apiKey, onProgress);
-
-    if (result.success) {
-      const metadataPath = path.join(workspace.workspacePath, 'metadata.json');
-      const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
-      metadata.tableExtractionComplete = true;
-      metadata.tablesCount = result.tables.length;
-      fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+    if (!workspace) {
+      return { success: false, error: 'Workspace not found' };
     }
 
-    mainWindow?.webContents.send('extraction:table-progress', {
-      workspaceId,
-      phase: 'analyzing',
-      currentPage: result.totalPages,
-      totalPages: result.totalPages,
-      tablesFound: result.tables.length,
-      status: result.success ? 'completed' : 'failed',
-      error: result.error,
-    });
+    // Get OpenRouter API key from new provider system or legacy BYOK
+    const providerConfigs = providerStore.get('providerConfigs') as Record<
+      string,
+      { apiKey?: string }
+    > | null;
+    let apiKey = providerConfigs?.['openrouter']?.apiKey;
 
-    return result;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return { success: false, tables: [], totalPages: 0, error: message };
-  }
-});
-
-ipcMain.handle('extraction:get-tables', async (_event, workspacePath: string) => {
-  const tablesDir = path.join(workspacePath, 'tables');
-  return getExtractedTables(tablesDir);
-});
-
-ipcMain.handle('extraction:get-table', async (_event, workspacePath: string, tableId: string) => {
-  const tablePath = path.join(workspacePath, 'tables', `${tableId}.md`);
-  if (!fs.existsSync(tablePath)) {
-    return null;
-  }
-  return { id: tableId, markdown: fs.readFileSync(tablePath, 'utf-8') };
-});
-
-ipcMain.handle('extraction:save-table', async (_event, workspacePath: string, tableId: string, markdown: string) => {
-  const tablePath = path.join(workspacePath, 'tables', `${tableId}.md`);
-  fs.writeFileSync(tablePath, markdown);
-
-  const manifestPath = path.join(workspacePath, 'tables', 'manifest.json');
-  if (fs.existsSync(manifestPath)) {
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
-    const tableIdx = manifest.tables.findIndex((t: { id: string }) => t.id === tableId);
-    if (tableIdx >= 0) {
-      manifest.tables[tableIdx].markdown = markdown;
-      manifest.tables[tableIdx].was_corrected = true;
-      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    // Fallback to legacy BYOK
+    if (!apiKey) {
+      const byokSettings = store.get('byokSettings') as
+        | { openrouterApiKey?: string }
+        | undefined;
+      apiKey = byokSettings?.openrouterApiKey;
     }
-  }
 
-  return { success: true };
-});
+    if (!apiKey) {
+      return {
+        success: false,
+        error:
+          'OpenRouter API key not configured. Add it in Settings > Vision-Language Models.',
+      };
+    }
+
+    const pdfPath = findPdfInWorkspace(workspace.workspacePath);
+    if (!pdfPath) {
+      return { success: false, error: 'PDF not found in workspace' };
+    }
+    const tablesDir = path.join(workspace.workspacePath, 'tables');
+
+    const onProgress = (progress: TableExtractionProgress) => {
+      mainWindow?.webContents.send('extraction:table-progress', {
+        workspaceId,
+        ...progress,
+        status: 'processing',
+      });
+    };
+
+    try {
+      const result = await extractTablesFromPDF(
+        pdfPath,
+        tablesDir,
+        apiKey,
+        onProgress,
+      );
+
+      if (result.success) {
+        const metadataPath = path.join(
+          workspace.workspacePath,
+          'metadata.json',
+        );
+        const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+        metadata.tableExtractionComplete = true;
+        metadata.tablesCount = result.tables.length;
+        fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+      }
+
+      mainWindow?.webContents.send('extraction:table-progress', {
+        workspaceId,
+        phase: 'analyzing',
+        currentPage: result.totalPages,
+        totalPages: result.totalPages,
+        tablesFound: result.tables.length,
+        status: result.success ? 'completed' : 'failed',
+        error: result.error,
+      });
+
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, tables: [], totalPages: 0, error: message };
+    }
+  },
+);
+
+ipcMain.handle(
+  'extraction:get-tables',
+  async (_event, workspacePath: string) => {
+    const tablesDir = path.join(workspacePath, 'tables');
+    return getExtractedTables(tablesDir);
+  },
+);
+
+ipcMain.handle(
+  'extraction:get-table',
+  async (_event, workspacePath: string, tableId: string) => {
+    const tablePath = path.join(workspacePath, 'tables', `${tableId}.md`);
+    if (!fs.existsSync(tablePath)) {
+      return null;
+    }
+    return { id: tableId, markdown: fs.readFileSync(tablePath, 'utf-8') };
+  },
+);
+
+ipcMain.handle(
+  'extraction:save-table',
+  async (_event, workspacePath: string, tableId: string, markdown: string) => {
+    const tablePath = path.join(workspacePath, 'tables', `${tableId}.md`);
+    fs.writeFileSync(tablePath, markdown);
+
+    const manifestPath = path.join(workspacePath, 'tables', 'manifest.json');
+    if (fs.existsSync(manifestPath)) {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+      const tableIdx = manifest.tables.findIndex(
+        (t: { id: string }) => t.id === tableId,
+      );
+      if (tableIdx >= 0) {
+        manifest.tables[tableIdx].markdown = markdown;
+        manifest.tables[tableIdx].was_corrected = true;
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+      }
+    }
+
+    return { success: true };
+  },
+);
 
 // ============================================
 // Local Verification State IPC Handlers
 // ============================================
 
-ipcMain.handle('state:initialize', async (_event, workspacePath: string, documentName: string, totalPages: number) => {
-  return initializeState(workspacePath, documentName, totalPages);
-});
+ipcMain.handle(
+  'state:initialize',
+  async (
+    _event,
+    workspacePath: string,
+    documentName: string,
+    totalPages: number,
+  ) => {
+    return initializeState(workspacePath, documentName, totalPages);
+  },
+);
 
 ipcMain.handle('state:load', async (_event, workspacePath: string) => {
   return loadState(workspacePath);
 });
 
-ipcMain.handle('state:get-page', async (_event, workspacePath: string, pageNum: number) => {
-  return getPageState(workspacePath, pageNum);
-});
+ipcMain.handle(
+  'state:get-page',
+  async (_event, workspacePath: string, pageNum: number) => {
+    return getPageState(workspacePath, pageNum);
+  },
+);
 
-ipcMain.handle('state:update-page', async (_event, workspacePath: string, pageNum: number, updates: Record<string, unknown>) => {
-  return updatePageState(workspacePath, pageNum, updates);
-});
+ipcMain.handle(
+  'state:update-page',
+  async (
+    _event,
+    workspacePath: string,
+    pageNum: number,
+    updates: Record<string, unknown>,
+  ) => {
+    return updatePageState(workspacePath, pageNum, updates);
+  },
+);
 
-ipcMain.handle('state:resolve-page', async (
-  _event,
-  workspacePath: string,
-  pageNum: number,
-  status: 'pending' | 'verified' | 'flagged' | 'rejected',
-  resolution?: string,
-  classification?: string
-) => {
-  resolvePageStatus(workspacePath, pageNum, status, resolution, classification);
-  return { success: true };
-});
+ipcMain.handle(
+  'state:resolve-page',
+  async (
+    _event,
+    workspacePath: string,
+    pageNum: number,
+    status: 'pending' | 'verified' | 'flagged' | 'rejected',
+    resolution?: string,
+    classification?: string,
+  ) => {
+    resolvePageStatus(
+      workspacePath,
+      pageNum,
+      status,
+      resolution,
+      classification,
+    );
+    return { success: true };
+  },
+);
 
-ipcMain.handle('state:get-table', async (_event, workspacePath: string, tableId: string) => {
-  return getTableState(workspacePath, tableId);
-});
+ipcMain.handle(
+  'state:get-table',
+  async (_event, workspacePath: string, tableId: string) => {
+    return getTableState(workspacePath, tableId);
+  },
+);
 
-ipcMain.handle('state:update-table-status', async (
-  _event,
-  workspacePath: string,
-  tableId: string,
-  status: 'pending' | 'verified' | 'flagged' | 'rejected'
-) => {
-  updateTableStatus(workspacePath, tableId, status);
-  return { success: true };
-});
+ipcMain.handle(
+  'state:update-table-status',
+  async (
+    _event,
+    workspacePath: string,
+    tableId: string,
+    status: 'pending' | 'verified' | 'flagged' | 'rejected',
+  ) => {
+    updateTableStatus(workspacePath, tableId, status);
+    return { success: true };
+  },
+);
 
-ipcMain.handle('state:update-table-markdown', async (
-  _event,
-  workspacePath: string,
-  tableId: string,
-  markdown: string
-) => {
-  updateTableMarkdown(workspacePath, tableId, markdown, 'user_edit');
-  return { success: true };
-});
+ipcMain.handle(
+  'state:update-table-markdown',
+  async (_event, workspacePath: string, tableId: string, markdown: string) => {
+    updateTableMarkdown(workspacePath, tableId, markdown, 'user_edit');
+    return { success: true };
+  },
+);
 
 ipcMain.handle('state:get-summary', async (_event, workspacePath: string) => {
   return getVerificationSummary(workspacePath);
@@ -801,12 +952,17 @@ ipcMain.handle('telemetry:get-user-id', async () => {
     const { randomUUID } = require('crypto');
     userId = `desktop_${randomUUID()}`;
     store.set('telemetryUserId', userId);
-    console.error(`[telemetry] Generated new user ID: ${userId.slice(0, 20)}...`);
+    console.error(
+      `[telemetry] Generated new user ID: ${userId.slice(0, 20)}...`,
+    );
   }
   return userId;
 });
 
-function sendTelemetryEvent(eventName: string, properties?: Record<string, unknown>) {
+function sendTelemetryEvent(
+  eventName: string,
+  properties?: Record<string, unknown>,
+) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('telemetry:event', { eventName, properties });
   }
@@ -816,81 +972,96 @@ ipcMain.handle('byok:get-settings', async () => {
   return store.get('byokSettings');
 });
 
-ipcMain.handle('byok:set-settings', async (_event, settings: {
-  enabled: boolean;
-  anthropicApiKey?: string;
-  openrouterApiKey?: string;
-}) => {
-  store.set('byokSettings', {
-    ...settings,
-    lastValidated: new Date().toISOString(),
-  });
-  console.error(`[byok] Settings updated, enabled=${settings.enabled}`);
-  return { success: true };
-});
+ipcMain.handle(
+  'byok:set-settings',
+  async (
+    _event,
+    settings: {
+      enabled: boolean;
+      anthropicApiKey?: string;
+      openrouterApiKey?: string;
+    },
+  ) => {
+    store.set('byokSettings', {
+      ...settings,
+      lastValidated: new Date().toISOString(),
+    });
+    console.error(`[byok] Settings updated, enabled=${settings.enabled}`);
+    return { success: true };
+  },
+);
 
-ipcMain.handle('byok:validate-key', async (_event, provider: 'anthropic' | 'openrouter', apiKey: string) => {
-  try {
-    if (provider === 'anthropic') {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 10,
-          messages: [{ role: 'user', content: 'Hi' }],
-        }),
-      });
+ipcMain.handle(
+  'byok:validate-key',
+  async (_event, provider: 'anthropic' | 'openrouter', apiKey: string) => {
+    try {
+      if (provider === 'anthropic') {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 10,
+            messages: [{ role: 'user', content: 'Hi' }],
+          }),
+        });
 
-      if (response.ok || response.status === 400) {
-        return { valid: true, provider };
+        if (response.ok || response.status === 400) {
+          return { valid: true, provider };
+        }
+
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          valid: false,
+          provider,
+          error: errorData.error?.message || `HTTP ${response.status}`,
+        };
       }
 
-      const errorData = await response.json().catch(() => ({}));
+      if (provider === 'openrouter') {
+        const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+
+        if (response.ok) {
+          return { valid: true, provider };
+        }
+
+        return { valid: false, provider, error: `HTTP ${response.status}` };
+      }
+
+      return { valid: false, provider, error: 'Unknown provider' };
+    } catch (error) {
       return {
         valid: false,
         provider,
-        error: errorData.error?.message || `HTTP ${response.status}`,
+        error: error instanceof Error ? error.message : 'Validation failed',
       };
     }
-
-    if (provider === 'openrouter') {
-      const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
-
-      if (response.ok) {
-        return { valid: true, provider };
-      }
-
-      return { valid: false, provider, error: `HTTP ${response.status}` };
-    }
-
-    return { valid: false, provider, error: 'Unknown provider' };
-  } catch (error) {
-    return {
-      valid: false,
-      provider,
-      error: error instanceof Error ? error.message : 'Validation failed',
-    };
-  }
-});
+  },
+);
 
 /**
  * Check if an Anthropic API key is configured (from provider config or legacy BYOK).
  */
 function hasAnthropicApiKey(): boolean {
   // Check new provider config system first
-  const providerConfigs = store.get('providerConfigs') as Record<string, { apiKey?: string }> | null;
+  const providerConfigs = providerStore.get('providerConfigs') as Record<
+    string,
+    { apiKey?: string }
+  > | null;
   if (providerConfigs?.['anthropic']?.apiKey) {
     return true;
   }
   // Fallback to legacy BYOK
-  const byokSettings = store.get('byokSettings') as { enabled: boolean; anthropicApiKey: string | null } | null;
+  const byokSettings = store.get('byokSettings') as {
+    enabled: boolean;
+    anthropicApiKey: string | null;
+  } | null;
   return !!byokSettings?.enabled && !!byokSettings?.anthropicApiKey;
 }
 
@@ -911,48 +1082,57 @@ ipcMain.handle('workspace:get-current', async () => {
   return { workspacePath: currentWorkspacePath };
 });
 
-ipcMain.handle('workspace:list-files', async (_event, workspacePath: string) => {
-  try {
-    if (!fs.existsSync(workspacePath)) {
+ipcMain.handle(
+  'workspace:list-files',
+  async (_event, workspacePath: string) => {
+    try {
+      if (!fs.existsSync(workspacePath)) {
+        return [];
+      }
+      const files = fs.readdirSync(workspacePath);
+      return files.filter((f) => {
+        const filePath = path.join(workspacePath, f);
+        return fs.statSync(filePath).isFile();
+      });
+    } catch (error) {
+      console.error('[workspace:list-files] Error:', error);
       return [];
     }
-    const files = fs.readdirSync(workspacePath);
-    return files.filter((f) => {
-      const filePath = path.join(workspacePath, f);
-      return fs.statSync(filePath).isFile();
-    });
-  } catch (error) {
-    console.error('[workspace:list-files] Error:', error);
-    return [];
-  }
-});
+  },
+);
 
-ipcMain.handle('workspace:get-thumbnail', async (_event, workspacePath: string) => {
-  const thumbnailPath = path.join(workspacePath, 'thumbnail.png');
-  
-  if (fs.existsSync(thumbnailPath)) {
-    return `file://${thumbnailPath}`;
-  }
-  
-  const pdfPath = findPdfInWorkspace(workspacePath);
-  if (!pdfPath) {
+ipcMain.handle(
+  'workspace:get-thumbnail',
+  async (_event, workspacePath: string) => {
+    const thumbnailPath = path.join(workspacePath, 'thumbnail.png');
+
+    if (fs.existsSync(thumbnailPath)) {
+      return `file://${thumbnailPath}`;
+    }
+
+    const pdfPath = findPdfInWorkspace(workspacePath);
+    if (!pdfPath) {
+      return null;
+    }
+
+    const result = await generatePDFThumbnail(pdfPath, thumbnailPath, 800);
+    if (result.success && result.path) {
+      return `file://${result.path}`;
+    }
     return null;
-  }
+  },
+);
 
-  const result = await generatePDFThumbnail(pdfPath, thumbnailPath, 800);
-  if (result.success && result.path) {
-    return `file://${result.path}`;
-  }
-  return null;
-});
-
-ipcMain.handle('workspace:open-in-finder', async (_event, workspacePath: string) => {
-  if (fs.existsSync(workspacePath)) {
-    shell.showItemInFolder(workspacePath);
-    return { success: true };
-  }
-  return { success: false, error: 'Path does not exist' };
-});
+ipcMain.handle(
+  'workspace:open-in-finder',
+  async (_event, workspacePath: string) => {
+    if (fs.existsSync(workspacePath)) {
+      shell.showItemInFolder(workspacePath);
+      return { success: true };
+    }
+    return { success: false, error: 'Path does not exist' };
+  },
+);
 
 ipcMain.on(
   'claude-code:query',
@@ -970,7 +1150,10 @@ ipcMain.on(
     console.error('Querying in workspace:', cwd);
 
     if (!hasAnthropicApiKey()) {
-      event.reply('claude-code:error', 'Please configure your Anthropic API key in Settings > Agent Providers.');
+      event.reply(
+        'claude-code:error',
+        'Please configure your Anthropic API key in Settings > Agent Providers.',
+      );
       return;
     }
 
@@ -985,12 +1168,14 @@ ipcMain.on(
     let initialOutputFiles: string[] = [];
     try {
       if (fs.existsSync(outputDir)) {
-        initialOutputFiles = fs.readdirSync(outputDir).filter(file => {
+        initialOutputFiles = fs.readdirSync(outputDir).filter((file) => {
           // Only include .xlsx and .csv files
           const filePath = path.join(outputDir, file);
           const ext = path.extname(file).toLowerCase();
-          return fs.statSync(filePath).isFile() &&
-                 (ext === '.xlsx' || ext === '.csv');
+          return (
+            fs.statSync(filePath).isFile() &&
+            (ext === '.xlsx' || ext === '.csv')
+          );
         });
       }
     } catch (error) {
@@ -1093,7 +1278,9 @@ User query: `;
         try {
           const result = execSync('which bun', { encoding: 'utf-8' }).trim();
           if (result && fs.existsSync(result)) return result;
-        } catch { /* no system bun */ }
+        } catch {
+          /* no system bun */
+        }
         return undefined;
       };
 
@@ -1108,14 +1295,21 @@ User query: `;
         try {
           const result = execSync('which uv', { encoding: 'utf-8' }).trim();
           if (result && fs.existsSync(result)) return result;
-        } catch { /* no system uv */ }
+        } catch {
+          /* no system uv */
+        }
         return undefined;
       };
 
       const bunPath = getBundledBunPath();
       if (!bunPath) {
-        event.reply('claude-code:error', 'Bundled runtime not found. This is a packaging bug - please report it.');
-        console.error('[ERROR] Could not find bundled bun. App may not be packaged correctly.');
+        event.reply(
+          'claude-code:error',
+          'Bundled runtime not found. This is a packaging bug - please report it.',
+        );
+        console.error(
+          '[ERROR] Could not find bundled bun. App may not be packaged correctly.',
+        );
         return;
       }
 
@@ -1124,12 +1318,18 @@ User query: `;
         // The SDK (@anthropic-ai/claude-agent-sdk) includes its own cli.js
         if (app.isPackaged) {
           // Production: unpacked from asar
-          const resourcePath = path.join(process.resourcesPath, 'app.asar.unpacked/node_modules/@anthropic-ai/claude-agent-sdk/cli.js');
+          const resourcePath = path.join(
+            process.resourcesPath,
+            'app.asar.unpacked/node_modules/@anthropic-ai/claude-agent-sdk/cli.js',
+          );
           console.error(`[getBundledClaudePath] Checking: ${resourcePath}`);
           if (fs.existsSync(resourcePath)) return resourcePath;
         }
         // Development
-        const devPath = path.join(__dirname, '../../node_modules/@anthropic-ai/claude-agent-sdk/cli.js');
+        const devPath = path.join(
+          __dirname,
+          '../../node_modules/@anthropic-ai/claude-agent-sdk/cli.js',
+        );
         console.error(`[getBundledClaudePath] Checking dev: ${devPath}`);
         if (fs.existsSync(devPath)) return devPath;
         return undefined;
@@ -1137,15 +1337,22 @@ User query: `;
 
       const claudePath = getBundledClaudePath();
       if (!claudePath) {
-        event.reply('claude-code:error', 'Claude Code CLI not found in SDK bundle. This is a bug - please report it.');
-        console.error('[ERROR] Could not find bundled CLI. Checked paths above.');
+        event.reply(
+          'claude-code:error',
+          'Claude Code CLI not found in SDK bundle. This is a bug - please report it.',
+        );
+        console.error(
+          '[ERROR] Could not find bundled CLI. Checked paths above.',
+        );
         return;
       }
 
       // Build enhanced PATH with bundled runtimes
       // The resources dir contains: bun, node (symlink to bun), uv
       const uvPath = getBundledUvPath();
-      const runtimeDir = app.isPackaged ? process.resourcesPath : path.join(__dirname, '../../resources');
+      const runtimeDir = app.isPackaged
+        ? process.resourcesPath
+        : path.join(__dirname, '../../resources');
       const baseEnv = {
         ...process.env,
         // Put bundled runtimes first in PATH so they take precedence
@@ -1157,7 +1364,9 @@ User query: `;
       console.error(`[query] Using bun: ${bunPath}`);
       console.error(`[query] Using uv: ${uvPath || 'not found'}`);
       console.error(`[query] Using claude: ${claudePath}`);
-      console.error(`[query] Enhanced PATH: ${enhancedEnv.PATH?.substring(0, 100)}...`);
+      console.error(
+        `[query] Enhanced PATH: ${enhancedEnv.PATH?.substring(0, 100)}...`,
+      );
 
       // Dynamic import for ESM-only SDK
       const { query } = await import('@anthropic-ai/claude-agent-sdk');
@@ -1205,8 +1414,10 @@ User query: `;
             }
             const filePath = path.join(outputDir, file);
             const ext = path.extname(file).toLowerCase();
-            return fs.statSync(filePath).isFile() &&
-                   (ext === '.xlsx' || ext === '.csv');
+            return (
+              fs.statSync(filePath).isFile() &&
+              (ext === '.xlsx' || ext === '.csv')
+            );
           });
 
           if (newFiles.length > 0) {
@@ -1232,7 +1443,11 @@ User query: `;
         durationMs: Date.now() - queryStartTime,
         messageCount: messages.length,
         outputFilesCount: fs.existsSync(outputDir)
-          ? fs.readdirSync(outputDir).filter(f => ['.xlsx', '.csv'].includes(path.extname(f).toLowerCase())).length
+          ? fs
+              .readdirSync(outputDir)
+              .filter((f) =>
+                ['.xlsx', '.csv'].includes(path.extname(f).toLowerCase()),
+              ).length
           : 0,
       });
     } catch (error) {
@@ -1277,7 +1492,10 @@ ipcMain.on(
     },
   ) => {
     const { sessionId, message, context } = data;
-    console.error(`[review-agent] Query received for session ${sessionId}:`, message.slice(0, 100));
+    console.error(
+      `[review-agent] Query received for session ${sessionId}:`,
+      message.slice(0, 100),
+    );
 
     // Create abort controller for this session
     const abortController = new AbortController();
@@ -1293,20 +1511,28 @@ ipcMain.on(
         context.documentName ? `- Document: ${context.documentName}` : null,
         context.currentPage ? `- Page: ${context.currentPage}` : null,
         ``,
-        context.tableMarkdown ? `## Table Content (editable)\n\`\`\`markdown\n${context.tableMarkdown}\n\`\`\`` : null,
-        context.pageContent ? `## Page Content\n\`\`\`\n${context.pageContent}\n\`\`\`` : null,
+        context.tableMarkdown
+          ? `## Table Content (editable)\n\`\`\`markdown\n${context.tableMarkdown}\n\`\`\``
+          : null,
+        context.pageContent
+          ? `## Page Content\n\`\`\`\n${context.pageContent}\n\`\`\``
+          : null,
         ``,
         `Your role:`,
         `- Answer questions about the extracted content`,
         `- Help verify table data accuracy`,
         `- Suggest corrections when you spot issues`,
         `- Be concise and direct`,
-      ].filter(Boolean).join('\n');
+      ]
+        .filter(Boolean)
+        .join('\n');
 
       const fullPrompt = `${systemContext}\n\n## User Request\n${message}`;
 
       // Get workspace path
-      const workspacePath = store.get('currentWorkspace') as string || path.join(app.getPath('desktop'), 'okrapdf');
+      const workspacePath =
+        (store.get('currentWorkspace') as string) ||
+        path.join(app.getPath('desktop'), 'okrapdf');
 
       // Get bundled paths (reusing from claude-code handler)
       const getBundledBunPath = (): string | undefined => {
@@ -1319,16 +1545,24 @@ ipcMain.on(
         try {
           const result = execSync('which bun', { encoding: 'utf-8' }).trim();
           if (result && fs.existsSync(result)) return result;
-        } catch { /* no system bun */ }
+        } catch {
+          /* no system bun */
+        }
         return undefined;
       };
 
       const getBundledClaudePath = (): string | undefined => {
         if (app.isPackaged) {
-          const resourcePath = path.join(process.resourcesPath, 'app.asar.unpacked/node_modules/@anthropic-ai/claude-agent-sdk/cli.js');
+          const resourcePath = path.join(
+            process.resourcesPath,
+            'app.asar.unpacked/node_modules/@anthropic-ai/claude-agent-sdk/cli.js',
+          );
           if (fs.existsSync(resourcePath)) return resourcePath;
         }
-        const devPath = path.join(__dirname, '../../node_modules/@anthropic-ai/claude-agent-sdk/cli.js');
+        const devPath = path.join(
+          __dirname,
+          '../../node_modules/@anthropic-ai/claude-agent-sdk/cli.js',
+        );
         if (fs.existsSync(devPath)) return devPath;
         return undefined;
       };
@@ -1337,11 +1571,16 @@ ipcMain.on(
       const claudePath = getBundledClaudePath();
 
       if (!bunPath || !claudePath) {
-        event.reply('review-agent:error', { sessionId, error: 'Runtime not found' });
+        event.reply('review-agent:error', {
+          sessionId,
+          error: 'Runtime not found',
+        });
         return;
       }
 
-      const runtimeDir = app.isPackaged ? process.resourcesPath : path.join(__dirname, '../../resources');
+      const runtimeDir = app.isPackaged
+        ? process.resourcesPath
+        : path.join(__dirname, '../../resources');
       const baseEnv = {
         ...process.env,
         PATH: `${runtimeDir}:${process.env.PATH || ''}`,
@@ -1394,7 +1633,10 @@ ipcMain.on(
           event.reply('review-agent:response', {
             sessionId,
             type: 'tool_result',
-            content: typeof sdkMessage.result === 'string' ? sdkMessage.result : JSON.stringify(sdkMessage.result),
+            content:
+              typeof sdkMessage.result === 'string'
+                ? sdkMessage.result
+                : JSON.stringify(sdkMessage.result),
           });
         }
       }
@@ -1437,7 +1679,7 @@ if (isDebug) {
 const installExtensions = async () => {
   const installer = require('electron-devtools-installer');
   const forceDownload = !!process.env.UPGRADE_EXTENSIONS;
-  const extensions = ['REACT_DEVELOPER_TOOLS'];
+  const extensions = ['REACT_DEVELOPER_TOOLS', 'REDUX_DEVTOOLS'];
 
   return installer
     .default(
@@ -1468,8 +1710,8 @@ const createWindow = async () => {
     show: true, // show immediately for debugging
     width: 1280,
     height: 800,
-    minWidth: 1024,   // Prevent cropping: sidebar(165) + pdf(450) + content(350) + margins
-    minHeight: 700,   // Prevent cropping: header(60) + content area
+    minWidth: 1024, // Prevent cropping: sidebar(165) + pdf(450) + content(350) + margins
+    minHeight: 700, // Prevent cropping: header(60) + content area
     useContentSize: true, // Dimensions refer to web content, not window chrome
     // icon: getAssetPath('icon.png'), // temporarily disabled for debugging
     webPreferences: {
@@ -1543,8 +1785,8 @@ app
   .then(() => {
     console.error('App ready, creating window...');
 
-    // Set up verification system IPC handlers
     setupVerificationIpcHandlers();
+    registerCodingAgentHandlers();
 
     createWindow();
     app.on('activate', () => {

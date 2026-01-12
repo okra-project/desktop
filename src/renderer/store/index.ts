@@ -1,10 +1,3 @@
-/**
- * Redux Store Configuration
- *
- * Combines all slices and sets up middleware for
- * persistence and debugging.
- */
-
 import { configureStore, combineReducers } from '@reduxjs/toolkit';
 import {
   persistStore,
@@ -17,43 +10,30 @@ import {
   REGISTER,
 } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
+import { settingsReducer, chatReducer, extractionReducer } from '@okrapdf/redux';
 import verificationReducer from './verification/slice';
 import reviewAgentReducer from './reviewAgentSlice';
 import { desktopApi } from './desktopApi';
 
-// ============================================
-// Root Reducer
-// ============================================
-
 const rootReducer = combineReducers({
+  settings: settingsReducer,
+  chat: chatReducer,
+  extraction: extractionReducer,
   verification: verificationReducer,
   reviewAgent: reviewAgentReducer,
   [desktopApi.reducerPath]: desktopApi.reducer,
 });
 
-// ============================================
-// Persistence Configuration
-// ============================================
-
 const persistConfig = {
-  key: 'okrapdf-verification',
-  version: 1,
+  key: 'okrapdf-desktop',
+  version: 3,
   storage,
-  // Only persist verification session data
   whitelist: ['verification'],
-  // Transform dates on rehydration
   transforms: [],
 };
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
 
-// ============================================
-// Custom Middleware
-// ============================================
-
-/**
- * Middleware to log verification events for debugging
- */
 const verificationLoggerMiddleware = () => (next: any) => (action: any) => {
   if (action.type?.startsWith('verification/')) {
     console.log('[Verification]', action.type, action.payload);
@@ -61,13 +41,9 @@ const verificationLoggerMiddleware = () => (next: any) => (action: any) => {
   return next(action);
 };
 
-/**
- * Middleware to notify main process of significant events
- */
 const ipcBridgeMiddleware = () => (next: any) => (action: any) => {
   const result = next(action);
 
-  // Notify main process of session events
   if (typeof window !== 'undefined' && window.electron?.ipcRenderer) {
     const significantActions = [
       'verification/startSession',
@@ -88,18 +64,12 @@ const ipcBridgeMiddleware = () => (next: any) => (action: any) => {
   return result;
 };
 
-// ============================================
-// Store Configuration
-// ============================================
-
 export const store = configureStore({
   reducer: persistedReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        // Ignore redux-persist actions
         ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
-        // Ignore Date objects in verification state
         ignoredPaths: [
           'verification.session.startedAt',
           'verification.session.completedAt',
@@ -116,18 +86,13 @@ export const store = configureStore({
 
 export const persistor = persistStore(store);
 
-// ============================================
-// Type Exports
-// ============================================
-
 export type RootState = ReturnType<typeof rootReducer>;
 export type AppDispatch = typeof store.dispatch;
-
-// ============================================
-// Typed Hooks
-// ============================================
 
 import { useDispatch, useSelector, TypedUseSelectorHook } from 'react-redux';
 
 export const useAppDispatch = () => useDispatch<AppDispatch>();
 export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;
+
+export { electronSettingsAdapter } from './settingsAdapter';
+export { electronExtractionAdapter } from './extractionAdapter';

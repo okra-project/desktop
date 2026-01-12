@@ -1,13 +1,22 @@
-/**
- * useOcrProviders Hook
- *
- * Provides access to OCR provider functionality from the renderer process.
- */
-
 import { useState, useEffect, useCallback } from 'react';
 
-// Types mirrored from main process
 export type OcrProviderId = 'google-docai' | 'openrouter' | string;
+
+export enum PluginState {
+  NotInstalled = 'not-installed',
+  Installing = 'installing',
+  Installed = 'installed',
+  Uninstalling = 'uninstalling',
+  UpdateAvailable = 'update-available',
+  Error = 'error',
+}
+
+export interface PluginStatus {
+  id: string;
+  state: PluginState;
+  error?: string;
+  progress?: { message: string; percent?: number };
+}
 
 export interface OcrProviderCapabilities {
   supportsText: boolean;
@@ -34,7 +43,9 @@ export interface OcrProviderMetadata {
   costPerPage?: number;
   isCloud: boolean;
   installInstructions?: string;
-  installed?: boolean;
+  state?: PluginState;
+  error?: string;
+  progress?: { message: string; percent?: number };
   npmPackages?: string[];
 }
 
@@ -92,14 +103,16 @@ export function useOcrProviders() {
 
       if (result.builtIn) {
         for (const p of result.builtIn) {
-          allProviders.push({ ...p, installed: true });
+          allProviders.push({ ...p, state: PluginState.Installed });
         }
       }
       if (result.plugins) {
         for (const p of result.plugins) {
           allProviders.push({
             ...p.metadata,
-            installed: p.installed,
+            state: p.state,
+            error: p.error,
+            progress: p.progress,
             npmPackages: p.npmPackages,
           });
         }
@@ -117,6 +130,31 @@ export function useOcrProviders() {
   useEffect(() => {
     fetchProviders();
   }, [fetchProviders]);
+
+  useEffect(() => {
+    const unsubscribe = window.electron.ipcRenderer.on(
+      'plugin:state-change',
+      (status: unknown) => {
+        const pluginStatus = status as PluginStatus;
+        setProviders((prev) =>
+          prev.map((p) =>
+            p.id === pluginStatus.id
+              ? {
+                  ...p,
+                  state: pluginStatus.state,
+                  error: pluginStatus.error,
+                  progress: pluginStatus.progress,
+                }
+              : p,
+          ),
+        );
+        if (pluginStatus.state === PluginState.Installed) {
+          setInstalling(null);
+        }
+      },
+    );
+    return unsubscribe;
+  }, []);
 
   const getConfig = useCallback(
     async (providerId: OcrProviderId): Promise<OcrProviderConfig | null> => {
@@ -156,18 +194,15 @@ export function useOcrProviders() {
   const installPlugin = useCallback(
     async (pluginId: string): Promise<{ success: boolean; error?: string }> => {
       setInstalling(pluginId);
-      try {
-        const result = await window.electron.ipcRenderer.invoke(
-          'plugin:install',
-          pluginId,
-        );
-        if (result.success) {
-          await fetchProviders();
-        }
-        return result;
-      } finally {
-        setInstalling(null);
+      const result = await window.electron.ipcRenderer.invoke(
+        'plugin:install',
+        pluginId,
+      );
+      if (result.success) {
+        await fetchProviders();
       }
+      setInstalling(null);
+      return result;
     },
     [fetchProviders],
   );

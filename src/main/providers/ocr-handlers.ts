@@ -28,63 +28,7 @@ import {
 } from '../plugins/plugin-loader';
 import { getRegistry } from '../plugins/registry';
 
-// ============================================================================
-// Provider Registry (Desktop-local until SDK is linked)
-// ============================================================================
-
-const REGISTERED_PROVIDERS: Map<OcrProviderId, OcrProviderMetadata> = new Map();
 const PROVIDER_CONFIGS: Map<OcrProviderId, OcrProviderConfig> = new Map();
-
-// Register built-in providers (n8n-style with authenticate spec)
-
-// Agent provider - powers document chat
-REGISTERED_PROVIDERS.set('anthropic', {
-  id: 'anthropic',
-  name: 'Anthropic Claude',
-  description: 'Claude AI for document chat and analysis',
-  runtime: 'api',
-  category: 'agent',
-  capabilities: {
-    supportsText: true,
-    supportsTables: true,
-    supportsBboxes: false,
-    supportsFigures: false,
-    supportsHandwriting: false,
-    supportsMultiLanguage: true,
-    outputFormats: ['markdown'],
-    maxPagesPerRequest: 100,
-  },
-  authenticate: {
-    type: 'header',
-    headerName: 'x-api-key',
-  },
-  documentationUrl: 'https://console.anthropic.com/settings/keys',
-  costPerPage: 0.003,
-  isCloud: true,
-  configSchema: {
-    type: 'object',
-    properties: {
-      apiKey: {
-        type: 'string',
-        title: 'Anthropic API Key',
-        description: 'Get from console.anthropic.com',
-        format: 'password',
-      },
-      modelId: {
-        type: 'string',
-        title: 'Model',
-        description: 'Claude model for chat',
-        enum: [
-          'claude-sonnet-4-20250514',
-          'claude-3-5-sonnet-20241022',
-          'claude-3-5-haiku-20241022',
-        ],
-        default: 'claude-sonnet-4-20250514',
-      },
-    },
-    required: ['apiKey'],
-  },
-});
 
 // ============================================================================
 // Store for provider configs
@@ -158,16 +102,13 @@ export async function setupOcrIpcHandlers(
   await loadPlugins();
 
   ipcMain.handle('ocr:list-providers', async () => {
-    const builtIn = Array.from(REGISTERED_PROVIDERS.values());
-    const available = getAvailablePlugins();
-    return { builtIn, plugins: available };
+    const plugins = getAvailablePlugins();
+    return { builtIn: [], plugins };
   });
 
   ipcMain.handle(
     'ocr:get-provider',
     async (_event, providerId: OcrProviderId) => {
-      const builtin = REGISTERED_PROVIDERS.get(providerId);
-      if (builtin) return { ...builtin, installed: true };
       const available = getAvailablePlugins().find((p) => p.id === providerId);
       return available ?? null;
     },

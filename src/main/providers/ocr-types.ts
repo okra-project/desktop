@@ -5,9 +5,22 @@
  * They can be replaced with SDK imports once the dependency is added.
  */
 
-export type OcrProviderId = 'google-docai' | 'openrouter' | 'anthropic' | string;
+export type OcrProviderId =
+  | 'google-docai'
+  | 'openrouter'
+  | 'anthropic'
+  | string;
 export type OcrProviderRuntime = 'api' | 'local' | 'python';
 export type OcrProviderCategory = 'ocr' | 'agent' | 'vlm';
+
+export enum PluginState {
+  NotInstalled = 'not-installed',
+  Installing = 'installing',
+  Installed = 'installed',
+  Uninstalling = 'uninstalling',
+  UpdateAvailable = 'update-available',
+  Error = 'error',
+}
 
 export interface OcrProviderCapabilities {
   supportsText: boolean;
@@ -76,14 +89,17 @@ export interface OcrProviderMetadata {
   /** JSON Schema for provider config fields (n8n-style properties) */
   configSchema?: {
     type: 'object';
-    properties: Record<string, {
-      type: string;
-      title: string;
-      description?: string;
-      format?: 'password' | 'file' | 'uri';
-      enum?: string[];
-      default?: unknown;
-    }>;
+    properties: Record<
+      string,
+      {
+        type: string;
+        title: string;
+        description?: string;
+        format?: 'password' | 'file' | 'uri';
+        enum?: string[];
+        default?: unknown;
+      }
+    >;
     required?: string[];
   };
   /** How the credential is used in requests */

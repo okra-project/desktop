@@ -1,4 +1,4 @@
-import type { OcrPlugin } from './plugin-types';
+import type { OcrPlugin, OcrPluginModule } from './plugin-types';
 import type { OcrProviderMetadata } from '../providers/ocr-types';
 import {
   getRegistry,
@@ -10,13 +10,17 @@ import {
   type PluginStatus,
 } from './registry';
 
-const loadedPlugins = new Map<string, OcrPlugin>();
+import * as openrouterPlugin from './openrouter.plugin';
+import * as googleDocaiPlugin from './google-docai.plugin';
+import * as anthropicPlugin from './anthropic.plugin';
 
-declare const __non_webpack_require__: typeof require;
-const dynamicRequire =
-  typeof __non_webpack_require__ !== 'undefined'
-    ? __non_webpack_require__
-    : require;
+const PLUGIN_MODULES: Record<string, OcrPluginModule> = {
+  'openrouter.plugin': openrouterPlugin,
+  'google-docai.plugin': googleDocaiPlugin,
+  'anthropic.plugin': anthropicPlugin,
+};
+
+const loadedPlugins = new Map<string, OcrPlugin>();
 
 export async function loadPlugins(): Promise<void> {
   const registry = getRegistry();
@@ -30,8 +34,11 @@ export async function loadPlugins(): Promise<void> {
     }
 
     try {
-      const modulePath = `./${manifest.pluginFile}`;
-      const pluginModule = dynamicRequire(modulePath);
+      const pluginModule = PLUGIN_MODULES[manifest.pluginFile];
+      if (!pluginModule) {
+        console.log(`[plugins] ${manifest.id}: module not found`);
+        continue;
+      }
 
       const depError = pluginModule.checkDependencies?.();
       if (depError) {

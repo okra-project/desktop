@@ -70,7 +70,12 @@ export type Channels =
   | 'ocr:extract-document'
   | 'ocr:compare'
   | 'ocr:get-results'
-  | 'ocr:get-page-bboxes';
+  | 'ocr:get-page-bboxes'
+  | 'plugin:install'
+  | 'plugin:uninstall'
+  | 'plugin:state-change'
+  | 'coding-agents:detect'
+  | 'coding-agents:list-all';
 
 const electronHandler = {
   ipcRenderer: {
