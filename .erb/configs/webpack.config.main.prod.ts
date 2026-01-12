@@ -7,6 +7,7 @@ import webpack from 'webpack';
 import { merge } from 'webpack-merge';
 import TerserPlugin from 'terser-webpack-plugin';
 import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
+import CopyWebpackPlugin from 'copy-webpack-plugin';
 import baseConfig from './webpack.config.base';
 import webpackPaths from './webpack.paths';
 import checkNodeEnv from '../scripts/check-node-env';
@@ -49,15 +50,6 @@ const configuration: webpack.Configuration = {
       analyzerPort: 8888,
     }),
 
-    /**
-     * Create global constants which can be configured at compile time.
-     *
-     * Useful for allowing different behaviour between development builds and
-     * release builds
-     *
-     * NODE_ENV should be production so that modules do not perform certain
-     * development checks
-     */
     new webpack.EnvironmentPlugin({
       NODE_ENV: 'production',
       DEBUG_PROD: false,
@@ -66,6 +58,15 @@ const configuration: webpack.Configuration = {
 
     new webpack.DefinePlugin({
       'process.type': '"browser"',
+    }),
+
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: path.join(webpackPaths.rootPath, 'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'),
+          to: path.join(webpackPaths.distMainPath, 'pdf.worker.mjs'),
+        },
+      ],
     }),
   ],
 

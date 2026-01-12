@@ -5,6 +5,7 @@
 import path from 'path';
 import webpack from 'webpack';
 import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
+import CopyWebpackPlugin from 'copy-webpack-plugin';
 import { merge } from 'webpack-merge';
 import checkNodeEnv from '../scripts/check-node-env';
 import baseConfig from './webpack.config.base';
@@ -46,6 +47,16 @@ const configuration: webpack.Configuration = {
 
     new webpack.DefinePlugin({
       'process.type': '"browser"',
+    }),
+
+    // Copy pdfjs-dist worker for main process PDF extraction
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: path.join(webpackPaths.rootPath, 'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'),
+          to: path.join(webpackPaths.dllPath, 'pdf.worker.mjs'),
+        },
+      ],
     }),
   ],
 
