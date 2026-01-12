@@ -30,6 +30,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_workspace: 'Get Workspace',
   search_workspace: 'Search Workspace',
   global_search: 'Global Search',
+  show_result: 'Show Result',
 };
 
 /**
@@ -41,6 +42,12 @@ export function useMcpEvents() {
   const activeSessionsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    // Signal to main process that renderer is ready to receive events
+    // This flushes any queued MCP events that were sent before we subscribed
+    window.electron.ipcRenderer.invoke('progress:renderer-ready').catch((err) => {
+      console.warn('[useMcpEvents] Failed to signal renderer ready:', err);
+    });
+
     // Tool completed - show results
     const unsubToolCompleted = window.electron.ipcRenderer.on(
       'mcp:tool-completed',

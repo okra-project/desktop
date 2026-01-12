@@ -85,9 +85,30 @@ export default function App() {
       },
     );
 
+    // MCP show_result navigation
+    const unsubShowResult = window.electron.ipcRenderer.on(
+      'mcp:show-result',
+      (data: unknown) => {
+        const event = data as {
+          workspaceId: string;
+          workspaceName: string;
+          workspacePath: string;
+          page: number;
+        };
+        setInitialPage(event.page);
+        setSelectedDocument({
+          id: event.workspaceId,
+          name: event.workspaceName,
+          workspacePath: event.workspacePath,
+        });
+        setScreen('viewer');
+      },
+    );
+
     return () => {
       unsubSettings();
       unsubOpenPdf();
+      unsubShowResult();
     };
   }, [dispatch, openPdfFromPath]);
 
@@ -107,10 +128,13 @@ export default function App() {
     (doc: { id: string; name: string; workspacePath: string; page?: number }) => {
       setSelectedDocument(doc);
       setScreen('viewer');
-      // TODO: if page is specified, navigate to that page in viewer
+      // Page navigation handled via Redux in DocumentViewer when it mounts
     },
     [],
   );
+
+  // Initial page to navigate to (set by MCP show_result)
+  const [initialPage, setInitialPage] = useState<number | null>(null);
 
   const handleBackToBrowser = useCallback(() => {
     setSelectedDocument(null);
@@ -166,6 +190,8 @@ export default function App() {
             workspacePath={selectedDocument.workspacePath}
             onBack={handleBackToBrowser}
             onOpenSettings={handleOpenSettings}
+            initialPage={initialPage}
+            onInitialPageUsed={() => setInitialPage(null)}
           />
         </ExtractionInitializer>
       );

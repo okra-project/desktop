@@ -83,7 +83,15 @@ export type Channels =
   | 'mcp:session-connected'
   | 'mcp:session-disconnected'
   | 'mcp:server-started'
-  | 'mcp:server-stopped';
+  | 'mcp:server-stopped'
+  | 'mcp:show-result'
+  | 'index:search'
+  | 'index:get-page-bboxes'
+  | 'index:find-bbox-at-point'
+  | 'index:get-stats'
+  | 'index:get-document-stats'
+  | 'index:reindex'
+  | 'index:updated';
 
 const electronHandler = {
   ipcRenderer: {

@@ -7,10 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { progressQueue } from '../utils/progress-queue';
 import { findPdfInWorkspace } from '../utils/pdf.utils';
-import {
-  extractTextFromPDF,
-  type ExtractionProgress,
-} from '../pdf-extraction';
+import { extractTextFromPDF, type ExtractionProgress } from '../pdf-extraction';
 import {
   renderPageFromFile,
   extractWithProvider,
@@ -36,7 +33,9 @@ interface ActiveRunState {
 const activeRuns = new Map<string, ActiveRunState>();
 
 // Get active run for a workspace (safe - returns null on any error)
-export function getActiveRunForWorkspace(workspacePath: string): ActiveRunState | null {
+export function getActiveRunForWorkspace(
+  workspacePath: string,
+): ActiveRunState | null {
   try {
     for (const run of activeRuns.values()) {
       if (run.workspacePath === workspacePath && run.status === 'running') {
@@ -88,7 +87,8 @@ export function registerWorkflowHandlers(): void {
         config: Record<string, unknown>;
       },
     ) => {
-      const { runId, nodeId, nodeType, workspacePath, totalPages, config } = data;
+      const { runId, nodeId, nodeType, workspacePath, totalPages, config } =
+        data;
 
       const abortController = new AbortController();
       workflowAbortControllers.set(`${runId}:${nodeId}`, abortController);
@@ -100,9 +100,13 @@ export function registerWorkflowHandlers(): void {
 
       try {
         if (nodeType === 'textExtractor' || nodeType === 'googleDocAi') {
-          const ocrDir = path.join(workspacePath, 'ocr');
-          if (!fs.existsSync(ocrDir)) {
-            fs.mkdirSync(ocrDir, { recursive: true });
+          const pluginDir = path.join(
+            workspacePath,
+            'plugins',
+            'text-extractor',
+          );
+          if (!fs.existsSync(pluginDir)) {
+            fs.mkdirSync(pluginDir, { recursive: true });
           }
 
           const onProgress = (progress: ExtractionProgress) => {
@@ -115,12 +119,18 @@ export function registerWorkflowHandlers(): void {
             });
           };
 
-          const result = await extractTextFromPDF(pdfPath, ocrDir, onProgress);
+          const result = await extractTextFromPDF(
+            pdfPath,
+            pluginDir,
+            onProgress,
+          );
 
           if (result.success) {
             const metadataPath = path.join(workspacePath, 'metadata.json');
             if (fs.existsSync(metadataPath)) {
-              const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+              const metadata = JSON.parse(
+                fs.readFileSync(metadataPath, 'utf-8'),
+              );
               metadata.textExtractionComplete = true;
               metadata.pageCount = result.totalPages;
               fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
@@ -132,12 +142,15 @@ export function registerWorkflowHandlers(): void {
 
         if (nodeType === 'entityExtractor' || nodeType === 'openrouter') {
           const providerId = 'openrouter';
-          const outputDir = path.join(workspacePath, 'ocr', providerId);
+          const outputDir = path.join(workspacePath, 'plugins', providerId);
           fs.mkdirSync(outputDir, { recursive: true });
 
           const providerConfig = config as OcrProviderConfig;
           if (!providerConfig.apiKey) {
-            return { success: false, error: 'OpenRouter API key not configured' };
+            return {
+              success: false,
+              error: 'OpenRouter API key not configured',
+            };
           }
 
           const manifestPath = path.join(outputDir, 'manifest.json');
@@ -245,7 +258,10 @@ export function registerWorkflowHandlers(): void {
                   ),
                 );
 
-                pageResult = await Promise.race([extractPromise, timeoutPromise]);
+                pageResult = await Promise.race([
+                  extractPromise,
+                  timeoutPromise,
+                ]);
                 if (pageResult && !pageResult.imageSize) {
                   pageResult.imageSize = { width, height };
                 }
@@ -331,7 +347,8 @@ export function registerWorkflowHandlers(): void {
 
         return { success: false, error: `Unknown node type: ${nodeType}` };
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+        const message =
+          error instanceof Error ? error.message : 'Unknown error';
         return { success: false, error: message };
       } finally {
         workflowAbortControllers.delete(`${runId}:${nodeId}`);

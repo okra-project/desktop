@@ -27,6 +27,8 @@ interface DocumentViewerProps {
   workspacePath: string;
   onBack: () => void;
   onOpenSettings: () => void;
+  initialPage?: number | null;
+  onInitialPageUsed?: () => void;
 }
 
 export default function DocumentViewer({
@@ -35,6 +37,8 @@ export default function DocumentViewer({
   workspacePath,
   onBack,
   onOpenSettings,
+  initialPage,
+  onInitialPageUsed,
 }: DocumentViewerProps) {
   const dispatch = useAppDispatch();
   const entities = useAppSelector(selectVisibleEntities);
@@ -45,6 +49,13 @@ export default function DocumentViewer({
 
   const [leftPanelWidth, setLeftPanelWidth] = useState(67);
   const [layerMenuOpen, setLayerMenuOpen] = useState(false);
+  const [agentPanelMinimized, setAgentPanelMinimized] = useState(() => {
+    return localStorage.getItem('agentPanelMinimized') === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('agentPanelMinimized', String(agentPanelMinimized));
+  }, [agentPanelMinimized]);
 
   useExtractionProgress(workspacePath);
 
@@ -64,6 +75,14 @@ export default function DocumentViewer({
   useEffect(() => {
     dispatch(setWorkspacePath(workspacePath));
   }, [workspacePath, dispatch]);
+
+  // Handle initial page navigation (e.g., from MCP show_result)
+  useEffect(() => {
+    if (initialPage && initialPage > 0) {
+      dispatch(setReduxPage(initialPage));
+      onInitialPageUsed?.();
+    }
+  }, [initialPage, dispatch, onInitialPageUsed]);
 
   useEffect(() => {
     if (currentPage > 0 && workspacePath) {
@@ -219,14 +238,21 @@ export default function DocumentViewer({
         </div>
       </header>
 
-      <div id="split-container" className="flex-1 flex overflow-hidden min-h-0">
+      <div
+        id="split-container"
+        className="flex-1 flex overflow-hidden min-h-0 relative"
+      >
         <div
-          className="h-full overflow-hidden border-r border-slate-200"
-          style={{ width: `${leftPanelWidth}%`, minWidth: '400px' }}
+          className="h-full overflow-hidden border-r border-slate-200 transition-all"
+          style={{
+            width: agentPanelMinimized ? '100%' : `${leftPanelWidth}%`,
+            minWidth: '400px',
+          }}
         >
           {pdfPath ? (
             <PDFViewer
               pdfPath={pdfPath}
+              initialPage={currentPage}
               onPageChange={handlePageChange}
               entities={entities}
               showEntityOverlays={showEntityOverlays}
@@ -242,24 +268,70 @@ export default function DocumentViewer({
           )}
         </div>
 
-        <div
-          className="w-1 bg-slate-200 hover:bg-blue-400 cursor-col-resize transition-colors shrink-0"
-          onMouseDown={() => {
-            isDragging.current = true;
-            document.body.style.cursor = 'col-resize';
-            document.body.style.userSelect = 'none';
-          }}
-        />
+        {!agentPanelMinimized && (
+          <>
+            <div
+              className="w-1 bg-slate-200 hover:bg-blue-400 cursor-col-resize transition-colors shrink-0"
+              onMouseDown={() => {
+                isDragging.current = true;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+              }}
+            />
+            <div
+              className="flex-1 h-full overflow-hidden flex flex-col bg-white"
+              style={{ minWidth: '350px' }}
+            >
+              <div className="px-4 py-2 border-b border-slate-200 bg-slate-50 shrink-0 flex items-center justify-between">
+                <h2 className="text-sm font-medium text-slate-700">
+                  Okra Agent
+                </h2>
+                <button
+                  onClick={() => setAgentPanelMinimized(true)}
+                  className="p-1 hover:bg-slate-200 rounded transition-colors"
+                  title="Minimize panel"
+                >
+                  <svg
+                    className="w-4 h-4 text-slate-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </button>
+              </div>
+              <ChatInterface onOpenSettings={onOpenSettings} />
+            </div>
+          </>
+        )}
 
-        <div
-          className="flex-1 h-full overflow-hidden flex flex-col bg-white"
-          style={{ minWidth: '350px' }}
-        >
-          <div className="px-4 py-2 border-b border-slate-200 bg-slate-50 shrink-0">
-            <h2 className="text-sm font-medium text-slate-700">Okra Agent</h2>
-          </div>
-          <ChatInterface onOpenSettings={onOpenSettings} />
-        </div>
+        {agentPanelMinimized && (
+          <button
+            onClick={() => setAgentPanelMinimized(false)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white border border-slate-200 rounded-lg shadow-md hover:bg-slate-50 transition-colors z-10"
+            title="Show Okra Agent"
+          >
+            <svg
+              className="w-5 h-5 text-slate-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+          </button>
+        )}
       </div>
 
       <ExtractionOverlay />

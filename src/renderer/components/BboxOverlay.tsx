@@ -5,7 +5,7 @@
  * Supports multiple providers for comparison mode.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { ENTITY_COLORS } from '../lib/entity-colors';
 import type { OcrBoundingBox, OcrProviderId } from '../hooks/useOcrProviders';
 
@@ -45,215 +45,241 @@ interface BboxOverlayProps {
 // Provider colors for comparison mode
 const PROVIDER_COLORS: Record<string, { border: string; fill: string }> = {
   'google-docai': {
-    border: 'rgba(66, 133, 244, 0.9)',  // Google blue
+    border: 'rgba(66, 133, 244, 0.9)', // Google blue
     fill: 'rgba(66, 133, 244, 0.12)',
   },
   openrouter: {
-    border: 'rgba(139, 92, 246, 0.9)',  // Purple
+    border: 'rgba(139, 92, 246, 0.9)', // Purple
     fill: 'rgba(139, 92, 246, 0.12)',
   },
   docling: {
-    border: 'rgba(34, 197, 94, 0.9)',   // Green
+    border: 'rgba(34, 197, 94, 0.9)', // Green
     fill: 'rgba(34, 197, 94, 0.12)',
   },
   marker: {
-    border: 'rgba(249, 115, 22, 0.9)',  // Orange
+    border: 'rgba(249, 115, 22, 0.9)', // Orange
     fill: 'rgba(249, 115, 22, 0.12)',
   },
 };
 
-// ============================================================================
-// Component
-// ============================================================================
+export const BboxOverlay = React.memo(
+  function BboxOverlay({
+    bboxes,
+    pageWidth,
+    pageHeight,
+    providerId,
+    normalized = true,
+    showTypes,
+    minConfidence = 0,
+    onBboxClick,
+    onBboxHover,
+    selectedIndex,
+    showConfidence = true,
+    showLabels = true,
+    comparisonMode = false,
+  }: BboxOverlayProps) {
+    const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-export function BboxOverlay({
-  bboxes,
-  pageWidth,
-  pageHeight,
-  providerId,
-  normalized = true,
-  showTypes,
-  minConfidence = 0,
-  onBboxClick,
-  onBboxHover,
-  selectedIndex,
-  showConfidence = true,
-  showLabels = true,
-  comparisonMode = false,
-}: BboxOverlayProps) {
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+    // Filter bboxes by type and confidence
+    const filteredBboxes = useMemo(() => {
+      return bboxes.filter((bbox) => {
+        // Filter by type
+        if (
+          showTypes &&
+          showTypes.length > 0 &&
+          !showTypes.includes(bbox.type)
+        ) {
+          return false;
+        }
+        // Filter by confidence
+        if (
+          minConfidence > 0 &&
+          bbox.confidence !== undefined &&
+          bbox.confidence < minConfidence
+        ) {
+          return false;
+        }
+        return true;
+      });
+    }, [bboxes, showTypes, minConfidence]);
 
-  // Filter bboxes by type and confidence
-  const filteredBboxes = useMemo(() => {
-    return bboxes.filter((bbox) => {
-      // Filter by type
-      if (showTypes && showTypes.length > 0 && !showTypes.includes(bbox.type)) {
-        return false;
-      }
-      // Filter by confidence
-      if (minConfidence > 0 && bbox.confidence !== undefined && bbox.confidence < minConfidence) {
-        return false;
-      }
-      return true;
-    });
-  }, [bboxes, showTypes, minConfidence]);
+    // Convert vertices to rectangle dimensions
+    const getRect = useCallback(
+      (bbox: OcrBoundingBox) => {
+        if (!bbox.vertices || bbox.vertices.length < 4) {
+          return null;
+        }
 
-  // Convert vertices to rectangle dimensions
-  const getRect = useCallback((bbox: OcrBoundingBox) => {
-    if (!bbox.vertices || bbox.vertices.length < 4) {
+        const xs = bbox.vertices.map((v) => v.x);
+        const ys = bbox.vertices.map((v) => v.y);
+        const minX = Math.min(...xs);
+        const minY = Math.min(...ys);
+        const maxX = Math.max(...xs);
+        const maxY = Math.max(...ys);
+
+        if (normalized) {
+          return {
+            left: minX * pageWidth,
+            top: minY * pageHeight,
+            width: (maxX - minX) * pageWidth,
+            height: (maxY - minY) * pageHeight,
+          };
+        }
+
+        return {
+          left: minX,
+          top: minY,
+          width: maxX - minX,
+          height: maxY - minY,
+        };
+      },
+      [pageWidth, pageHeight, normalized],
+    );
+
+    // Get colors for a bbox
+    const getColors = useCallback(
+      (bbox: OcrBoundingBox) => {
+        if (comparisonMode && providerId && PROVIDER_COLORS[providerId]) {
+          return PROVIDER_COLORS[providerId];
+        }
+
+        const entityColor =
+          ENTITY_COLORS[bbox.type as keyof typeof ENTITY_COLORS];
+        if (entityColor) {
+          return { border: entityColor.border, fill: entityColor.fill };
+        }
+
+        // Default fallback
+        return {
+          border: 'rgba(100, 116, 139, 0.7)',
+          fill: 'rgba(100, 116, 139, 0.08)',
+        };
+      },
+      [comparisonMode, providerId],
+    );
+
+    // Handle bbox click
+    const handleClick = useCallback(
+      (bbox: OcrBoundingBox, index: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        onBboxClick?.(bbox, index);
+      },
+      [onBboxClick],
+    );
+
+    // Handle bbox hover
+    const handleMouseEnter = useCallback(
+      (bbox: OcrBoundingBox, index: number) => {
+        setHoveredIndex(index);
+        onBboxHover?.(bbox, index);
+      },
+      [onBboxHover],
+    );
+
+    const handleMouseLeave = useCallback(() => {
+      setHoveredIndex(null);
+      onBboxHover?.(null, null);
+    }, [onBboxHover]);
+
+    if (filteredBboxes.length === 0) {
       return null;
     }
 
-    const xs = bbox.vertices.map(v => v.x);
-    const ys = bbox.vertices.map(v => v.y);
-    const minX = Math.min(...xs);
-    const minY = Math.min(...ys);
-    const maxX = Math.max(...xs);
-    const maxY = Math.max(...ys);
+    return (
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ width: pageWidth, height: pageHeight }}
+      >
+        {filteredBboxes.map((bbox, index) => {
+          const rect = getRect(bbox);
+          if (!rect) return null;
 
-    if (normalized) {
-      return {
-        left: minX * pageWidth,
-        top: minY * pageHeight,
-        width: (maxX - minX) * pageWidth,
-        height: (maxY - minY) * pageHeight,
-      };
-    }
+          const colors = getColors(bbox);
+          const isSelected = selectedIndex === index;
+          const isHovered = hoveredIndex === index;
+          const opacity =
+            showConfidence && bbox.confidence !== undefined
+              ? 0.3 + bbox.confidence * 0.7
+              : 1;
 
-    return {
-      left: minX,
-      top: minY,
-      width: maxX - minX,
-      height: maxY - minY,
-    };
-  }, [pageWidth, pageHeight, normalized]);
+          return (
+            <div
+              key={bbox.blockId ?? `bbox-${index}`}
+              className="absolute pointer-events-auto cursor-pointer transition-all duration-150"
+              style={{
+                left: rect.left,
+                top: rect.top,
+                width: rect.width,
+                height: rect.height,
+                border: `2px solid ${colors.border}`,
+                backgroundColor: colors.fill,
+                opacity,
+                borderRadius: 2,
+                boxShadow:
+                  isSelected || isHovered
+                    ? `0 0 0 2px ${colors.border}, 0 4px 12px rgba(0,0,0,0.15)`
+                    : undefined,
+                transform: isHovered ? 'scale(1.01)' : undefined,
+                zIndex: isSelected ? 20 : isHovered ? 10 : 1,
+              }}
+              onClick={(e) => handleClick(bbox, index, e)}
+              onMouseEnter={() => handleMouseEnter(bbox, index)}
+              onMouseLeave={handleMouseLeave}
+            >
+              {/* Label */}
+              {showLabels && (isHovered || isSelected) && (
+                <div
+                  className="absolute -top-6 left-0 px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap shadow-sm"
+                  style={{
+                    backgroundColor: colors.border.replace(/[\d.]+\)$/, '1)'),
+                    color: 'white',
+                  }}
+                >
+                  {bbox.type}
+                  {bbox.confidence !== undefined && (
+                    <span className="ml-1 opacity-75">
+                      {Math.round(bbox.confidence * 100)}%
+                    </span>
+                  )}
+                  {comparisonMode && providerId && (
+                    <span className="ml-1 opacity-75">({providerId})</span>
+                  )}
+                </div>
+              )}
 
-  // Get colors for a bbox
-  const getColors = useCallback((bbox: OcrBoundingBox) => {
-    if (comparisonMode && providerId && PROVIDER_COLORS[providerId]) {
-      return PROVIDER_COLORS[providerId];
-    }
-
-    const entityColor = ENTITY_COLORS[bbox.type as keyof typeof ENTITY_COLORS];
-    if (entityColor) {
-      return { border: entityColor.border, fill: entityColor.fill };
-    }
-
-    // Default fallback
-    return { border: 'rgba(100, 116, 139, 0.7)', fill: 'rgba(100, 116, 139, 0.08)' };
-  }, [comparisonMode, providerId]);
-
-  // Handle bbox click
-  const handleClick = useCallback((bbox: OcrBoundingBox, index: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    onBboxClick?.(bbox, index);
-  }, [onBboxClick]);
-
-  // Handle bbox hover
-  const handleMouseEnter = useCallback((bbox: OcrBoundingBox, index: number) => {
-    setHoveredIndex(index);
-    onBboxHover?.(bbox, index);
-  }, [onBboxHover]);
-
-  const handleMouseLeave = useCallback(() => {
-    setHoveredIndex(null);
-    onBboxHover?.(null, null);
-  }, [onBboxHover]);
-
-  if (filteredBboxes.length === 0) {
-    return null;
-  }
-
-  return (
-    <div
-      className="absolute inset-0 pointer-events-none"
-      style={{ width: pageWidth, height: pageHeight }}
-    >
-      {filteredBboxes.map((bbox, index) => {
-        const rect = getRect(bbox);
-        if (!rect) return null;
-
-        const colors = getColors(bbox);
-        const isSelected = selectedIndex === index;
-        const isHovered = hoveredIndex === index;
-        const opacity = showConfidence && bbox.confidence !== undefined
-          ? 0.3 + bbox.confidence * 0.7
-          : 1;
-
-        return (
-          <div
-            key={bbox.blockId ?? `bbox-${index}`}
-            className="absolute pointer-events-auto cursor-pointer transition-all duration-150"
-            style={{
-              left: rect.left,
-              top: rect.top,
-              width: rect.width,
-              height: rect.height,
-              border: `2px solid ${colors.border}`,
-              backgroundColor: colors.fill,
-              opacity,
-              borderRadius: 2,
-              boxShadow: isSelected || isHovered
-                ? `0 0 0 2px ${colors.border}, 0 4px 12px rgba(0,0,0,0.15)`
-                : undefined,
-              transform: isHovered ? 'scale(1.01)' : undefined,
-              zIndex: isSelected ? 20 : isHovered ? 10 : 1,
-            }}
-            onClick={(e) => handleClick(bbox, index, e)}
-            onMouseEnter={() => handleMouseEnter(bbox, index)}
-            onMouseLeave={handleMouseLeave}
-          >
-            {/* Label */}
-            {showLabels && (isHovered || isSelected) && (
-              <div
-                className="absolute -top-6 left-0 px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap shadow-sm"
-                style={{
-                  backgroundColor: colors.border.replace(/[\d.]+\)$/, '1)'),
-                  color: 'white',
-                }}
-              >
-                {bbox.type}
-                {bbox.confidence !== undefined && (
-                  <span className="ml-1 opacity-75">
-                    {Math.round(bbox.confidence * 100)}%
-                  </span>
-                )}
-                {comparisonMode && providerId && (
-                  <span className="ml-1 opacity-75">({providerId})</span>
-                )}
-              </div>
-            )}
-
-            {/* Text preview on hover */}
-            {isHovered && bbox.text && (
-              <div
-                className="absolute top-full left-0 mt-1 p-2 bg-white rounded shadow-lg border border-slate-200 text-xs text-slate-700 max-w-xs z-30"
-                style={{ maxHeight: 120, overflow: 'auto' }}
-              >
-                {bbox.text.slice(0, 200)}
-                {bbox.text.length > 200 && '...'}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ============================================================================
-// Comparison Overlay (Multiple Providers)
-// ============================================================================
+              {/* Text preview on hover */}
+              {isHovered && bbox.text && (
+                <div
+                  className="absolute top-full left-0 mt-1 p-2 bg-white rounded shadow-lg border border-slate-200 text-xs text-slate-700 max-w-xs z-30"
+                  style={{ maxHeight: 120, overflow: 'auto' }}
+                >
+                  {bbox.text.slice(0, 200)}
+                  {bbox.text.length > 200 && '...'}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  },
+  (prev, next) => {
+    return (
+      prev.pageWidth === next.pageWidth &&
+      prev.pageHeight === next.pageHeight &&
+      prev.providerId === next.providerId &&
+      prev.selectedIndex === next.selectedIndex &&
+      prev.bboxes.length === next.bboxes.length &&
+      prev.bboxes.every((b, i) => b.blockId === next.bboxes[i]?.blockId)
+    );
+  },
+);
 
 interface BboxComparisonOverlayProps {
-  /** Map of provider ID to bboxes */
   providerBboxes: Record<OcrProviderId, OcrBoundingBox[]>;
-  /** Page dimensions */
   pageWidth: number;
   pageHeight: number;
-  /** Currently selected provider(s) */
   selectedProviders?: OcrProviderId[];
-  /** Filter by type */
   showTypes?: OcrBoundingBox['type'][];
 }
 
@@ -299,12 +325,20 @@ interface ProviderLegendProps {
   enabledProviders?: OcrProviderId[];
 }
 
-export function ProviderLegend({ providers, onToggle, enabledProviders }: ProviderLegendProps) {
+export function ProviderLegend({
+  providers,
+  onToggle,
+  enabledProviders,
+}: ProviderLegendProps) {
   return (
     <div className="flex flex-wrap gap-2 p-2 bg-white rounded-lg shadow-sm border border-slate-200">
       {providers.map((providerId) => {
-        const colors = PROVIDER_COLORS[providerId] ?? { border: '#64748b', fill: '#f1f5f9' };
-        const isEnabled = !enabledProviders || enabledProviders.includes(providerId);
+        const colors = PROVIDER_COLORS[providerId] ?? {
+          border: '#64748b',
+          fill: '#f1f5f9',
+        };
+        const isEnabled =
+          !enabledProviders || enabledProviders.includes(providerId);
 
         return (
           <button

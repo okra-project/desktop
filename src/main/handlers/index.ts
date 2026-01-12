@@ -14,6 +14,7 @@ import { registerTelemetryHandlers } from './telemetry.handlers';
 import { registerAgentHandlers } from './agent.handlers';
 import { registerFileHandlers } from './file.handlers';
 import { registerMcpHandlers } from './mcp.handlers';
+import { registerIndexHandlers } from './index.handlers';
 
 export interface HandlerContext {
   mainWindow: BrowserWindow | null;
@@ -50,6 +51,7 @@ export function registerAllHandlers(): void {
   registerTelemetryHandlers();
   registerAgentHandlers();
   registerMcpHandlers();
+  registerIndexHandlers();
 
   console.error('[handlers] All IPC handlers registered');
 }

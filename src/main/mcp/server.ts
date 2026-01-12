@@ -93,7 +93,7 @@ export function createMcpServer(config: McpServerConfig): McpServerInstance {
         version: '1.0.0',
         description: 'MCP server for local PDF workspace access',
         mcpEndpoint: '/mcp',
-        tools: ['list_workspaces', 'get_workspace', 'search_workspace'],
+        tools: ['list_workspaces', 'get_workspace', 'search_workspace', 'global_search', 'show_result'],
       });
     });
 
@@ -420,6 +420,50 @@ function registerToolsWithZod(
           {
             type: 'text',
             text: `Found ${results.length} document(s) matching "${query}":\n\n${summary}`,
+          },
+        ],
+      };
+    }),
+  );
+
+  server.tool(
+    'show_result',
+    'Navigate the host app to display a specific document and page. Use this to show evidence or results to the user.',
+    {
+      workspaceId: z.string().describe('The workspace/document ID to display'),
+      page: z
+        .number()
+        .optional()
+        .describe('Page number to navigate to (1-indexed). Defaults to page 1.'),
+    },
+    wrapToolHandler('show_result', async ({ workspaceId, page }: { workspaceId: string; page?: number }) => {
+      const workspace = provider.getWorkspace(workspaceId);
+
+      if (!workspace) {
+        return {
+          content: [
+            { type: 'text', text: `Workspace not found: ${workspaceId}` },
+          ],
+          isError: true,
+        };
+      }
+
+      const targetPage = page ?? 1;
+
+      // Emit navigation event to host app
+      progressQueue.send('mcp:show-result', {
+        workspaceId,
+        workspaceName: workspace.name,
+        workspacePath: workspace.workspacePath,
+        page: targetPage,
+        timestamp: Date.now(),
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Navigating to "${workspace.name}" page ${targetPage}`,
           },
         ],
       };

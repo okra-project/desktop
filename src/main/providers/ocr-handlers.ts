@@ -223,7 +223,7 @@ export async function setupOcrIpcHandlers(
       }
 
       const pdfPath = path.join(workspacePath, pdfFile);
-      const outputDir = path.join(workspacePath, 'ocr', providerId);
+      const outputDir = path.join(workspacePath, 'plugins', providerId);
       fs.mkdirSync(outputDir, { recursive: true });
 
       try {
@@ -412,7 +412,7 @@ export async function setupOcrIpcHandlers(
       workspacePath: string,
       providerId: OcrProviderId,
     ): Promise<{ pages: OcrPageResult[]; manifest: unknown } | null> => {
-      const outputDir = path.join(workspacePath, 'ocr', providerId);
+      const outputDir = path.join(workspacePath, 'plugins', providerId);
       const manifestPath = path.join(outputDir, 'manifest.json');
 
       if (!fs.existsSync(manifestPath)) {
@@ -450,7 +450,7 @@ export async function setupOcrIpcHandlers(
     }> => {
       const pagePath = path.join(
         workspacePath,
-        'ocr',
+        'plugins',
         providerId,
         `page-${String(pageNumber).padStart(3, '0')}.json`,
       );
@@ -479,7 +479,7 @@ export async function setupOcrIpcHandlers(
     }> => {
       const manifestPath = path.join(
         workspacePath,
-        'ocr',
+        'plugins',
         providerId,
         'manifest.json',
       );

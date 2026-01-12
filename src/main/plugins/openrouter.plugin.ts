@@ -248,7 +248,7 @@ class OpenRouterPlugin implements OcrPlugin {
                 ],
               },
             ],
-            max_tokens: 4096,
+            max_tokens: 10000,
           }),
         },
       );

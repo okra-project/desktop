@@ -10,9 +10,13 @@ import { dependencies, optionalDependencies } from '../../release/app/package.js
 // Include both dependencies and optionalDependencies as externals
 // This is critical for native modules like @napi-rs/canvas which have
 // platform-specific binaries in optionalDependencies
+// Also include native modules from root package.json that can't be bundled
 const externals = [
   ...Object.keys(dependencies || {}),
   ...Object.keys(optionalDependencies || {}),
+  // Native modules used in main process (from root node_modules)
+  'chokidar',
+  'fsevents',
 ];
 
 const configuration: webpack.Configuration = {

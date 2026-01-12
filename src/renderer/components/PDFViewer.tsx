@@ -1,4 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -210,13 +216,43 @@ export default function PDFViewer({
   const onDocumentLoadSuccess = ({ numPages: pages }: { numPages: number }) => {
     setNumPages(pages);
     // Use initialPage but clamp to valid range
-    setCurrentPage(Math.max(1, Math.min(initialPage, pages)));
+    const targetPage = Math.max(1, Math.min(initialPage, pages));
+    setCurrentPage(targetPage);
+    // Scroll to initial page if not page 1
+    if (targetPage > 1) {
+      setTimeout(() => {
+        const pageDiv = pageRefs.current.get(targetPage);
+        const container = containerRef.current;
+        if (pageDiv && container) {
+          pageDiv.scrollIntoView({ behavior: 'auto', block: 'start' });
+          // Trigger observers: scroll event + resize to force react-pdf to render
+          setTimeout(() => {
+            container.dispatchEvent(new Event('scroll', { bubbles: true }));
+            window.dispatchEvent(new Event('resize'));
+          }, 50);
+        }
+      }, 300); // Longer delay for initial render
+    }
   };
 
-  // Sync with external page changes
+  // Sync with external page changes and scroll to page
   useEffect(() => {
     if (initialPage && numPages > 0 && initialPage !== currentPage) {
-      setCurrentPage(Math.max(1, Math.min(initialPage, numPages)));
+      const targetPage = Math.max(1, Math.min(initialPage, numPages));
+      setCurrentPage(targetPage);
+      // Scroll to the target page
+      setTimeout(() => {
+        const pageDiv = pageRefs.current.get(targetPage);
+        const container = containerRef.current;
+        if (pageDiv && container) {
+          pageDiv.scrollIntoView({ behavior: 'auto', block: 'start' });
+          // Trigger observers: scroll event + resize to force react-pdf to render
+          setTimeout(() => {
+            container.dispatchEvent(new Event('scroll', { bubbles: true }));
+            window.dispatchEvent(new Event('resize'));
+          }, 50);
+        }
+      }, 150);
     }
   }, [initialPage, numPages]);
 
@@ -224,6 +260,13 @@ export default function PDFViewer({
     const newPage = Math.max(1, Math.min(page, numPages));
     setCurrentPage(newPage);
     onPageChange?.(newPage);
+    // Scroll to the page
+    setTimeout(() => {
+      const pageDiv = pageRefs.current.get(newPage);
+      if (pageDiv) {
+        pageDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 50);
   };
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -238,14 +281,18 @@ export default function PDFViewer({
     }
   };
 
-  // Get entities for a specific page
-  const getPageEntities = useCallback(
-    (pageNum: number) => {
-      if (!showEntityOverlays || !entities.length) return [];
-      return entities.filter((e) => e.page === pageNum);
-    },
-    [entities, showEntityOverlays],
-  );
+  const entitiesByPage = useMemo(() => {
+    if (!showEntityOverlays || !entities.length)
+      return new Map<number, EntityOverlay[]>();
+    const grouped = new Map<number, EntityOverlay[]>();
+    for (const entity of entities) {
+      if (!grouped.has(entity.page)) {
+        grouped.set(entity.page, []);
+      }
+      grouped.get(entity.page)!.push(entity);
+    }
+    return grouped;
+  }, [entities, showEntityOverlays]);
 
   // Handle entity click on overlay
   const handleOverlayClick = useCallback(
@@ -548,7 +595,6 @@ export default function PDFViewer({
         >
           {Array.from({ length: numPages }, (_, index) => {
             const pageNum = index + 1;
-            const pageEntities = getPageEntities(pageNum);
             const renderedDims = renderedPageDimensions[pageNum];
 
             return (
@@ -567,65 +613,13 @@ export default function PDFViewer({
                   onRenderSuccess={() => handlePageRenderSuccess(pageNum)}
                 />
 
-                {/* Entity Overlays */}
-                {showEntityOverlays &&
-                  pageEntities.length > 0 &&
-                  renderedDims && (
-                    <div
-                      className="absolute inset-0 pointer-events-none"
-                      style={{
-                        width: renderedDims.width,
-                        height: renderedDims.height,
-                        top: renderedDims.top,
-                        left: renderedDims.left,
-                      }}
-                    >
-                      {pageEntities.map((entity) => {
-                        if (!entity.bbox) return null;
-                        const colors =
-                          OVERLAY_COLORS[entity.type] ||
-                          OVERLAY_COLORS.paragraph;
-                        const scaled = scaleBbox(
-                          entity.bbox,
-                          pageNum,
-                          renderedDims.width,
-                          renderedDims.height,
-                        );
-
-                        return (
-                          <div
-                            key={entity.id}
-                            className="absolute pointer-events-auto cursor-pointer transition-all hover:brightness-110"
-                            style={{
-                              left: scaled.left,
-                              top: scaled.top,
-                              width: scaled.width,
-                              height: scaled.height,
-                              border: `2px solid ${colors.border}`,
-                              backgroundColor: colors.fill,
-                              borderRadius: 2,
-                            }}
-                            onClick={(e) => handleOverlayClick(entity, e)}
-                            title={
-                              entity.title || `${entity.type} #${entity.id}`
-                            }
-                          >
-                            {/* Entity label */}
-                            <span
-                              className="absolute -top-5 left-0 text-[10px] font-medium px-1 py-0.5 rounded whitespace-nowrap"
-                              style={{
-                                backgroundColor: colors.label,
-                                color: 'white',
-                              }}
-                            >
-                              {entity.type}
-                              {entity.title ? `: ${entity.title}` : ''}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                <PageEntityOverlays
+                  pageNum={pageNum}
+                  entities={entitiesByPage.get(pageNum) ?? []}
+                  renderedDims={renderedDims}
+                  scaleBbox={scaleBbox}
+                  onEntityClick={handleOverlayClick}
+                />
               </div>
             );
           })}
@@ -634,3 +628,92 @@ export default function PDFViewer({
     </div>
   );
 }
+
+interface PageEntityOverlaysProps {
+  pageNum: number;
+  entities: EntityOverlay[];
+  renderedDims:
+    | { width: number; height: number; top: number; left: number }
+    | undefined;
+  scaleBbox: (
+    bbox: BoundingBox,
+    pageNum: number,
+    width: number,
+    height: number,
+  ) => { left: number; top: number; width: number; height: number };
+  onEntityClick: (entity: EntityOverlay, event: React.MouseEvent) => void;
+}
+
+const PageEntityOverlays = React.memo(
+  function PageEntityOverlays({
+    pageNum,
+    entities,
+    renderedDims,
+    scaleBbox,
+    onEntityClick,
+  }: PageEntityOverlaysProps) {
+    if (!entities.length || !renderedDims) return null;
+
+    return (
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          width: renderedDims.width,
+          height: renderedDims.height,
+          top: renderedDims.top,
+          left: renderedDims.left,
+        }}
+      >
+        {entities.map((entity) => {
+          if (!entity.bbox) return null;
+          const colors =
+            OVERLAY_COLORS[entity.type] || OVERLAY_COLORS.paragraph;
+          const scaled = scaleBbox(
+            entity.bbox,
+            pageNum,
+            renderedDims.width,
+            renderedDims.height,
+          );
+
+          return (
+            <div
+              key={entity.id}
+              className="absolute pointer-events-auto cursor-pointer transition-all hover:brightness-110"
+              style={{
+                left: scaled.left,
+                top: scaled.top,
+                width: scaled.width,
+                height: scaled.height,
+                border: `2px solid ${colors.border}`,
+                backgroundColor: colors.fill,
+                borderRadius: 2,
+              }}
+              onClick={(e) => onEntityClick(entity, e)}
+              title={entity.title || `${entity.type} #${entity.id}`}
+            >
+              <span
+                className="absolute -top-5 left-0 text-[10px] font-medium px-1 py-0.5 rounded whitespace-nowrap"
+                style={{ backgroundColor: colors.label, color: 'white' }}
+              >
+                {entity.type}
+                {entity.title ? `: ${entity.title}` : ''}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  },
+  (prev, next) => {
+    return (
+      prev.pageNum === next.pageNum &&
+      prev.renderedDims?.width === next.renderedDims?.width &&
+      prev.renderedDims?.height === next.renderedDims?.height &&
+      prev.entities.length === next.entities.length &&
+      prev.entities.every(
+        (e, i) =>
+          e.id === next.entities[i]?.id && e.bbox === next.entities[i]?.bbox,
+      )
+    );
+  },
+);
