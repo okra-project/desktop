@@ -5,6 +5,7 @@ import ChatInterface from './ChatInterface';
 import { ExtractionOverlay } from './ExtractionOverlay';
 import { LayerMenu } from './review/LayerMenu';
 import { StatusBubble } from './StatusBubble';
+import { QueryResultsPanel } from './QueryResultsPanel';
 import { SENTRY_ENABLED } from '../../config/sentry';
 import { useAppDispatch, useAppSelector } from '../store';
 import { useExtractionProgress } from '../hooks/useExtractionProgress';
@@ -20,6 +21,15 @@ import {
   selectPageDimensions,
   type OverlayType,
 } from '../store/viewerSlice';
+import { selectHasActiveQuery, clearQuery } from '../store/querySlice';
+
+interface SelectorResult {
+  id: string;
+  page: number;
+  type: string;
+  text: string;
+  bbox: { xMin: number; yMin: number; xMax: number; yMax: number };
+}
 
 interface DocumentViewerProps {
   documentUuid: string;
@@ -29,6 +39,9 @@ interface DocumentViewerProps {
   onOpenSettings: () => void;
   initialPage?: number | null;
   onInitialPageUsed?: () => void;
+  selector?: string | null;
+  selectorResults?: SelectorResult[] | null;
+  onSelectorUsed?: () => void;
 }
 
 export default function DocumentViewer({
@@ -39,6 +52,9 @@ export default function DocumentViewer({
   onOpenSettings,
   initialPage,
   onInitialPageUsed,
+  selector,
+  selectorResults,
+  onSelectorUsed,
 }: DocumentViewerProps) {
   const dispatch = useAppDispatch();
   const entities = useAppSelector(selectVisibleEntities);
@@ -46,8 +62,10 @@ export default function DocumentViewer({
   const currentPage = useAppSelector(selectCurrentPage);
   const overlayVisibility = useAppSelector(selectOverlayVisibility);
   const pageDimensions = useAppSelector(selectPageDimensions);
+  const hasQueryResults = useAppSelector(selectHasActiveQuery);
 
   const [leftPanelWidth, setLeftPanelWidth] = useState(67);
+  const [showResultsPanel, setShowResultsPanel] = useState(false);
   const [layerMenuOpen, setLayerMenuOpen] = useState(false);
   const [agentPanelMinimized, setAgentPanelMinimized] = useState(() => {
     return localStorage.getItem('agentPanelMinimized') === 'true';
@@ -56,6 +74,18 @@ export default function DocumentViewer({
   useEffect(() => {
     localStorage.setItem('agentPanelMinimized', String(agentPanelMinimized));
   }, [agentPanelMinimized]);
+
+  useEffect(() => {
+    if (hasQueryResults) {
+      setShowResultsPanel(true);
+    }
+  }, [hasQueryResults]);
+
+  useEffect(() => {
+    if (selector) {
+      setShowResultsPanel(true);
+    }
+  }, [selector]);
 
   useExtractionProgress(workspacePath);
 
@@ -204,6 +234,31 @@ export default function DocumentViewer({
 
           <div className="flex items-center gap-2">
             <StatusBubble />
+            {hasQueryResults && (
+              <button
+                onClick={() => setShowResultsPanel((v) => !v)}
+                className={`p-2 rounded-lg transition-colors ${
+                  showResultsPanel
+                    ? 'bg-okra-yellow text-ink'
+                    : 'hover:bg-sidebar-bg-hover text-sidebar-text'
+                }`}
+                title="Query Results"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                  />
+                </svg>
+              </button>
+            )}
             <LayerMenu
               open={layerMenuOpen}
               onOpenChange={setLayerMenuOpen}
@@ -331,6 +386,21 @@ export default function DocumentViewer({
               />
             </svg>
           </button>
+        )}
+
+        {showResultsPanel && (
+          <div className="w-80 h-full shrink-0 border-l border-slate-200">
+            <QueryResultsPanel
+              selector={selector}
+              results={selectorResults}
+              workspaceId={documentUuid}
+              workspacePath={workspacePath}
+              onClose={() => {
+                setShowResultsPanel(false);
+                onSelectorUsed?.();
+              }}
+            />
+          </div>
         )}
       </div>
 

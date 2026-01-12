@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useToast } from '../components/Toast';
+import { useAppDispatch } from '../store';
+import { setResultsFromMcp } from '../store/querySlice';
+import type { QueryResultSet } from '../../shared/types/query';
 
 interface McpToolCalledEvent {
   tool: string;
@@ -31,6 +34,8 @@ const TOOL_LABELS: Record<string, string> = {
   search_workspace: 'Search Workspace',
   global_search: 'Global Search',
   show_result: 'Show Result',
+  query: 'Query',
+  codemode: 'Codemode',
 };
 
 /**
@@ -39,14 +44,15 @@ const TOOL_LABELS: Record<string, string> = {
  */
 export function useMcpEvents() {
   const { showToast } = useToast();
+  const dispatch = useAppDispatch();
   const activeSessionsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    // Signal to main process that renderer is ready to receive events
-    // This flushes any queued MCP events that were sent before we subscribed
-    window.electron.ipcRenderer.invoke('progress:renderer-ready').catch((err) => {
-      console.warn('[useMcpEvents] Failed to signal renderer ready:', err);
-    });
+    window.electron.ipcRenderer
+      .invoke('progress:renderer-ready')
+      .catch((err) => {
+        console.warn('[useMcpEvents] Failed to signal renderer ready:', err);
+      });
 
     // Tool completed - show results
     const unsubToolCompleted = window.electron.ipcRenderer.on(
@@ -105,14 +111,28 @@ export function useMcpEvents() {
       },
     );
 
+    const unsubQueryResults = window.electron.ipcRenderer.on(
+      'query:results',
+      (data: unknown) => {
+        const event = data as { results: QueryResultSet; timestamp: number };
+        dispatch(setResultsFromMcp(event.results));
+        showToast(
+          'info',
+          `Query: ${event.results.totalCount} result(s) in ${event.results.executionMs}ms`,
+          3000,
+        );
+      },
+    );
+
     return () => {
       unsubToolCompleted();
       unsubSessionConnected();
       unsubSessionDisconnected();
       unsubServerStarted();
       unsubServerStopped();
+      unsubQueryResults();
     };
-  }, [showToast]);
+  }, [showToast, dispatch]);
 
   return {
     activeSessions: activeSessionsRef.current.size,

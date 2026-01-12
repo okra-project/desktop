@@ -21,9 +21,13 @@ function McpEventsInitializer({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function ExtractionInitializer({ workspaceId, workspacePath, children }: { 
-  workspaceId: string; 
-  workspacePath: string; 
+function ExtractionInitializer({
+  workspaceId,
+  workspacePath,
+  children,
+}: {
+  workspaceId: string;
+  workspacePath: string;
   children: React.ReactNode;
 }) {
   useExtractionInit(workspaceId, workspacePath);
@@ -47,6 +51,14 @@ export default function App() {
   const [previousScreen, setPreviousScreen] = useState<AppScreen>('browser');
   const [selectedDocument, setSelectedDocument] =
     useState<SelectedDocument | null>(null);
+  const [activeSelector, setActiveSelector] = useState<string | null>(null);
+  const [activeSelectorResults, setActiveSelectorResults] = useState<Array<{
+    id: string;
+    page: number;
+    type: string;
+    text: string;
+    bbox: { xMin: number; yMin: number; xMax: number; yMax: number };
+  }> | null>(null);
 
   const openPdfFromPath = useCallback(async (filePath: string) => {
     try {
@@ -85,7 +97,6 @@ export default function App() {
       },
     );
 
-    // MCP show_result navigation
     const unsubShowResult = window.electron.ipcRenderer.on(
       'mcp:show-result',
       (data: unknown) => {
@@ -93,9 +104,17 @@ export default function App() {
           workspaceId: string;
           workspaceName: string;
           workspacePath: string;
-          page: number;
+          selector: string;
+          results: Array<{
+            id: string;
+            page: number;
+            type: string;
+            text: string;
+            bbox: { xMin: number; yMin: number; xMax: number; yMax: number };
+          }>;
         };
-        setInitialPage(event.page);
+        setActiveSelector(event.selector);
+        setActiveSelectorResults(event.results);
         setSelectedDocument({
           id: event.workspaceId,
           name: event.workspaceName,
@@ -125,7 +144,12 @@ export default function App() {
   }, [hasApiKey, handleCloseSettings]);
 
   const handleSelectDocument = useCallback(
-    (doc: { id: string; name: string; workspacePath: string; page?: number }) => {
+    (doc: {
+      id: string;
+      name: string;
+      workspacePath: string;
+      page?: number;
+    }) => {
       setSelectedDocument(doc);
       setScreen('viewer');
       // Page navigation handled via Redux in DocumentViewer when it mounts
@@ -192,6 +216,12 @@ export default function App() {
             onOpenSettings={handleOpenSettings}
             initialPage={initialPage}
             onInitialPageUsed={() => setInitialPage(null)}
+            selector={activeSelector}
+            selectorResults={activeSelectorResults}
+            onSelectorUsed={() => {
+              setActiveSelector(null);
+              setActiveSelectorResults(null);
+            }}
           />
         </ExtractionInitializer>
       );
@@ -202,9 +232,7 @@ export default function App() {
 
   return (
     <ToastProvider>
-      <McpEventsInitializer>
-        {renderScreen()}
-      </McpEventsInitializer>
+      <McpEventsInitializer>{renderScreen()}</McpEventsInitializer>
     </ToastProvider>
   );
 }

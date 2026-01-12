@@ -11,6 +11,7 @@ import 'react-pdf/dist/Page/TextLayer.css';
 import { getOverlayScaleFactors } from '@okrapdf/plugin-types';
 import { ENTITY_COLORS, type EntityColorType } from '../lib/entity-colors';
 import { DomSearchProvider, useSearch } from '../search';
+import { QueryResultsOverlay } from './QueryResultsOverlay';
 
 // Bundle worker locally - all pdfjs-dist unified to 5.4.530 via npm overrides
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -620,6 +621,17 @@ export default function PDFViewer({
                   scaleBbox={scaleBbox}
                   onEntityClick={handleOverlayClick}
                 />
+
+                {renderedDims && (
+                  <QueryResultsOverlay
+                    containerWidth={renderedDims.width}
+                    containerHeight={renderedDims.height}
+                    pageWidth={renderedDims.width}
+                    pageHeight={renderedDims.height}
+                    offsetX={renderedDims.left}
+                    offsetY={renderedDims.top}
+                  />
+                )}
               </div>
             );
           })}

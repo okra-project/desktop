@@ -2,6 +2,12 @@ import express, { Request, Response } from 'express';
 import { Server } from 'http';
 import { randomUUID } from 'crypto';
 import { progressQueue } from '../utils/progress-queue';
+import { parseQuery, parseDisplayMode, queryEngine } from '../query';
+import {
+  CodemodeExecutor,
+  generateToolTypes,
+  MCP_TOOL_SCHEMAS,
+} from '../codemode';
 
 export interface McpServerConfig {
   port: number;
@@ -33,6 +39,14 @@ export interface GlobalSearchResult {
   matches: Array<{ page: number; line: string }>;
 }
 
+export interface SelectorResult {
+  id: string;
+  page: number;
+  type: string;
+  text: string;
+  bbox: { xMin: number; yMin: number; xMax: number; yMax: number };
+}
+
 export interface WorkspaceProvider {
   listWorkspaces: () => Workspace[];
   getWorkspace: (id: string) => Workspace | null;
@@ -42,6 +56,7 @@ export interface WorkspaceProvider {
     query: string,
   ) => Promise<Array<{ page: number; snippet: string }>>;
   globalSearch: (query: string) => Promise<GlobalSearchResult[]>;
+  queryBySelector: (id: string, selector: string) => Promise<SelectorResult[]>;
 }
 
 export function createMcpServer(config: McpServerConfig): McpServerInstance {
@@ -57,15 +72,12 @@ export function createMcpServer(config: McpServerConfig): McpServerInstance {
       return;
     }
 
-    const { McpServer } = await import(
-      '@modelcontextprotocol/sdk/server/mcp.js'
-    );
-    const { StreamableHTTPServerTransport } = await import(
-      '@modelcontextprotocol/sdk/server/streamableHttp.js'
-    );
-    const { isInitializeRequest } = await import(
-      '@modelcontextprotocol/sdk/types.js'
-    );
+    const { McpServer } =
+      await import('@modelcontextprotocol/sdk/server/mcp.js');
+    const { StreamableHTTPServerTransport } =
+      await import('@modelcontextprotocol/sdk/server/streamableHttp.js');
+    const { isInitializeRequest } =
+      await import('@modelcontextprotocol/sdk/types.js');
     const { z } = await import('zod');
 
     const app = express();
@@ -93,7 +105,7 @@ export function createMcpServer(config: McpServerConfig): McpServerInstance {
         version: '1.0.0',
         description: 'MCP server for local PDF workspace access',
         mcpEndpoint: '/mcp',
-        tools: ['list_workspaces', 'get_workspace', 'search_workspace', 'global_search', 'show_result'],
+        tools: ['codemode'],
       });
     });
 
@@ -169,7 +181,10 @@ export function createMcpServer(config: McpServerConfig): McpServerInstance {
       httpServer = app.listen(port, () => {
         running = true;
         console.log(`[MCP] Server started on port ${port}`);
-        progressQueue.send('mcp:server-started', { port, timestamp: Date.now() });
+        progressQueue.send('mcp:server-started', {
+          port,
+          timestamp: Date.now(),
+        });
         resolve();
       });
 
@@ -252,221 +267,183 @@ function registerToolsWithZod(
   provider: WorkspaceProvider,
   z: any,
 ): void {
-  server.tool(
-    'list_workspaces',
-    'List all local PDF workspaces with their metadata',
-    {},
-    wrapToolHandler('list_workspaces', async () => {
-      const workspaces = provider.listWorkspaces();
+  const codemodeExecutor = new CodemodeExecutor([
+    {
+      name: 'list_workspaces',
+      execute: async () => ({ workspaces: provider.listWorkspaces() }),
+    },
+    {
+      name: 'get_workspace',
+      execute: async (args: unknown) => {
+        const { workspaceId, page } = args as {
+          workspaceId: string;
+          page?: number;
+        };
+        const content = await provider.getWorkspaceContent(workspaceId, page);
+        return { content };
+      },
+    },
+    {
+      name: 'search_workspace',
+      execute: async (args: unknown) => {
+        const { workspaceId, query } = args as {
+          workspaceId: string;
+          query: string;
+        };
+        const results = await provider.searchWorkspace(workspaceId, query);
+        return { results };
+      },
+    },
+    {
+      name: 'global_search',
+      execute: async (args: unknown) => {
+        const { query } = args as { query: string };
+        const results = await provider.globalSearch(query);
+        return { results };
+      },
+    },
+    {
+      name: 'query_selector',
+      execute: async (args: unknown) => {
+        const { workspaceId, selector } = args as {
+          workspaceId: string;
+          selector: string;
+        };
+        const results = await provider.queryBySelector(workspaceId, selector);
+        return { results };
+      },
+    },
+    {
+      name: 'find_workspaces',
+      execute: async (args: unknown) => {
+        const { query } = args as { query: string };
+        const needle = query?.trim().toLowerCase();
+        if (!needle) {
+          return { results: [] };
+        }
+        const results = provider
+          .listWorkspaces()
+          .filter((w) =>
+            [w.id, w.name].some((val) => val.toLowerCase().includes(needle)),
+          )
+          .map((w) => ({ id: w.id, name: w.name }));
+        return { results };
+      },
+    },
+    {
+      name: 'search_all',
+      execute: async (args: unknown) => {
+        const { query, selector } = args as {
+          query?: string;
+          selector?: string;
+        };
+        const sanitizedQuery = query ? query.replace(/"/g, '\\"') : '';
+        const fallbackSelector = sanitizedQuery
+          ? `[text*="${sanitizedQuery}"]`
+          : null;
+        const effectiveSelector = selector || fallbackSelector;
+        if (!effectiveSelector) {
+          return { results: [] };
+        }
+        const workspaces = provider.listWorkspaces();
+        const results = await Promise.all(
+          workspaces.map(async (w) => ({
+            workspaceId: w.id,
+            workspaceName: w.name,
+            results: await provider.queryBySelector(w.id, effectiveSelector),
+          })),
+        );
+        return { results };
+      },
+    },
+    {
+      name: 'show_result',
+      execute: async (args: unknown) => {
+        const { workspaceId, selector } = args as {
+          workspaceId: string;
+          selector: string;
+        };
+        const workspace = provider.getWorkspace(workspaceId);
+        if (!workspace) {
+          return { error: `Workspace not found: ${workspaceId}` };
+        }
+        const results = await provider.queryBySelector(workspaceId, selector);
+        progressQueue.send('mcp:show-result', {
+          workspaceId,
+          workspaceName: workspace.name,
+          workspacePath: workspace.workspacePath,
+          selector,
+          results,
+          timestamp: Date.now(),
+        });
+        return { results };
+      },
+    },
+    {
+      name: 'query',
+      execute: async (args: unknown) => {
+        const { query, display } = args as { query: string; display?: string };
+        const ast = parseQuery(query);
+        if (display) {
+          ast.display = { mode: parseDisplayMode(display) };
+        }
+        const results = await queryEngine.execute(ast);
+        progressQueue.send('query:results', { results, timestamp: Date.now() });
+        return results;
+      },
+    },
+  ]);
 
-      if (workspaces.length === 0) {
+  server.tool(
+    'codemode',
+    `Execute JavaScript code that chains multiple MCP tools.
+
+Available tools via 'mcp' object:
+- mcp.list_workspaces() → { workspaces: [...] }
+- mcp.get_workspace({ workspaceId, page? }) → { content: string }
+- mcp.search_workspace({ workspaceId, query }) → { results: [...] }
+- mcp.global_search({ query }) → { results: [...] }
+- mcp.query_selector({ workspaceId, selector }) → { results: [...] }
+- mcp.find_workspaces({ query }) → { results: [{ id, name }] }
+- mcp.search_all({ query?, selector? }) → { results: [{ workspaceId, workspaceName, results: [...] }] }
+- mcp.show_result({ workspaceId, selector }) → { results: [...] }
+- mcp.query({ query, display? }) → { results: [...], totalCount, executionMs }
+
+Example:
+  const ws = await mcp.list_workspaces();
+  for (const w of ws.workspaces) {
+    const r = await mcp.query({ query: "SELECT tables FROM " + w.id });
+    if (r.totalCount > 0) return { found: w.name, tables: r.totalCount };
+  }
+  return { found: null };
+`,
+    {
+      code: z.string().describe('JavaScript async function body'),
+      timeout: z.number().optional().describe('Timeout in ms (default: 30000)'),
+    },
+    wrapToolHandler(
+      'codemode',
+      async ({ code, timeout }: { code: string; timeout?: number }) => {
+        const result = await codemodeExecutor.execute({ code, timeout });
+
+        if (!result.success) {
+          return {
+            content: [
+              { type: 'text', text: `Execution failed: ${result.error}` },
+            ],
+            isError: true,
+          };
+        }
+
         return {
           content: [
             {
               type: 'text',
-              text: 'No workspaces found. Open a PDF in OkraPDF to create a workspace.',
+              text: `Executed in ${result.executionMs}ms (${result.toolCalls.length} tool calls)\n\nResult: ${JSON.stringify(result.result, null, 2)}`,
             },
           ],
         };
-      }
-
-      const summary = workspaces
-        .map(
-          (w) =>
-            `- **${w.name}** (${w.id})\n  Pages: ${w.pageCount ?? '?'} | Status: ${w.extractionStatus}\n  Last opened: ${new Date(w.lastOpenedAt).toLocaleDateString()}`,
-        )
-        .join('\n\n');
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Found ${workspaces.length} workspace(s):\n\n${summary}`,
-          },
-        ],
-      };
-    }),
-  );
-
-  server.tool(
-    'get_workspace',
-    'Get details and extracted content from a specific workspace',
-    {
-      workspaceId: z.string().describe('The workspace ID to retrieve'),
-      page: z
-        .number()
-        .optional()
-        .describe(
-          'Specific page number to get (1-indexed). Omit for all pages.',
-        ),
-    },
-    wrapToolHandler('get_workspace', async ({ workspaceId, page }: { workspaceId: string; page?: number }) => {
-      const workspace = provider.getWorkspace(workspaceId);
-
-      if (!workspace) {
-        return {
-          content: [
-            { type: 'text', text: `Workspace not found: ${workspaceId}` },
-          ],
-          isError: true,
-        };
-      }
-
-      const content = await provider.getWorkspaceContent(workspaceId, page);
-
-      if (!content) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `No extracted content available for workspace: ${workspace.name}. Run OCR extraction first.`,
-            },
-          ],
-        };
-      }
-
-      const header = `# ${workspace.name}\n\nPages: ${workspace.pageCount ?? '?'} | Status: ${workspace.extractionStatus}\n\n---\n\n`;
-      return { content: [{ type: 'text', text: header + content }] };
-    }),
-  );
-
-  server.tool(
-    'search_workspace',
-    "Search for text within a workspace's extracted content",
-    {
-      workspaceId: z.string().describe('The workspace ID to search'),
-      query: z.string().describe('Search query (keyword or phrase)'),
-    },
-    wrapToolHandler('search_workspace', async ({ workspaceId, query }: { workspaceId: string; query: string }) => {
-      const workspace = provider.getWorkspace(workspaceId);
-
-      if (!workspace) {
-        return {
-          content: [
-            { type: 'text', text: `Workspace not found: ${workspaceId}` },
-          ],
-          isError: true,
-        };
-      }
-
-      const results = await provider.searchWorkspace(workspaceId, query);
-
-      if (results.length === 0) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `No results found for "${query}" in ${workspace.name}`,
-            },
-          ],
-        };
-      }
-
-      const resultText = results
-        .slice(0, 10)
-        .map((r) => `**Page ${r.page}:**\n${r.snippet}`)
-        .join('\n\n---\n\n');
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Found ${results.length} result(s) for "${query}" in ${workspace.name}:\n\n${resultText}`,
-          },
-        ],
-      };
-    }),
-  );
-
-  server.tool(
-    'global_search',
-    'Search across all PDF workspaces. Returns matching documents with snippets.',
-    {
-      query: z.string().describe('Search text (plain words or phrase)'),
-    },
-    wrapToolHandler('global_search', async ({ query }: { query: string }) => {
-      if (!query || query.trim().length < 2) {
-        return {
-          content: [
-            { type: 'text', text: 'Query must be at least 2 characters' },
-          ],
-          isError: true,
-        };
-      }
-
-      const results = await provider.globalSearch(query.trim());
-
-      if (results.length === 0) {
-        return {
-          content: [
-            { type: 'text', text: `No documents found matching "${query}"` },
-          ],
-        };
-      }
-
-      const summary = results
-        .slice(0, 20)
-        .map((r) => {
-          const matchPreview = r.matches
-            .slice(0, 2)
-            .map((m) => `  - Page ${m.page}: ${m.line.slice(0, 100)}${m.line.length > 100 ? '...' : ''}`)
-            .join('\n');
-          return `**${r.workspaceName}** (${r.workspaceId})\n${matchPreview}`;
-        })
-        .join('\n\n');
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Found ${results.length} document(s) matching "${query}":\n\n${summary}`,
-          },
-        ],
-      };
-    }),
-  );
-
-  server.tool(
-    'show_result',
-    'Navigate the host app to display a specific document and page. Use this to show evidence or results to the user.',
-    {
-      workspaceId: z.string().describe('The workspace/document ID to display'),
-      page: z
-        .number()
-        .optional()
-        .describe('Page number to navigate to (1-indexed). Defaults to page 1.'),
-    },
-    wrapToolHandler('show_result', async ({ workspaceId, page }: { workspaceId: string; page?: number }) => {
-      const workspace = provider.getWorkspace(workspaceId);
-
-      if (!workspace) {
-        return {
-          content: [
-            { type: 'text', text: `Workspace not found: ${workspaceId}` },
-          ],
-          isError: true,
-        };
-      }
-
-      const targetPage = page ?? 1;
-
-      // Emit navigation event to host app
-      progressQueue.send('mcp:show-result', {
-        workspaceId,
-        workspaceName: workspace.name,
-        workspacePath: workspace.workspacePath,
-        page: targetPage,
-        timestamp: Date.now(),
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Navigating to "${workspace.name}" page ${targetPage}`,
-          },
-        ],
-      };
-    }),
+      },
+    ),
   );
 }

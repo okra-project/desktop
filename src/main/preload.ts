@@ -91,7 +91,12 @@ export type Channels =
   | 'index:get-stats'
   | 'index:get-document-stats'
   | 'index:reindex'
-  | 'index:updated';
+  | 'index:updated'
+  | 'query:execute'
+  | 'query:parse'
+  | 'query:set-current-workspace'
+  | 'query:parse-display-mode'
+  | 'query:results';
 
 const electronHandler = {
   ipcRenderer: {

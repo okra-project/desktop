@@ -376,6 +376,33 @@ class IndexService implements IService {
     }));
   }
 
+  searchFiltered(options: Omit<SearchOptions, 'query'>): SearchResult[] {
+    const results = this.searchIndex.search('', {
+      filter: (result) => {
+        const doc = result as unknown as IndexedBbox;
+        if (options.documentId && doc.documentId !== options.documentId) {
+          return false;
+        }
+        if (
+          options.entityTypes?.length &&
+          !options.entityTypes.includes(doc.type)
+        ) {
+          return false;
+        }
+        return true;
+      },
+    });
+
+    return results.slice(0, options.limit || 50).map((r) => ({
+      entity: r as unknown as IndexedBbox,
+      score: r.score,
+      matches: Object.entries(r.match).map(([term, fields]) => ({
+        term,
+        field: (fields as string[])[0],
+      })),
+    }));
+  }
+
   getPageBboxes(documentId: string, pageNumber: number): IndexedBbox[] {
     return this.searchIndex
       .search('', {

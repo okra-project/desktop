@@ -114,6 +114,127 @@ class McpService implements IService {
 
         return Array.from(resultsByDoc.values());
       },
+
+      queryBySelector: async (id: string, selector: string) => {
+        const types: Array<
+          'table' | 'figure' | 'footnote' | 'signature' | 'callout' | 'text'
+        > = [];
+        let textContains: string | null = null;
+        let pageFilter: number[] | null = null;
+
+        const validTypes = [
+          'table',
+          'figure',
+          'footnote',
+          'signature',
+          'callout',
+          'text',
+        ] as const;
+
+        let limit: number | null = null;
+        let offset: number | null = null;
+
+        const typeMatches = selector.match(/\.(\w+)/g);
+        if (typeMatches) {
+          for (const m of typeMatches) {
+            const t = m.slice(1) as (typeof validTypes)[number];
+            if (validTypes.includes(t)) {
+              types.push(t);
+            }
+          }
+        }
+
+        const typeAttrMatches = selector.match(/\[type=["'][^"']+["']\]/g);
+        if (typeAttrMatches) {
+          for (const m of typeAttrMatches) {
+            const value = m.match(/\[type=["']([^"']+)["']\]/)?.[1];
+            if (!value) continue;
+            for (const t of value.split(',')) {
+              const trimmed = t.trim() as (typeof validTypes)[number];
+              if (validTypes.includes(trimmed)) {
+                types.push(trimmed);
+              }
+            }
+          }
+        }
+
+        const typePseudoMatches = selector.match(/:type\(([^)]+)\)/g);
+        if (typePseudoMatches) {
+          for (const m of typePseudoMatches) {
+            const value = m.match(/:type\(([^)]+)\)/)?.[1];
+            if (!value) continue;
+            for (const t of value.split(',')) {
+              const trimmed = t.trim() as (typeof validTypes)[number];
+              if (validTypes.includes(trimmed)) {
+                types.push(trimmed);
+              }
+            }
+          }
+        }
+
+        const textMatch = selector.match(/\[text\*=["']([^"']+)["']\]/);
+        if (textMatch) {
+          textContains = textMatch[1];
+        }
+
+        const pageMatch = selector.match(/:page\((\d+)(?:-(\d+))?\)/);
+        if (pageMatch) {
+          const start = parseInt(pageMatch[1], 10);
+          const end = pageMatch[2] ? parseInt(pageMatch[2], 10) : start;
+          pageFilter = [];
+          for (let p = start; p <= end; p++) {
+            pageFilter.push(p);
+          }
+        }
+
+        const limitMatch = selector.match(/:limit\((\d+)\)/);
+        if (limitMatch) {
+          limit = parseInt(limitMatch[1], 10);
+        }
+
+        const offsetMatch = selector.match(/:offset\((\d+)\)/);
+        if (offsetMatch) {
+          offset = parseInt(offsetMatch[1], 10);
+        }
+
+        let searchResults = [] as ReturnType<typeof indexService.search>;
+
+        if (textContains) {
+          searchResults = indexService.search({
+            query: textContains,
+            documentId: id,
+            entityTypes: types.length > 0 ? types : undefined,
+            limit: 200,
+          });
+        } else if (types.length > 0) {
+          searchResults = indexService.searchFiltered({
+            documentId: id,
+            entityTypes: types,
+            limit: 200,
+          });
+        }
+
+        let filtered = searchResults;
+        if (pageFilter) {
+          filtered = filtered.filter((r) =>
+            pageFilter!.includes(r.entity.pageNumber),
+          );
+        }
+        if (offset && offset > 0) {
+          filtered = filtered.slice(offset);
+        }
+        if (limit && limit > 0) {
+          filtered = filtered.slice(0, limit);
+        }
+
+        return filtered.map((r) => ({
+          id: r.entity.id,
+          page: r.entity.pageNumber,
+          type: r.entity.type,
+          text: r.entity.text,
+          bbox: r.entity.bbox,
+        }));
+      },
     };
   }
 

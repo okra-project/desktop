@@ -15,6 +15,7 @@ import { registerAgentHandlers } from './agent.handlers';
 import { registerFileHandlers } from './file.handlers';
 import { registerMcpHandlers } from './mcp.handlers';
 import { registerIndexHandlers } from './index.handlers';
+import { registerQueryHandlers } from './query.handlers';
 
 export interface HandlerContext {
   mainWindow: BrowserWindow | null;
@@ -52,6 +53,7 @@ export function registerAllHandlers(): void {
   registerAgentHandlers();
   registerMcpHandlers();
   registerIndexHandlers();
+  registerQueryHandlers();
 
   console.error('[handlers] All IPC handlers registered');
 }
