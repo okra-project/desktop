@@ -58,7 +58,7 @@ export async function renderPageToBuffer(
   pdf: PDFDocumentProxy,
   pageNum: number,
   scale = 2.0,
-): Promise<Buffer> {
+): Promise<{ buffer: Buffer; width: number; height: number }> {
   const page = await pdf.getPage(pageNum);
   const viewport = page.getViewport({ scale });
 
@@ -71,13 +71,17 @@ export async function renderPageToBuffer(
     viewport,
   } as Parameters<typeof page.render>[0]).promise;
 
-  return canvas.toBuffer('image/png');
+  return {
+    buffer: canvas.toBuffer('image/png'),
+    width: viewport.width,
+    height: viewport.height,
+  };
 }
 
 export async function renderPageFromFile(
   pdfPath: string,
   pageNum: number,
-): Promise<Buffer> {
+): Promise<{ buffer: Buffer; width: number; height: number }> {
   const { pdfToPng } = await import('pdf-to-png-converter');
   const results = await pdfToPng(pdfPath, {
     pagesToProcess: [pageNum],
@@ -88,7 +92,11 @@ export async function renderPageFromFile(
   if (!results.length || !results[0].content) {
     throw new Error(`Failed to render page ${pageNum}`);
   }
-  return Buffer.from(results[0].content);
+  return {
+    buffer: Buffer.from(results[0].content),
+    width: results[0].width,
+    height: results[0].height,
+  };
 }
 
 export async function extractWithProvider(
@@ -246,7 +254,11 @@ export async function setupOcrIpcHandlers(
           mainWindow?.webContents.send('ocr:progress', progress);
 
           // Render page to image
-          const imageBuffer = await renderPageToBuffer(pdf, pageNum);
+          const {
+            buffer: imageBuffer,
+            width,
+            height,
+          } = await renderPageToBuffer(pdf, pageNum);
 
           // Extract with provider
           const pageResult = await extractWithProvider(
@@ -255,6 +267,36 @@ export async function setupOcrIpcHandlers(
             pageNum,
             config,
           );
+
+          // Post-process result to ensure consistent coordinate system (Absolute Pixels)
+          if (!pageResult.imageSize) {
+            // Provider didn't return dimensions (e.g. DocAI, OpenRouter)
+            // We interpret this as potential normalized coordinates
+            pageResult.imageSize = { width, height };
+
+            // Check if bboxes are normalized (0-1) and scale them if so
+            if (pageResult.bboxes && pageResult.bboxes.length > 0) {
+              const allCoords = pageResult.bboxes.flatMap((b) =>
+                b.vertices.flatMap((v) => [v.x, v.y]),
+              );
+              const maxCoord = Math.max(...allCoords);
+
+              // Heuristic: If max coordinate is small (<= 1.5), assume normalized
+              // Use 1.5 to account for potential slight float overshoots or 1-based indexing in some weird cases
+              if (maxCoord <= 1.5) {
+                console.log(
+                  `[ocr-handler] Scaling normalized bboxes for page ${pageNum}`,
+                );
+                pageResult.bboxes = pageResult.bboxes.map((bbox) => ({
+                  ...bbox,
+                  vertices: bbox.vertices.map((v) => ({
+                    x: v.x * width,
+                    y: v.y * height,
+                  })),
+                }));
+              }
+            }
+          }
           results.push(pageResult);
 
           // Save result to disk
@@ -402,7 +444,10 @@ export async function setupOcrIpcHandlers(
       workspacePath: string,
       providerId: OcrProviderId,
       pageNumber: number,
-    ): Promise<OcrPageResult['bboxes']> => {
+    ): Promise<{
+      bboxes: OcrPageResult['bboxes'];
+      imageSize?: OcrPageResult['imageSize'];
+    }> => {
       const pagePath = path.join(
         workspacePath,
         'ocr',
@@ -411,13 +456,13 @@ export async function setupOcrIpcHandlers(
       );
 
       if (!fs.existsSync(pagePath)) {
-        return [];
+        return { bboxes: [] };
       }
 
       const pageResult: OcrPageResult = JSON.parse(
         fs.readFileSync(pagePath, 'utf-8'),
       );
-      return pageResult.bboxes;
+      return { bboxes: pageResult.bboxes, imageSize: pageResult.imageSize };
     },
   );
 

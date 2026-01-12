@@ -60,3 +60,6 @@ out/.claude/
 src/node_modules
 .erb/node_modules
 .vercel
+
+# MCP local config
+.mcp.json

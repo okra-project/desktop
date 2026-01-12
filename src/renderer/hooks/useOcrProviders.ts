@@ -329,12 +329,13 @@ export function useOcrExtraction(workspacePath: string | null) {
       pageNumber: number,
     ): Promise<OcrBoundingBox[]> => {
       if (!workspacePath) return [];
-      return window.electron.ipcRenderer.invoke(
+      const result = await window.electron.ipcRenderer.invoke(
         'ocr:get-page-bboxes',
         workspacePath,
         providerId,
         pageNumber,
       );
+      return result?.bboxes ?? [];
     },
     [workspacePath],
   );

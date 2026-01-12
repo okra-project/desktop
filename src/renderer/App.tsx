@@ -11,8 +11,15 @@ import SettingsScreen from './components/SettingsScreen';
 import DragDropOverlay from './components/DragDropOverlay';
 import { useExtractionInit } from './hooks/useExtractionRedux';
 import { useWorkflowExtraction } from './hooks/useWorkflowExtraction';
+import { useMcpEvents } from './hooks/useMcpEvents';
 import { ToastProvider } from './components/Toast';
 import './App.css';
+
+// Wrapper to initialize MCP events listener (must be inside ToastProvider)
+function McpEventsInitializer({ children }: { children: React.ReactNode }) {
+  useMcpEvents();
+  return <>{children}</>;
+}
 
 function ExtractionInitializer({ workspaceId, workspacePath, children }: { 
   workspaceId: string; 
@@ -169,7 +176,9 @@ export default function App() {
 
   return (
     <ToastProvider>
-      {renderScreen()}
+      <McpEventsInitializer>
+        {renderScreen()}
+      </McpEventsInitializer>
     </ToastProvider>
   );
 }

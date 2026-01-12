@@ -20,7 +20,7 @@ function CodeComponent({ inline, className, children }: any) {
   }
   return (
     <pre className="bg-ink text-cream rounded-md p-3 overflow-x-auto font-mono">
-      <code className={className}>{children}</code>
+      <code className={`${className} text-cream`}>{children}</code>
     </pre>
   );
 }
@@ -120,7 +120,7 @@ function Message({ message }: MessageProps) {
               message.contentBlocks.map((block: ContentBlock, index: number) => {
                 if (block.type === 'text') {
                   return (
-                    <div key={index} className="prose prose-sm max-w-none prose-p:text-ink prose-headings:text-ink prose-strong:text-ink prose-code:text-ink">
+                    <div key={index} className="prose prose-sm max-w-none prose-p:text-ink prose-headings:text-ink prose-strong:text-ink">
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
@@ -144,7 +144,7 @@ function Message({ message }: MessageProps) {
               })
             ) : (
               /* Fallback to simple content rendering for backward compatibility */
-              <div className="prose prose-sm max-w-none prose-p:text-ink prose-headings:text-ink prose-strong:text-ink prose-code:text-ink">
+              <div className="prose prose-sm max-w-none prose-p:text-ink prose-headings:text-ink prose-strong:text-ink">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{

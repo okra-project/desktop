@@ -35,6 +35,10 @@ interface ViewerState {
   entitiesLoading: boolean;
   entitiesError: string | null;
   selectedEntityId: string | null;
+  pageDimensions: Record<
+    number,
+    { width: number | null; height: number | null }
+  >;
 }
 
 const initialState: ViewerState = {
@@ -55,10 +59,17 @@ const initialState: ViewerState = {
   entitiesLoading: false,
   entitiesError: null,
   selectedEntityId: null,
+  pageDimensions: {},
 };
 
 export const fetchPageEntities = createAsyncThunk<
-  EntityOverlay[],
+  {
+    entities: EntityOverlay[];
+    pageDimensions: Record<
+      number,
+      { width: number | null; height: number | null }
+    >;
+  },
   { workspacePath: string; page: number },
   { rejectValue: string }
 >(
@@ -68,12 +79,14 @@ export const fetchPageEntities = createAsyncThunk<
 
     for (const providerId of providers) {
       try {
-        const bboxes = await window.electron.ipcRenderer.invoke(
+        const result = await window.electron.ipcRenderer.invoke(
           'ocr:get-page-bboxes',
           workspacePath,
           providerId,
           page,
         );
+
+        const bboxes = result?.bboxes ?? [];
 
         if (bboxes && bboxes.length > 0) {
           const entities: EntityOverlay[] = [];
@@ -117,14 +130,26 @@ export const fetchPageEntities = createAsyncThunk<
           console.log(
             `[viewerSlice] Loaded ${entities.length} entities for page ${page} from ${providerId}`,
           );
-          return entities;
+
+          const pageDimensions = result?.imageSize
+            ? {
+                [page]: {
+                  width: result.imageSize.width,
+                  height: result.imageSize.height,
+                },
+              }
+            : {};
+
+          return { entities, pageDimensions };
+
+          return { entities, pageDimensions };
         }
       } catch (err) {
         console.warn(`[viewerSlice] Failed to fetch from ${providerId}:`, err);
       }
     }
 
-    return [];
+    return { entities: [], pageDimensions: {} };
   },
 );
 
@@ -135,6 +160,7 @@ const viewerSlice = createSlice({
     setWorkspacePath: (state, action: PayloadAction<string | null>) => {
       state.workspacePath = action.payload;
       state.entities = [];
+      state.pageDimensions = {};
       state.currentPage = 1;
     },
     setCurrentPage: (state, action: PayloadAction<number>) => {
@@ -172,6 +198,7 @@ const viewerSlice = createSlice({
     },
     clearEntities: (state) => {
       state.entities = [];
+      state.pageDimensions = {};
       state.entitiesError = null;
     },
     resetViewer: () => initialState,
@@ -184,7 +211,13 @@ const viewerSlice = createSlice({
       })
       .addCase(fetchPageEntities.fulfilled, (state, action) => {
         state.entitiesLoading = false;
-        state.entities = action.payload;
+        state.entities = action.payload.entities;
+        if (Object.keys(action.payload.pageDimensions).length > 0) {
+          state.pageDimensions = {
+            ...state.pageDimensions,
+            ...action.payload.pageDimensions,
+          };
+        }
       })
       .addCase(fetchPageEntities.rejected, (state, action) => {
         state.entitiesLoading = false;
@@ -222,6 +255,8 @@ export const selectEntitiesError = (state: RootState) =>
   state.viewer.entitiesError;
 export const selectSelectedEntityId = (state: RootState) =>
   state.viewer.selectedEntityId;
+export const selectPageDimensions = (state: RootState) =>
+  state.viewer.pageDimensions;
 
 export const selectVisibleEntities = createSelector(
   [selectEntities, selectOverlayVisibility],

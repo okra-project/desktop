@@ -31,6 +31,10 @@ export interface ReviewDataContextValue {
 
   entitiesData: EntitiesResponse | null;
   entitiesLoading: boolean;
+  pageDimensions: Record<
+    number,
+    { width: number | null; height: number | null }
+  >;
 
   tablesData: TablesResponse | null;
   refetchTables: () => void;
@@ -105,6 +109,9 @@ export function LocalReviewDataProvider({
   const [totalPages, setTotalPages] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [allEntities, setAllEntities] = useState<Entity[]>([]);
+  const [pageDimensions, setPageDimensions] = useState<
+    Record<number, { width: number | null; height: number | null }>
+  >({});
 
   useEffect(() => {
     const loadPageCount = async () => {
@@ -126,19 +133,30 @@ export function LocalReviewDataProvider({
     const loadEntities = async () => {
       if (totalPages === 0) return;
 
+      setPageDimensions({});
       const entities: Entity[] = [];
       const providers = ['openrouter', 'google-docai'];
 
       for (let page = 1; page <= totalPages; page++) {
         for (const providerId of providers) {
           try {
-            const bboxes: OcrBoundingBox[] =
-              await window.electron.ipcRenderer.invoke(
-                'ocr:get-page-bboxes',
-                workspacePath,
-                providerId,
-                page,
-              );
+            const result = await window.electron.ipcRenderer.invoke(
+              'ocr:get-page-bboxes',
+              workspacePath,
+              providerId,
+              page,
+            );
+            const bboxes: OcrBoundingBox[] = result?.bboxes ?? [];
+
+            if (result?.imageSize) {
+              setPageDimensions((prev) => ({
+                ...prev,
+                [page]: {
+                  width: result.imageSize.width,
+                  height: result.imageSize.height,
+                },
+              }));
+            }
 
             if (bboxes && bboxes.length > 0) {
               for (let idx = 0; idx < bboxes.length; idx++) {
@@ -281,6 +299,7 @@ export function LocalReviewDataProvider({
     refetchTree: () => {},
     entitiesData,
     entitiesLoading: false,
+    pageDimensions,
     tablesData,
     refetchTables: () => {},
     pageContent,

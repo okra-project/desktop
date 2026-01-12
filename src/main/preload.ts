@@ -76,7 +76,14 @@ export type Channels =
   | 'plugin:uninstall'
   | 'plugin:state-change'
   | 'coding-agents:detect'
-  | 'coding-agents:list-all';
+  | 'coding-agents:list-all'
+  // MCP server event channels
+  | 'mcp:tool-called'
+  | 'mcp:tool-completed'
+  | 'mcp:session-connected'
+  | 'mcp:session-disconnected'
+  | 'mcp:server-started'
+  | 'mcp:server-stopped';
 
 const electronHandler = {
   ipcRenderer: {

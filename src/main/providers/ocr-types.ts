@@ -63,6 +63,7 @@ export interface OcrPageResult {
   markdown?: string;
   bboxes: OcrBoundingBox[];
   tables?: OcrTableData[];
+  imageSize?: { width: number; height: number };
   confidence?: number;
   durationMs?: number;
   error?: string;
@@ -117,6 +118,8 @@ export interface OcrProviderMetadata {
   costPerPage?: number;
   isCloud: boolean;
   installInstructions?: string;
+  /** npm packages required by this plugin (installed on-demand) */
+  npmDependencies?: string[];
 }
 
 export interface OcrProgress {

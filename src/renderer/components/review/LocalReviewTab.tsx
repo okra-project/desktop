@@ -29,6 +29,7 @@ export function LocalReviewTab({
     setCurrentPage,
     savePageVersion,
     isSaving,
+    pageDimensions,
   } = useReviewData();
 
   const [isEditMode, setIsEditMode] = useState(false);
@@ -189,6 +190,7 @@ export function LocalReviewTab({
                 onPageChange={handlePreviewPage}
                 entities={entityOverlays}
                 showEntityOverlays={visibleLayers.size > 0}
+                pageDimensions={pageDimensions}
               />
             ) : (
               <div style={styles.pdfPlaceholder}>

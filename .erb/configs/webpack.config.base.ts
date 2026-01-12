@@ -5,10 +5,18 @@
 import webpack from 'webpack';
 import TsconfigPathsPlugins from 'tsconfig-paths-webpack-plugin';
 import webpackPaths from './webpack.paths';
-import { dependencies as externals } from '../../release/app/package.json';
+import { dependencies, optionalDependencies } from '../../release/app/package.json';
+
+// Include both dependencies and optionalDependencies as externals
+// This is critical for native modules like @napi-rs/canvas which have
+// platform-specific binaries in optionalDependencies
+const externals = [
+  ...Object.keys(dependencies || {}),
+  ...Object.keys(optionalDependencies || {}),
+];
 
 const configuration: webpack.Configuration = {
-  externals: [...Object.keys(externals || {}), '@napi-rs/canvas'],
+  externals,
 
   stats: 'errors-only',
 
