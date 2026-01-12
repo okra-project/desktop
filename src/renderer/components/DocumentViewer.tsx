@@ -17,6 +17,7 @@ import {
   selectShowAnyOverlay,
   selectCurrentPage,
   selectOverlayVisibility,
+  selectPageDimensions,
   type OverlayType,
 } from '../store/viewerSlice';
 
@@ -40,6 +41,7 @@ export default function DocumentViewer({
   const showEntityOverlays = useAppSelector(selectShowAnyOverlay);
   const currentPage = useAppSelector(selectCurrentPage);
   const overlayVisibility = useAppSelector(selectOverlayVisibility);
+  const pageDimensions = useAppSelector(selectPageDimensions);
 
   const [leftPanelWidth, setLeftPanelWidth] = useState(50);
   const [layerMenuOpen, setLayerMenuOpen] = useState(false);
@@ -56,13 +58,8 @@ export default function DocumentViewer({
     return layers;
   }, [overlayVisibility]);
   const [pdfPath, setPdfPath] = useState<string>('');
-  const [newFileCount, setNewFileCount] = useState(0);
-  const [showFileList, setShowFileList] = useState(false);
-  const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([]);
-  const lastOpenedFileCount = useRef<number>(0);
   const isDragging = useRef(false);
   const missingPdfReported = useRef<Set<string>>(new Set());
-  const fileListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     dispatch(setWorkspacePath(workspacePath));
@@ -73,55 +70,6 @@ export default function DocumentViewer({
       dispatch(fetchPageEntities({ workspacePath, page: currentPage }));
     }
   }, [currentPage, workspacePath, dispatch]);
-
-  useEffect(() => {
-    const initFileCount = async () => {
-      const files = await window.electron.ipcRenderer.invoke(
-        'workspace:list-files',
-        workspacePath,
-      );
-      lastOpenedFileCount.current = files?.length ?? 0;
-      setWorkspaceFiles(files || []);
-    };
-    initFileCount();
-  }, [workspacePath]);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        fileListRef.current &&
-        !fileListRef.current.contains(e.target as Node)
-      ) {
-        setShowFileList(false);
-      }
-    };
-    if (showFileList) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () =>
-        document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showFileList]);
-
-  const handleToggleFileList = async () => {
-    if (!showFileList) {
-      const files = await window.electron.ipcRenderer.invoke(
-        'workspace:list-files',
-        workspacePath,
-      );
-      setWorkspaceFiles(files || []);
-      lastOpenedFileCount.current = files?.length ?? 0;
-      setNewFileCount(0);
-    }
-    setShowFileList(!showFileList);
-  };
-
-  const handleOpenFile = async (fileName: string) => {
-    const filePath = `${workspacePath}/${fileName}`;
-    await window.electron.ipcRenderer.invoke(
-      'workspace:open-in-finder',
-      filePath,
-    );
-  };
 
   const handlePageChange = (page: number) => {
     dispatch(setReduxPage(page));
@@ -199,7 +147,12 @@ export default function DocumentViewer({
 
   return (
     <div className="flex flex-col h-screen bg-cream">
-      <header className="bg-white shadow-sm border-b border-sidebar-border px-4 py-3 flex items-center justify-between shrink-0">
+      {/* Header with drag region for macOS traffic lights */}
+      <header className="bg-white shadow-sm border-b border-sidebar-border pr-4 py-3 flex items-center shrink-0">
+        {/* Draggable spacer for traffic lights - only this area is draggable */}
+        <div className="w-20 flex-shrink-0 drag-region self-stretch" />
+        {/* Content area - all buttons are clickable */}
+        <div className="flex items-center justify-between flex-1">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
@@ -238,76 +191,31 @@ export default function DocumentViewer({
             visibleLayers={visibleLayers}
             onToggleLayer={handleToggleLayer}
           />
-          <div className="relative">
-            <button
-              onClick={handleToggleFileList}
-              className="p-2 hover:bg-sidebar-bg-hover rounded-lg transition-colors relative"
-              title="View workspace files"
+          <button
+            onClick={() =>
+              window.electron.ipcRenderer.invoke(
+                'workspace:open-in-finder',
+                workspacePath,
+              )
+            }
+            className="p-2 hover:bg-sidebar-bg-hover rounded-lg transition-colors"
+            title="Open in Finder"
+          >
+            <svg
+              className="w-5 h-5 text-sidebar-text"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              <svg
-                className="w-5 h-5 text-sidebar-text"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                />
-              </svg>
-              {newFileCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
-                  {newFileCount}
-                </span>
-              )}
-            </button>
-
-            {showFileList && (
-              <div
-                ref={fileListRef}
-                className="absolute right-0 top-full mt-1 w-72 bg-white rounded-lg shadow-lg border border-slate-200 z-50 max-h-96 overflow-auto"
-              >
-                <div className="px-3 py-2 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white">
-                  <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                    Files
-                  </span>
-                  <button
-                    onClick={() =>
-                      window.electron.ipcRenderer.invoke(
-                        'workspace:open-in-finder',
-                        workspacePath,
-                      )
-                    }
-                    className="text-xs text-blue-500 hover:text-blue-600"
-                  >
-                    Reveal
-                  </button>
-                </div>
-                {workspaceFiles.length === 0 ? (
-                  <div className="p-4 text-xs text-slate-400 text-center">
-                    Empty
-                  </div>
-                ) : (
-                  <div className="py-1">
-                    {workspaceFiles.map((file) => (
-                      <button
-                        key={file}
-                        onClick={() => handleOpenFile(file)}
-                        className="w-full px-3 py-1.5 text-left text-[13px] text-slate-700 hover:bg-slate-100 flex items-center gap-2 font-mono"
-                      >
-                        <span className="w-4 text-slate-400 text-[11px]">
-                          {file.split('.').pop()}
-                        </span>
-                        <span className="truncate">{file}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+              />
+            </svg>
+          </button>
+        </div>
         </div>
       </header>
 
@@ -322,6 +230,7 @@ export default function DocumentViewer({
               onPageChange={handlePageChange}
               entities={entities}
               showEntityOverlays={showEntityOverlays}
+              pageDimensions={pageDimensions}
             />
           ) : (
             <div className="flex items-center justify-center h-full bg-slate-50">
