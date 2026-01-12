@@ -260,35 +260,19 @@ export default function PDFViewer({
     Record<number, { width: number; height: number }>
   >({});
 
-  // Scale bbox from DocAI coordinates to rendered coordinates
   const scaleBbox = useCallback(
     (
       bbox: BoundingBox,
-      pageNum: number,
+      _pageNum: number,
       renderedWidth: number,
       renderedHeight: number,
-    ) => {
-      const docDims = pageDimensions[pageNum];
-      if (!docDims || !docDims.width || !docDims.height) {
-        // Fallback: assume bbox is already in percentage
-        return {
-          left: bbox.x * renderedWidth,
-          top: bbox.y * renderedHeight,
-          width: bbox.width * renderedWidth,
-          height: bbox.height * renderedHeight,
-        };
-      }
-      // Scale from DocAI page dimensions to rendered dimensions
-      const scaleX = renderedWidth / docDims.width;
-      const scaleY = renderedHeight / docDims.height;
-      return {
-        left: bbox.x * scaleX,
-        top: bbox.y * scaleY,
-        width: bbox.width * scaleX,
-        height: bbox.height * scaleY,
-      };
-    },
-    [pageDimensions],
+    ) => ({
+      left: bbox.x * renderedWidth,
+      top: bbox.y * renderedHeight,
+      width: bbox.width * renderedWidth,
+      height: bbox.height * renderedHeight,
+    }),
+    [],
   );
 
   // Handle page render complete to capture dimensions
