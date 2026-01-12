@@ -150,11 +150,12 @@ const PLUGIN_REGISTRY: PluginManifest[] = [
             title: 'Model',
             description: 'VLM model for extraction',
             enum: [
+              'qwen/qwen3-vl-235b-a22b-instruct',
               'qwen/qwen2.5-vl-72b-instruct',
               'anthropic/claude-3.5-sonnet',
               'google/gemini-pro-vision',
             ],
-            default: 'qwen/qwen2.5-vl-72b-instruct',
+            default: 'qwen/qwen3-vl-235b-a22b-instruct',
           },
         },
         required: ['apiKey'],

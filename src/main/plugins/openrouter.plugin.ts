@@ -222,7 +222,7 @@ class OpenRouterPlugin implements OcrPlugin {
 
     try {
       const imageBase64 = imageBuffer.toString('base64');
-      const model = config.modelId ?? 'qwen/qwen2.5-vl-72b-instruct';
+      const model = config.modelId ?? 'qwen/qwen3-vl-235b-a22b-instruct';
 
       const response = await fetchWithRetry(
         'https://openrouter.ai/api/v1/chat/completions',
