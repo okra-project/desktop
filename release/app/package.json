@@ -1,6 +1,6 @@
 {
   "name": "electron-react-boilerplate",
-  "version": "5.1.6",
+  "version": "5.1.7",
   "description": "A foundation for scalable desktop apps",
   "license": "MIT",
   "author": {
@@ -22,6 +22,12 @@
   },
   "optionalDependencies": {
     "@napi-rs/canvas-darwin-arm64": "^0.1.88",
-    "@napi-rs/canvas-darwin-x64": "^0.1.88"
+    "@napi-rs/canvas-darwin-x64": "^0.1.88",
+    "@napi-rs/canvas-linux-arm64-gnu": "^0.1.88",
+    "@napi-rs/canvas-linux-arm64-musl": "^0.1.88",
+    "@napi-rs/canvas-linux-x64-gnu": "^0.1.88",
+    "@napi-rs/canvas-linux-x64-musl": "^0.1.88",
+    "@napi-rs/canvas-win32-arm64-msvc": "^0.1.88",
+    "@napi-rs/canvas-win32-x64-msvc": "^0.1.88"
   }
 }
