@@ -34,7 +34,15 @@ export interface OcrProviderCapabilities {
 }
 
 export interface OcrBoundingBox {
-  type: 'text' | 'table' | 'figure' | 'heading' | 'paragraph' | 'line';
+  type:
+    | 'text'
+    | 'table'
+    | 'figure'
+    | 'heading'
+    | 'paragraph'
+    | 'line'
+    | 'footnote'
+    | 'signature';
   vertices: { x: number; y: number }[];
   text?: string;
   confidence?: number;

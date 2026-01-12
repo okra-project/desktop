@@ -3,6 +3,18 @@
  *
  * Plugins are optional providers that may have external dependencies.
  * If dependencies are missing, the plugin is simply not loaded (no build failure).
+ *
+ * ## AI-Native Plugin Philosophy
+ *
+ * Plugins should be "AI-native" - when merging functionality into the main app,
+ * consider exposing additional fields that allow injecting AI capabilities:
+ *
+ * - `skills?: SkillDefinition[]` - Inject skill definitions the agent can invoke
+ * - `mcpTools?: McpToolDefinition[]` - Expose MCP tools for agent use
+ * - `codemodeScript?: string` - Provide codemode scripts for agent execution
+ *
+ * This enables plugins to extend not just the app's functionality, but also
+ * the AI agent's capabilities, making the entire system more composable.
  */
 
 import type {

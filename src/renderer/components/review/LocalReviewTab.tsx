@@ -1,6 +1,7 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import PDFViewer from '../PDFViewer';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import PDFViewer, { type EntityOverlay } from '../PDFViewer';
 import { useReviewData } from '../../providers/ReviewDataContext';
+import { LayerMenu } from './LayerMenu';
 
 export interface LocalReviewTabProps {
   jobId: string;
@@ -11,16 +12,17 @@ export interface LocalReviewTabProps {
   onBack?: () => void;
 }
 
-export function LocalReviewTab({ 
-  documentName, 
-  pdfPath, 
-  currentPage: initialPage, 
-  onPageChange, 
-  onBack 
+export function LocalReviewTab({
+  documentName,
+  pdfPath,
+  currentPage: initialPage,
+  onPageChange,
+  onBack,
 }: LocalReviewTabProps) {
   const {
     treeData,
     treeLoading,
+    entitiesData,
     pageContent,
     contentLoading,
     currentPage,
@@ -28,10 +30,39 @@ export function LocalReviewTab({
     savePageVersion,
     isSaving,
   } = useReviewData();
-  
+
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedContent, setEditedContent] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [visibleLayers, setVisibleLayers] = useState<Set<string>>(
+    new Set(['table', 'figure', 'footnote']),
+  );
+  const [layerMenuOpen, setLayerMenuOpen] = useState(false);
+
+  const handleToggleLayer = useCallback((layer: string) => {
+    setVisibleLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(layer)) {
+        next.delete(layer);
+      } else {
+        next.add(layer);
+      }
+      return next;
+    });
+  }, []);
+
+  const entityOverlays: EntityOverlay[] = useMemo(() => {
+    if (!entitiesData?.entities) return [];
+    return entitiesData.entities
+      .filter((e) => visibleLayers.has(e.type))
+      .map((e) => ({
+        id: e.id,
+        type: e.type,
+        title: e.title,
+        bbox: e.bbox,
+        page: e.page,
+      }));
+  }, [entitiesData?.entities, visibleLayers]);
 
   const totalPages = treeData?.totalPages ?? 0;
 
@@ -45,11 +76,14 @@ export function LocalReviewTab({
     setEditedContent(pageContent?.content ?? '');
   }, [pageContent]);
 
-  const handlePreviewPage = useCallback((pageNum: number) => {
-    setCurrentPage(pageNum);
-    setIsEditMode(false);
-    onPageChange?.(pageNum);
-  }, [setCurrentPage, onPageChange]);
+  const handlePreviewPage = useCallback(
+    (pageNum: number) => {
+      setCurrentPage(pageNum);
+      setIsEditMode(false);
+      onPageChange?.(pageNum);
+    },
+    [setCurrentPage, onPageChange],
+  );
 
   const handleSaveContent = useCallback(async () => {
     await savePageVersion(editedContent);
@@ -114,18 +148,34 @@ export function LocalReviewTab({
           <div style={styles.panelHeader}>
             <h2 style={styles.panelTitle}>Page {currentPage}</h2>
             <div style={styles.panelActions}>
+              <LayerMenu
+                open={layerMenuOpen}
+                onOpenChange={setLayerMenuOpen}
+                visibleLayers={visibleLayers}
+                onToggleLayer={handleToggleLayer}
+              />
               <button
                 onClick={() => handlePreviewPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage <= 1}
-                style={{ ...styles.navButton, opacity: currentPage <= 1 ? 0.5 : 1 }}
+                style={{
+                  ...styles.navButton,
+                  opacity: currentPage <= 1 ? 0.5 : 1,
+                }}
               >
                 ←
               </button>
-              <span style={styles.pageIndicator}>{currentPage}/{totalPages}</span>
+              <span style={styles.pageIndicator}>
+                {currentPage}/{totalPages}
+              </span>
               <button
-                onClick={() => handlePreviewPage(Math.min(totalPages, currentPage + 1))}
+                onClick={() =>
+                  handlePreviewPage(Math.min(totalPages, currentPage + 1))
+                }
                 disabled={currentPage >= totalPages}
-                style={{ ...styles.navButton, opacity: currentPage >= totalPages ? 0.5 : 1 }}
+                style={{
+                  ...styles.navButton,
+                  opacity: currentPage >= totalPages ? 0.5 : 1,
+                }}
               >
                 →
               </button>
@@ -137,6 +187,8 @@ export function LocalReviewTab({
                 pdfPath={pdfPath}
                 initialPage={currentPage}
                 onPageChange={handlePreviewPage}
+                entities={entityOverlays}
+                showEntityOverlays={visibleLayers.size > 0}
               />
             ) : (
               <div style={styles.pdfPlaceholder}>
@@ -200,7 +252,9 @@ export function LocalReviewTab({
               />
             ) : (
               <div style={styles.contentPreview}>
-                <pre style={styles.preformatted}>{pageContent?.content || 'No content extracted'}</pre>
+                <pre style={styles.preformatted}>
+                  {pageContent?.content || 'No content extracted'}
+                </pre>
               </div>
             )}
           </div>
@@ -355,10 +409,19 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'flex-start',
     justifyContent: 'center',
   },
-  pdfPlaceholder: { textAlign: 'center' as const, padding: '32px', color: '#64748b' },
+  pdfPlaceholder: {
+    textAlign: 'center' as const,
+    padding: '32px',
+    color: '#64748b',
+  },
   pdfPlaceholderIcon: { fontSize: '48px', marginBottom: '16px' },
   contentContainer: { flex: 1, overflow: 'auto', padding: '12px' },
-  contentPlaceholder: { color: '#94a3b8', fontSize: '13px', textAlign: 'center' as const, padding: '24px' },
+  contentPlaceholder: {
+    color: '#94a3b8',
+    fontSize: '13px',
+    textAlign: 'center' as const,
+    padding: '24px',
+  },
   contentEditor: {
     width: '100%',
     height: '100%',

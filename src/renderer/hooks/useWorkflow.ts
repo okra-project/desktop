@@ -1,5 +1,6 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
+import { createSelector } from '@reduxjs/toolkit';
 import {
   selectActiveRun,
   selectActiveRunId,
@@ -13,15 +14,21 @@ import {
   type CreateRunOptions,
 } from '@okrapdf/workflow-runtime';
 
+const defaultProgress = { completed: 0, total: 0, percentage: 0 };
+
 export function useWorkflow() {
   const dispatch = useAppDispatch();
   const activeRunId = useAppSelector(selectActiveRunId);
   const activeRun = useAppSelector(selectActiveRun);
   const status = useAppSelector(selectActiveRunStatus);
 
-  const progress = useAppSelector((state) =>
-    activeRunId ? selectRunProgress(activeRunId)(state) : { completed: 0, total: 0, percentage: 0 }
+  const selectProgress = useMemo(
+    () => activeRunId
+      ? createSelector([(state) => state], (state) => selectRunProgress(activeRunId)(state))
+      : () => defaultProgress,
+    [activeRunId]
   );
+  const progress = useAppSelector(selectProgress);
 
   const startRun = useCallback(async (options: CreateRunOptions) => {
     const runner = getWorkflowRunner();
@@ -62,11 +69,19 @@ export function useWorkflow() {
 }
 
 export function useWorkspaceWorkflow(workspaceId: string) {
-  const latestRun = useAppSelector(selectLatestRunForWorkspace(workspaceId));
-
-  const progress = useAppSelector((state) =>
-    latestRun ? selectRunProgress(latestRun.id)(state) : { completed: 0, total: 0, percentage: 0 }
+  const selectLatestRun = useMemo(
+    () => selectLatestRunForWorkspace(workspaceId),
+    [workspaceId]
   );
+  const latestRun = useAppSelector(selectLatestRun);
+
+  const selectProgress = useMemo(
+    () => latestRun
+      ? createSelector([(state) => state], (state) => selectRunProgress(latestRun.id)(state))
+      : () => defaultProgress,
+    [latestRun?.id]
+  );
+  const progress = useAppSelector(selectProgress);
 
   return {
     latestRun,

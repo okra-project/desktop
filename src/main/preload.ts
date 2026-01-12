@@ -71,6 +71,7 @@ export type Channels =
   | 'ocr:compare'
   | 'ocr:get-results'
   | 'ocr:get-page-bboxes'
+  | 'ocr:check-extraction-status'
   | 'plugin:install'
   | 'plugin:uninstall'
   | 'plugin:state-change'

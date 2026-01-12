@@ -45,7 +45,7 @@ const store = new Store({
 // PDF Rendering Utilities
 // ============================================================================
 
-function ensureDomMatrix(): void {
+export function ensureDomMatrix(): void {
   if (typeof (global as typeof globalThis).DOMMatrix === 'undefined') {
     const { DOMMatrix, DOMPoint, DOMRect } = require('@napi-rs/canvas');
     (global as typeof globalThis).DOMMatrix = DOMMatrix;
@@ -54,7 +54,7 @@ function ensureDomMatrix(): void {
   }
 }
 
-async function renderPageToBuffer(
+export async function renderPageToBuffer(
   pdf: PDFDocumentProxy,
   pageNum: number,
   scale = 2.0,
@@ -71,11 +71,27 @@ async function renderPageToBuffer(
     viewport,
   } as Parameters<typeof page.render>[0]).promise;
 
-  // Return PNG buffer
   return canvas.toBuffer('image/png');
 }
 
-async function extractWithProvider(
+export async function renderPageFromFile(
+  pdfPath: string,
+  pageNum: number,
+): Promise<Buffer> {
+  const { pdfToPng } = await import('pdf-to-png-converter');
+  const results = await pdfToPng(pdfPath, {
+    pagesToProcess: [pageNum],
+    viewportScale: 2.0,
+    disableFontFace: true,
+    verbosityLevel: 0,
+  });
+  if (!results.length || !results[0].content) {
+    throw new Error(`Failed to render page ${pageNum}`);
+  }
+  return Buffer.from(results[0].content);
+}
+
+export async function extractWithProvider(
   providerId: OcrProviderId,
   imageBuffer: Buffer,
   pageNumber: number,
@@ -206,7 +222,11 @@ export async function setupOcrIpcHandlers(
         ensureDomMatrix();
         const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
         const data = new Uint8Array(fs.readFileSync(pdfPath));
-        const pdf: PDFDocumentProxy = await getDocument({ data }).promise;
+        const pdf: PDFDocumentProxy = await getDocument({
+          data,
+          disableFontFace: true,
+          verbosity: 0,
+        }).promise;
 
         const totalPages = pdf.numPages;
         const startPage = options?.startPage ?? 1;
@@ -398,6 +418,35 @@ export async function setupOcrIpcHandlers(
         fs.readFileSync(pagePath, 'utf-8'),
       );
       return pageResult.bboxes;
+    },
+  );
+
+  ipcMain.handle(
+    'ocr:check-extraction-status',
+    async (
+      _event,
+      workspacePath: string,
+      providerId: OcrProviderId,
+    ): Promise<{
+      completed: boolean;
+      pageCount?: number;
+      failedPages?: number[];
+    }> => {
+      const manifestPath = path.join(
+        workspacePath,
+        'ocr',
+        providerId,
+        'manifest.json',
+      );
+      if (!fs.existsSync(manifestPath)) {
+        return { completed: false };
+      }
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+      return {
+        completed: manifest.completed === true,
+        pageCount: manifest.pageCount,
+        failedPages: manifest.failedPages,
+      };
     },
   );
 }

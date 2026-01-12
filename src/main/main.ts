@@ -20,7 +20,15 @@ import {
   setupVerificationIpcHandlers,
   cleanupVerificationIpcHandlers,
 } from './verification/ipc-handlers';
-import { setupOcrIpcHandlers, cleanupOcrIpcHandlers } from './providers';
+import {
+  setupOcrIpcHandlers,
+  cleanupOcrIpcHandlers,
+  renderPageFromFile,
+  extractWithProvider,
+  ensureDomMatrix,
+  type OcrProviderConfig,
+  type OcrProgress,
+} from './providers';
 import { registerCodingAgentHandlers } from './coding-agents';
 import {
   extractTextFromPDF,
@@ -892,6 +900,161 @@ ipcMain.handle(
         }
 
         return { success: result.success, error: result.error };
+      }
+
+      if (nodeType === 'entityExtractor' || nodeType === 'openrouter') {
+        const providerId = 'openrouter';
+        const outputDir = path.join(workspacePath, 'ocr', providerId);
+        fs.mkdirSync(outputDir, { recursive: true });
+
+        const providerConfig = config as OcrProviderConfig;
+        if (!providerConfig.apiKey) {
+          return { success: false, error: 'OpenRouter API key not configured' };
+        }
+
+        const manifestPath = path.join(outputDir, 'manifest.json');
+        if (fs.existsSync(manifestPath)) {
+          const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+          if (manifest.completed && manifest.pageCount === totalPages) {
+            console.log('[entityExtractor] Already completed, skipping');
+            mainWindow?.webContents.send('ocr:progress', {
+              providerId,
+              phase: 'completed',
+              currentPage: totalPages,
+              totalPages,
+            } as OcrProgress);
+            return { success: true };
+          }
+        }
+
+        const failedPages: number[] = [];
+        const MAX_RETRIES = 2;
+        const TIMEOUT_MS = 90000;
+
+        for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+          if (abortController.signal.aborted) {
+            return { success: false, error: 'Extraction cancelled' };
+          }
+
+          const outputPath = path.join(
+            outputDir,
+            `page-${String(pageNum).padStart(3, '0')}.json`,
+          );
+
+          if (fs.existsSync(outputPath)) {
+            const existing = JSON.parse(fs.readFileSync(outputPath, 'utf-8'));
+            if (existing.bboxes && !existing.error) {
+              console.log(
+                `[entityExtractor] Page ${pageNum} already done, skipping`,
+              );
+              continue;
+            }
+          }
+
+          mainWindow?.webContents.send('workflow:node-progress', {
+            runId,
+            nodeId,
+            type: 'page_complete',
+            page: pageNum,
+            totalPages,
+          });
+
+          mainWindow?.webContents.send('ocr:progress', {
+            providerId,
+            phase: 'processing',
+            currentPage: pageNum,
+            totalPages,
+            message: `Extracting page ${pageNum}/${totalPages}`,
+          } as OcrProgress);
+
+          let pageResult = null;
+          let lastError = null;
+
+          for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+              const imageBuffer = await renderPageFromFile(pdfPath, pageNum);
+
+              const extractPromise = extractWithProvider(
+                providerId,
+                imageBuffer,
+                pageNum,
+                providerConfig,
+              );
+
+              const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(
+                  () => reject(new Error('Timeout after 90s')),
+                  TIMEOUT_MS,
+                ),
+              );
+
+              pageResult = await Promise.race([extractPromise, timeoutPromise]);
+              break;
+            } catch (err) {
+              lastError = err instanceof Error ? err.message : String(err);
+              console.error(
+                `[entityExtractor] Page ${pageNum} attempt ${attempt + 1} failed:`,
+                lastError,
+              );
+              if (attempt < MAX_RETRIES) {
+                await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+              }
+            }
+          }
+
+          if (pageResult) {
+            fs.writeFileSync(outputPath, JSON.stringify(pageResult, null, 2));
+            if (pageResult.markdown) {
+              const mdPath = path.join(
+                outputDir,
+                `page-${String(pageNum).padStart(3, '0')}.md`,
+              );
+              fs.writeFileSync(mdPath, pageResult.markdown);
+            }
+          } else {
+            failedPages.push(pageNum);
+            fs.writeFileSync(
+              outputPath,
+              JSON.stringify(
+                {
+                  pageNumber: pageNum,
+                  bboxes: [],
+                  error: lastError,
+                },
+                null,
+                2,
+              ),
+            );
+          }
+        }
+
+        const manifest = {
+          providerId,
+          completed: failedPages.length === 0,
+          pageCount: totalPages,
+          failedPages,
+          extractedAt: new Date().toISOString(),
+        };
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+        mainWindow?.webContents.send('ocr:progress', {
+          providerId,
+          phase: failedPages.length === 0 ? 'completed' : 'failed',
+          currentPage: totalPages,
+          totalPages,
+          error:
+            failedPages.length > 0
+              ? `Failed pages: ${failedPages.join(', ')}`
+              : undefined,
+        } as OcrProgress);
+
+        return {
+          success: failedPages.length === 0,
+          error:
+            failedPages.length > 0
+              ? `Failed: ${failedPages.length} pages`
+              : undefined,
+        };
       }
 
       return { success: false, error: `Unknown node type: ${nodeType}` };
@@ -1804,14 +1967,24 @@ if (isDebug) {
 const installExtensions = async () => {
   const installer = require('electron-devtools-installer');
   const forceDownload = !!process.env.UPGRADE_EXTENSIONS;
-  const extensions = ['REACT_DEVELOPER_TOOLS', 'REDUX_DEVTOOLS'];
 
-  return installer
-    .default(
-      extensions.map((name) => installer[name]),
+  try {
+    const react = await installer.default(installer.REACT_DEVELOPER_TOOLS, {
       forceDownload,
-    )
-    .catch(console.error);
+    });
+    console.error('React DevTools installed:', react.name);
+  } catch (err) {
+    console.error('React DevTools error:', err);
+  }
+
+  try {
+    const redux = await installer.default(installer.REDUX_DEVTOOLS, {
+      forceDownload,
+    });
+    console.error('Redux DevTools installed:', redux.name);
+  } catch (err) {
+    console.error('Redux DevTools error:', err);
+  }
 };
 
 const createWindow = async () => {

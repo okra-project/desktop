@@ -103,7 +103,8 @@
     "fix-path": "^5.0.0",
     "google-auth-library": "^10.5.0",
     "lucide-react": "^0.562.0",
-    "pdfjs-dist": "5.4.296",
+    "pdf-to-png-converter": "^3.11.0",
+    "pdfjs-dist": "^5.4.530",
     "posthog-js": "^1.318.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -307,6 +308,14 @@
   },
   "collective": {
     "url": "https://opencollective.com/electron-react-boilerplate-594"
+  },
+  "overrides": {
+    "react-pdf": {
+      "pdfjs-dist": "$pdfjs-dist"
+    },
+    "pdf-to-png-converter": {
+      "pdfjs-dist": "$pdfjs-dist"
+    }
   },
   "devEngines": {
     "runtime": {

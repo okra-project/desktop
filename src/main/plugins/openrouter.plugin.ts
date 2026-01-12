@@ -1,6 +1,104 @@
-import type { OcrProviderConfig, OcrPageResult } from '../providers/ocr-types';
+import type {
+  OcrProviderConfig,
+  OcrPageResult,
+  OcrBoundingBox,
+} from '../providers/ocr-types';
 import type { OcrPlugin, OcrPluginModule } from './plugin-types';
 import { getManifest } from './registry';
+
+// Prompt phrasing triggers Qwen VL to output bbox_2d coordinates
+const ENTITY_EXTRACTION_PROMPT = `Detect all tables, figures, footnotes, signatures, and callout boxes in this document page and output their bbox coordinates in JSON format.
+
+Elements to detect:
+- Tables (data tables with rows and columns)
+- Figures (pie charts, bar charts, diagrams, images)
+- Footnotes (small text at bottom with asterisks or reference numbers)
+- Signatures (handwritten signatures, sign-off blocks, signature lines)
+- Callout/info boxes (highlighted sections with statistics or key points)
+
+Return JSON with format:
+{
+  "tables": [{"title": "table name (required - use descriptive narration if no visible title)", "schema": ["col1", "col2"], "is_complete": true, "bbox_2d": [x1, y1, x2, y2]}],
+  "figures": [{"title": "figure caption (required - use descriptive narration if no visible caption)", "bbox_2d": [x1, y1, x2, y2]}],
+  "footnotes": [{"title": "footnote text (required)", "bbox_2d": [x1, y1, x2, y2]}],
+  "signatures": [{"title": "signer name or 'Signature' (required)", "bbox_2d": [x1, y1, x2, y2]}]
+}
+
+Rules:
+- bbox_2d coordinates are in 0-1000 normalized scale
+- Annotate metadata and titles in the same language as the document provided
+- schema = column headers if visible
+- is_complete = false if table continues on next page
+- Return valid JSON only`;
+
+interface EntityItem {
+  title: string | null;
+  bbox_2d?: [number, number, number, number];
+  bbox?: { x: number; y: number; width: number; height: number };
+  schema?: string[];
+  is_complete?: boolean;
+}
+
+interface ExtractedEntities {
+  tables?: EntityItem[];
+  figures?: EntityItem[];
+  footnotes?: EntityItem[];
+  signatures?: EntityItem[];
+}
+
+// Qwen returns bbox_2d in 0-1000 scale, convert to vertices in 0-1 scale
+function bboxToVertices(
+  bbox_2d: [number, number, number, number],
+): { x: number; y: number }[] {
+  const [x1, y1, x2, y2] = bbox_2d.map((v) => v / 1000);
+  return [
+    { x: x1, y: y1 },
+    { x: x2, y: y1 },
+    { x: x2, y: y2 },
+    { x: x1, y: y2 },
+  ];
+}
+
+function entitiesToBboxes(entities: ExtractedEntities): OcrBoundingBox[] {
+  const bboxes: OcrBoundingBox[] = [];
+
+  const processItems = (
+    items: EntityItem[] | undefined,
+    type: OcrBoundingBox['type'],
+  ) => {
+    if (!items) return;
+    for (const item of items) {
+      if (item.bbox_2d && item.bbox_2d.length === 4) {
+        bboxes.push({
+          type,
+          vertices: bboxToVertices(item.bbox_2d),
+          text: item.title || undefined,
+        });
+      }
+    }
+  };
+
+  processItems(entities.tables, 'table');
+  processItems(entities.figures, 'figure');
+  processItems(entities.footnotes, 'footnote');
+  processItems(entities.signatures, 'signature');
+
+  return bboxes;
+}
+
+function parseJsonResponse(content: string): ExtractedEntities | null {
+  try {
+    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || [
+      null,
+      content,
+    ];
+    const jsonStr = jsonMatch[1] || content;
+    return JSON.parse(jsonStr.trim());
+  } catch {
+    console.warn('[openrouter] Failed to parse JSON response');
+    return null;
+  }
+}
 
 class OpenRouterPlugin implements OcrPlugin {
   id = 'openrouter';
@@ -14,17 +112,6 @@ class OpenRouterPlugin implements OcrPlugin {
     const startTime = Date.now();
     const imageBase64 = imageBuffer.toString('base64');
     const model = config.modelId ?? 'qwen/qwen2.5-vl-72b-instruct';
-
-    const prompt = `Analyze this PDF page image. Extract ALL content as clean markdown.
-
-Instructions:
-1. Extract all text, preserving structure and hierarchy
-2. Convert tables to markdown table format
-3. Describe figures/charts briefly in [brackets]
-4. Preserve headings with proper markdown levels (#, ##, etc.)
-5. Keep lists as markdown lists
-
-Output clean markdown only. Do not include explanations.`;
 
     const response = await fetch(
       'https://openrouter.ai/api/v1/chat/completions',
@@ -42,7 +129,7 @@ Output clean markdown only. Do not include explanations.`;
             {
               role: 'user',
               content: [
-                { type: 'text', text: prompt },
+                { type: 'text', text: ENTITY_EXTRACTION_PROMPT },
                 {
                   type: 'image_url',
                   image_url: { url: `data:image/png;base64,${imageBase64}` },
@@ -63,12 +150,19 @@ Output clean markdown only. Do not include explanations.`;
     }
 
     const data = await response.json();
-    const markdown = data.choices?.[0]?.message?.content || '';
+    const content = data.choices?.[0]?.message?.content || '';
+
+    const entities = parseJsonResponse(content);
+    const bboxes = entities ? entitiesToBboxes(entities) : [];
+
+    console.log(
+      `[openrouter] Page ${pageNumber}: extracted ${bboxes.length} entities`,
+    );
 
     return {
       pageNumber,
-      markdown,
-      bboxes: [],
+      markdown: content,
+      bboxes,
       durationMs: Date.now() - startTime,
     };
   }

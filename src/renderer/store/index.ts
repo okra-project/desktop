@@ -1,4 +1,11 @@
 import { configureStore, combineReducers } from '@reduxjs/toolkit';
+
+declare global {
+  interface Window {
+    __REDUX_DEVTOOLS_EXTENSION__?: unknown;
+    __REDUX_DEVTOOLS_EXTENSION_COMPOSE__?: unknown;
+  }
+}
 import {
   persistStore,
   persistReducer,
@@ -10,10 +17,20 @@ import {
   REGISTER,
 } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
-import { settingsReducer, chatReducer, extractionReducer } from '@okrapdf/redux';
-import { workflowReducer, WorkflowRunner, initializeWorkflowRunner } from '@okrapdf/workflow-runtime';
+import {
+  settingsReducer,
+  chatReducer,
+  extractionReducer,
+} from '@okrapdf/redux';
+import {
+  workflowReducer,
+  WorkflowRunner,
+  initializeWorkflowRunner,
+} from '@okrapdf/workflow-runtime';
 import verificationReducer from './verification/slice';
 import reviewAgentReducer from './reviewAgentSlice';
+import viewerReducer from './viewerSlice';
+import processingEventsReducer from './processingEventsSlice';
 import { desktopApi } from './desktopApi';
 import { electronWorkflowAdapter } from './workflowAdapter';
 
@@ -24,6 +41,8 @@ const rootReducer = combineReducers({
   workflow: workflowReducer,
   verification: verificationReducer,
   reviewAgent: reviewAgentReducer,
+  viewer: viewerReducer,
+  processingEvents: processingEventsReducer,
   [desktopApi.reducerPath]: desktopApi.reducer,
 });
 
@@ -84,7 +103,16 @@ export const store = configureStore({
     })
       .concat(desktopApi.middleware)
       .concat(verificationLoggerMiddleware, ipcBridgeMiddleware),
-  devTools: process.env.NODE_ENV !== 'production',
+  devTools: {
+    name: 'OkraPDF Desktop',
+    trace: true,
+    traceLimit: 25,
+  },
+});
+
+console.log('[Redux] Store created, devTools:', {
+  extensionDetected: !!window.__REDUX_DEVTOOLS_EXTENSION__,
+  composeDetected: !!window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__,
 });
 
 export const persistor = persistStore(store);
@@ -104,7 +132,7 @@ export { electronWorkflowAdapter } from './workflowAdapter';
 const workflowRunner = new WorkflowRunner(
   electronWorkflowAdapter,
   store.dispatch,
-  store.getState as () => { workflow: ReturnType<typeof workflowReducer> }
+  store.getState as () => { workflow: ReturnType<typeof workflowReducer> },
 );
 initializeWorkflowRunner(workflowRunner);
 export { workflowRunner };
