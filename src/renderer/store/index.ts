@@ -11,14 +11,17 @@ import {
 } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
 import { settingsReducer, chatReducer, extractionReducer } from '@okrapdf/redux';
+import { workflowReducer, WorkflowRunner, initializeWorkflowRunner } from '@okrapdf/workflow-runtime';
 import verificationReducer from './verification/slice';
 import reviewAgentReducer from './reviewAgentSlice';
 import { desktopApi } from './desktopApi';
+import { electronWorkflowAdapter } from './workflowAdapter';
 
 const rootReducer = combineReducers({
   settings: settingsReducer,
   chat: chatReducer,
   extraction: extractionReducer,
+  workflow: workflowReducer,
   verification: verificationReducer,
   reviewAgent: reviewAgentReducer,
   [desktopApi.reducerPath]: desktopApi.reducer,
@@ -96,3 +99,12 @@ export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;
 
 export { electronSettingsAdapter } from './settingsAdapter';
 export { electronExtractionAdapter } from './extractionAdapter';
+export { electronWorkflowAdapter } from './workflowAdapter';
+
+const workflowRunner = new WorkflowRunner(
+  electronWorkflowAdapter,
+  store.dispatch,
+  store.getState as () => { workflow: ReturnType<typeof workflowReducer> }
+);
+initializeWorkflowRunner(workflowRunner);
+export { workflowRunner };

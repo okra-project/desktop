@@ -91,6 +91,7 @@
     "@clerk/clerk-js": "^5.117.0",
     "@electron/notarize": "^3.0.0",
     "@okrapdf/redux": "file:../okrapdf-sdk/packages/redux",
+    "@okrapdf/workflow-runtime": "file:../okrapdf-sdk/packages/workflow-runtime",
     "@reduxjs/toolkit": "^2.11.2",
     "@rrweb/types": "^2.0.0-alpha.18",
     "@sentry/electron": "^5.0.0",

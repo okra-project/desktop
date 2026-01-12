@@ -834,6 +834,131 @@ ipcMain.handle(
 );
 
 // ============================================
+// Workflow Runtime IPC Handlers
+// ============================================
+
+const workflowAbortControllers = new Map<string, AbortController>();
+
+ipcMain.handle(
+  'workflow:execute-node',
+  async (
+    _event,
+    data: {
+      runId: string;
+      nodeId: string;
+      nodeType: string;
+      workspacePath: string;
+      totalPages: number;
+      config: Record<string, unknown>;
+    },
+  ) => {
+    const { runId, nodeId, nodeType, workspacePath, totalPages, config } = data;
+
+    const abortController = new AbortController();
+    workflowAbortControllers.set(`${runId}:${nodeId}`, abortController);
+
+    const pdfPath = findPdfInWorkspace(workspacePath);
+    if (!pdfPath) {
+      return { success: false, error: 'PDF not found in workspace' };
+    }
+
+    try {
+      if (nodeType === 'textExtractor' || nodeType === 'googleDocAi') {
+        const ocrDir = path.join(workspacePath, 'ocr');
+        if (!fs.existsSync(ocrDir)) {
+          fs.mkdirSync(ocrDir, { recursive: true });
+        }
+
+        const onProgress = (progress: ExtractionProgress) => {
+          mainWindow?.webContents.send('workflow:node-progress', {
+            runId,
+            nodeId,
+            type: 'page_complete',
+            page: progress.currentPage,
+            totalPages: progress.totalPages,
+          });
+        };
+
+        const result = await extractTextFromPDF(pdfPath, ocrDir, onProgress);
+
+        if (result.success) {
+          const metadataPath = path.join(workspacePath, 'metadata.json');
+          if (fs.existsSync(metadataPath)) {
+            const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+            metadata.textExtractionComplete = true;
+            metadata.pageCount = result.totalPages;
+            fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+          }
+        }
+
+        return { success: result.success, error: result.error };
+      }
+
+      return { success: false, error: `Unknown node type: ${nodeType}` };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, error: message };
+    } finally {
+      workflowAbortControllers.delete(`${runId}:${nodeId}`);
+    }
+  },
+);
+
+ipcMain.handle(
+  'workflow:cancel-node',
+  async (_event, data: { runId: string; nodeId: string }) => {
+    const key = `${data.runId}:${data.nodeId}`;
+    const controller = workflowAbortControllers.get(key);
+    if (controller) {
+      controller.abort();
+      workflowAbortControllers.delete(key);
+    }
+    return { success: true };
+  },
+);
+
+ipcMain.handle(
+  'workflow:get-page-result',
+  async (
+    _event,
+    data: { workspacePath: string; nodeType: string; page: number },
+  ) => {
+    const { workspacePath, nodeType, page } = data;
+
+    if (nodeType === 'textExtractor' || nodeType === 'googleDocAi') {
+      const filePath = path.join(
+        workspacePath,
+        'ocr',
+        `page-${String(page).padStart(3, '0')}.md`,
+      );
+      if (fs.existsSync(filePath)) {
+        return { page, content: fs.readFileSync(filePath, 'utf-8') };
+      }
+      return null;
+    }
+
+    return null;
+  },
+);
+
+ipcMain.handle(
+  'workflow:retry-page',
+  async (
+    _event,
+    data: {
+      runId: string;
+      nodeId: string;
+      nodeType: string;
+      workspacePath: string;
+      page: number;
+      config: Record<string, unknown>;
+    },
+  ) => {
+    return { success: false, error: 'Page retry not yet implemented' };
+  },
+);
+
+// ============================================
 // Local Verification State IPC Handlers
 // ============================================
 
