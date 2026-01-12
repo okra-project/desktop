@@ -1,5 +1,15 @@
 import { spawnSync } from 'child_process';
-import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'fs';
+import {
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+} from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -15,7 +25,7 @@ export default async function beforeBuild(_context) {
   const downloadBinariesScript = join(__dirname, 'downloadRuntimeBinaries.js');
   const downloadResult = spawnSync('node', [downloadBinariesScript], {
     cwd: projectDir,
-    stdio: 'inherit'
+    stdio: 'inherit',
   });
 
   if (downloadResult.status !== 0) {
@@ -30,7 +40,11 @@ export default async function beforeBuild(_context) {
     if (existsSync(bunPath)) {
       // Remove existing symlink if present
       if (existsSync(nodePath)) {
-        try { unlinkSync(nodePath); } catch { /* ignore */ }
+        try {
+          unlinkSync(nodePath);
+        } catch {
+          /* ignore */
+        }
       }
       // Create symlink: node -> bun
       try {
@@ -45,7 +59,9 @@ export default async function beforeBuild(_context) {
   // Step 2: Copy runtime dependencies (SDK + native bindings)
   console.log('Copying runtime dependencies to release/app/node_modules...');
 
-  const pkgJson = JSON.parse(readFileSync(join(projectDir, 'release/app/package.json'), 'utf-8'));
+  const pkgJson = JSON.parse(
+    readFileSync(join(projectDir, 'release/app/package.json'), 'utf-8'),
+  );
   const runtimeDeps = new Set(Object.keys(pkgJson.dependencies ?? {}));
 
   const nodeModulesDir = join(projectDir, 'release/app/node_modules');
@@ -65,7 +81,9 @@ export default async function beforeBuild(_context) {
 
     if (!existsSync(sourceDir)) {
       if (isOptional) {
-        console.log(`- Skipping optional dependency ${depName} (not installed on this platform)`);
+        console.log(
+          `- Skipping optional dependency ${depName} (not installed on this platform)`,
+        );
         return;
       }
       return;
@@ -84,7 +102,7 @@ export default async function beforeBuild(_context) {
     cpSync(realSourceDir, targetDir, {
       recursive: true,
       dereference: true,
-      force: true
+      force: true,
     });
 
     copiedDeps.add(depName);
@@ -106,7 +124,10 @@ export default async function beforeBuild(_context) {
           copyDependency(depDepName, true);
         }
       } catch (error) {
-        console.warn(`- Warning: Failed to read package.json for ${depName}:`, error.message);
+        console.warn(
+          `- Warning: Failed to read package.json for ${depName}:`,
+          error.message,
+        );
       }
     }
   }
@@ -117,6 +138,12 @@ export default async function beforeBuild(_context) {
     '@napi-rs/canvas',
     '@napi-rs/canvas-darwin-arm64',
     '@napi-rs/canvas-darwin-x64',
+    '@napi-rs/canvas-linux-arm64-gnu',
+    '@napi-rs/canvas-linux-arm64-musl',
+    '@napi-rs/canvas-linux-x64-gnu',
+    '@napi-rs/canvas-linux-x64-musl',
+    '@napi-rs/canvas-win32-arm64-msvc',
+    '@napi-rs/canvas-win32-x64-msvc',
     'pdfjs-dist',
   ];
   for (const depName of sdkDeps) {
@@ -137,7 +164,7 @@ export default async function beforeBuild(_context) {
   if (existsSync(buildSkillsScript)) {
     const skillsResult = spawnSync('bun', [buildSkillsScript], {
       cwd: projectDir,
-      stdio: 'inherit'
+      stdio: 'inherit',
     });
 
     if (skillsResult.status !== 0) {

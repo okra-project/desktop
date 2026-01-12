@@ -14,6 +14,7 @@ import { app } from 'electron';
 import fixPath from 'fix-path';
 import fs from 'fs';
 import path from 'path';
+import Module from 'module';
 import * as Sentry from '@sentry/electron/main';
 import {
   SENTRY_DSN,
@@ -35,6 +36,23 @@ if (app.isPackaged) {
   const resourcesPath = process.resourcesPath;
   const arch = process.arch;
   const platform = process.platform;
+
+  const appAsarModules = path.join(resourcesPath, 'app.asar', 'node_modules');
+  const appAsarUnpackedModules = path.join(
+    resourcesPath,
+    'app.asar.unpacked',
+    'node_modules',
+  );
+  const existingNodePath = process.env.NODE_PATH
+    ? process.env.NODE_PATH.split(path.delimiter)
+    : [];
+  const nextNodePath = [
+    appAsarModules,
+    appAsarUnpackedModules,
+    ...existingNodePath,
+  ].filter((modulePath) => fs.existsSync(modulePath));
+  process.env.NODE_PATH = nextNodePath.join(path.delimiter);
+  Module._initPaths();
 
   let nodeFile = '';
   if (platform === 'darwin') {

@@ -89,6 +89,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.1.25",
     "@anthropic-ai/claude-code": "^2.0.76",
     "@electron/notarize": "^3.0.0",
+    "@napi-rs/canvas": "^0.1.88",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "@okrapdf/plugin-types": "^0.1.0",
     "@okrapdf/redux": "^0.1.0",
@@ -318,6 +319,11 @@
     },
     "pdf-to-png-converter": {
       "pdfjs-dist": "$pdfjs-dist"
+    }
+  },
+  "pnpm": {
+    "overrides": {
+      "pdfjs-dist": "^5.4.530"
     }
   },
   "devEngines": {
