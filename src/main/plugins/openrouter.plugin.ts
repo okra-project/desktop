@@ -31,6 +31,9 @@ Rules:
 - is_complete = false if table continues on next page
 - Return valid JSON only`;
 
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 1000;
+
 interface EntityItem {
   title: string | null;
   bbox_2d?: [number, number, number, number];
@@ -44,6 +47,125 @@ interface ExtractedEntities {
   figures?: EntityItem[];
   footnotes?: EntityItem[];
   signatures?: EntityItem[];
+}
+
+type ErrorCode =
+  | 'rate_limit'
+  | 'timeout'
+  | 'api_error'
+  | 'parse_error'
+  | 'unknown';
+
+interface ClassifiedError {
+  code: ErrorCode;
+  message: string;
+  retryable: boolean;
+  status?: number;
+}
+
+function classifyError(error: unknown, status?: number): ClassifiedError {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (status === 429) {
+    return {
+      code: 'rate_limit',
+      message: 'Rate limited by OpenRouter',
+      retryable: true,
+      status,
+    };
+  }
+  if (
+    status === 408 ||
+    message.includes('timeout') ||
+    message.includes('ETIMEDOUT')
+  ) {
+    return {
+      code: 'timeout',
+      message: 'Request timed out',
+      retryable: true,
+      status,
+    };
+  }
+  if (status && status >= 500) {
+    return {
+      code: 'api_error',
+      message: `Server error: ${status}`,
+      retryable: true,
+      status,
+    };
+  }
+  if (status && status >= 400) {
+    return {
+      code: 'api_error',
+      message: `Client error: ${status} - ${message}`,
+      retryable: false,
+      status,
+    };
+  }
+  if (message.includes('JSON') || message.includes('parse')) {
+    return {
+      code: 'parse_error',
+      message: 'Failed to parse response',
+      retryable: false,
+    };
+  }
+
+  return { code: 'unknown', message, retryable: true };
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = MAX_RETRIES,
+): Promise<Response> {
+  let lastError: ClassifiedError | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+
+      if (response.ok) {
+        return response;
+      }
+
+      const errorText = await response.text();
+      lastError = classifyError(new Error(errorText), response.status);
+
+      if (!lastError.retryable) {
+        throw new Error(`${lastError.code}: ${lastError.message}`);
+      }
+
+      const delay = BASE_DELAY_MS * Math.pow(2, attempt);
+      console.warn(
+        `[openrouter] Attempt ${attempt + 1}/${maxRetries} failed: ${lastError.message}. Retrying in ${delay}ms...`,
+      );
+      await sleep(delay);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('rate_limit:')) {
+        throw error;
+      }
+
+      lastError = classifyError(error);
+
+      if (!lastError.retryable || attempt === maxRetries - 1) {
+        throw new Error(`${lastError.code}: ${lastError.message}`);
+      }
+
+      const delay = BASE_DELAY_MS * Math.pow(2, attempt);
+      console.warn(
+        `[openrouter] Attempt ${attempt + 1}/${maxRetries} failed: ${lastError.message}. Retrying in ${delay}ms...`,
+      );
+      await sleep(delay);
+    }
+  }
+
+  throw new Error(
+    `${lastError?.code || 'unknown'}: ${lastError?.message || 'Max retries exceeded'}`,
+  );
 }
 
 function entitiesToBboxes(entities: ExtractedEntities): OcrBoundingBox[] {
@@ -97,61 +219,89 @@ class OpenRouterPlugin implements OcrPlugin {
     config: OcrProviderConfig,
   ): Promise<OcrPageResult> {
     const startTime = Date.now();
-    const imageBase64 = imageBuffer.toString('base64');
-    const model = config.modelId ?? 'qwen/qwen2.5-vl-72b-instruct';
 
-    const response = await fetch(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${config.apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://github.com/okrapdf/okrapdf-desktop',
-          'X-Title': 'OkraPDF Desktop',
+    try {
+      const imageBase64 = imageBuffer.toString('base64');
+      const model = config.modelId ?? 'qwen/qwen2.5-vl-72b-instruct';
+
+      const response = await fetchWithRetry(
+        'https://openrouter.ai/api/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://github.com/okrapdf/okrapdf-desktop',
+            'X-Title': 'OkraPDF Desktop',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: ENTITY_EXTRACTION_PROMPT },
+                  {
+                    type: 'image_url',
+                    image_url: { url: `data:image/png;base64,${imageBase64}` },
+                  },
+                ],
+              },
+            ],
+            max_tokens: 4096,
+          }),
         },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: ENTITY_EXTRACTION_PROMPT },
-                {
-                  type: 'image_url',
-                  image_url: { url: `data:image/png;base64,${imageBase64}` },
-                },
-              ],
-            },
-          ],
-          max_tokens: 4096,
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `OpenRouter API error: ${response.status} - ${errorText}`,
       );
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || '';
+
+      if (!content) {
+        return {
+          pageNumber,
+          bboxes: [],
+          error: 'Empty response from model',
+          durationMs: Date.now() - startTime,
+        };
+      }
+
+      const entities = parseJsonResponse(content);
+
+      if (!entities) {
+        return {
+          pageNumber,
+          markdown: content,
+          bboxes: [],
+          error: 'Failed to parse JSON from model response',
+          durationMs: Date.now() - startTime,
+        };
+      }
+
+      const bboxes = entitiesToBboxes(entities);
+
+      console.log(
+        `[openrouter] Page ${pageNumber}: extracted ${bboxes.length} entities`,
+      );
+
+      return {
+        pageNumber,
+        markdown: content,
+        bboxes,
+        durationMs: Date.now() - startTime,
+      };
+    } catch (error) {
+      const classified = classifyError(error);
+      console.error(
+        `[openrouter] Page ${pageNumber} failed: ${classified.message}`,
+      );
+
+      return {
+        pageNumber,
+        bboxes: [],
+        error: `${classified.code}: ${classified.message}`,
+        durationMs: Date.now() - startTime,
+      };
     }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
-
-    const entities = parseJsonResponse(content);
-    const bboxes = entities ? entitiesToBboxes(entities) : [];
-
-    console.log(
-      `[openrouter] Page ${pageNumber}: extracted ${bboxes.length} entities`,
-    );
-
-    return {
-      pageNumber,
-      markdown: content,
-      bboxes,
-      durationMs: Date.now() - startTime,
-    };
   }
 
   async checkHealth(

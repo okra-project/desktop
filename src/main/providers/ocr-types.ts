@@ -65,6 +65,7 @@ export interface OcrPageResult {
   tables?: OcrTableData[];
   confidence?: number;
   durationMs?: number;
+  error?: string;
 }
 
 export interface OcrProviderConfig {
