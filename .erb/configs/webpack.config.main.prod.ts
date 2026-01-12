@@ -63,7 +63,7 @@ const configuration: webpack.Configuration = {
     new CopyWebpackPlugin({
       patterns: [
         {
-          from: path.join(webpackPaths.rootPath, 'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'),
+          from: path.join(webpackPaths.appNodeModulesPath, 'pdfjs-dist/legacy/build/pdf.worker.mjs'),
           to: path.join(webpackPaths.distMainPath, 'pdf.worker.mjs'),
         },
       ],

@@ -117,6 +117,7 @@ export default async function beforeBuild(_context) {
     '@napi-rs/canvas',
     '@napi-rs/canvas-darwin-arm64',
     '@napi-rs/canvas-darwin-x64',
+    'pdfjs-dist',
   ];
   for (const depName of sdkDeps) {
     if (existsSync(join(nodeModulesDir, depName))) {
