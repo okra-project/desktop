@@ -81,22 +81,22 @@ export async function renderPageToBuffer(
 export async function renderPageFromFile(
   pdfPath: string,
   pageNum: number,
+  scale = 2.0,
 ): Promise<{ buffer: Buffer; width: number; height: number }> {
-  const { pdfToPng } = await import('pdf-to-png-converter');
-  const results = await pdfToPng(pdfPath, {
-    pagesToProcess: [pageNum],
-    viewportScale: 2.0,
+  ensureDomMatrix();
+  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const data = new Uint8Array(fs.readFileSync(pdfPath));
+  const pdf: PDFDocumentProxy = await getDocument({
+    data,
     disableFontFace: true,
-    verbosityLevel: 0,
-  });
-  if (!results.length || !results[0].content) {
-    throw new Error(`Failed to render page ${pageNum}`);
+    verbosity: 0,
+  }).promise;
+
+  try {
+    return await renderPageToBuffer(pdf, pageNum, scale);
+  } finally {
+    await pdf.cleanup();
   }
-  return {
-    buffer: Buffer.from(results[0].content),
-    width: results[0].width,
-    height: results[0].height,
-  };
 }
 
 export async function extractWithProvider(

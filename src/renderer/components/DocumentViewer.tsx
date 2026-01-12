@@ -43,7 +43,7 @@ export default function DocumentViewer({
   const overlayVisibility = useAppSelector(selectOverlayVisibility);
   const pageDimensions = useAppSelector(selectPageDimensions);
 
-  const [leftPanelWidth, setLeftPanelWidth] = useState(50);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(67);
   const [layerMenuOpen, setLayerMenuOpen] = useState(false);
 
   useExtractionProgress(workspacePath);
@@ -153,69 +153,69 @@ export default function DocumentViewer({
         <div className="w-20 flex-shrink-0 drag-region self-stretch" />
         {/* Content area - all buttons are clickable */}
         <div className="flex items-center justify-between flex-1">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="p-2 hover:bg-sidebar-bg-hover rounded-lg transition-colors"
-            title="Back to documents"
-          >
-            <svg
-              className="w-5 h-5 text-sidebar-text"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBack}
+              className="p-2 hover:bg-sidebar-bg-hover rounded-lg transition-colors"
+              title="Back to documents"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </button>
-          <div>
-            <h1 className="text-lg font-semibold text-ink truncate max-w-[400px]">
-              {documentName}
-            </h1>
-            <p className="text-xs text-sidebar-text">
-              Page {currentPage} • {entities.length} entities
-            </p>
+              <svg
+                className="w-5 h-5 text-sidebar-text"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+            </button>
+            <div>
+              <h1 className="text-lg font-semibold text-ink truncate max-w-[400px]">
+                {documentName}
+              </h1>
+              <p className="text-xs text-sidebar-text">
+                Page {currentPage} • {entities.length} entities
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2">
-          <StatusBubble />
-          <LayerMenu
-            open={layerMenuOpen}
-            onOpenChange={setLayerMenuOpen}
-            visibleLayers={visibleLayers}
-            onToggleLayer={handleToggleLayer}
-          />
-          <button
-            onClick={() =>
-              window.electron.ipcRenderer.invoke(
-                'workspace:open-in-finder',
-                workspacePath,
-              )
-            }
-            className="p-2 hover:bg-sidebar-bg-hover rounded-lg transition-colors"
-            title="Open in Finder"
-          >
-            <svg
-              className="w-5 h-5 text-sidebar-text"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <div className="flex items-center gap-2">
+            <StatusBubble />
+            <LayerMenu
+              open={layerMenuOpen}
+              onOpenChange={setLayerMenuOpen}
+              visibleLayers={visibleLayers}
+              onToggleLayer={handleToggleLayer}
+            />
+            <button
+              onClick={() =>
+                window.electron.ipcRenderer.invoke(
+                  'workspace:open-in-finder',
+                  workspacePath,
+                )
+              }
+              className="p-2 hover:bg-sidebar-bg-hover rounded-lg transition-colors"
+              title="Open in Finder"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-              />
-            </svg>
-          </button>
-        </div>
+              <svg
+                className="w-5 h-5 text-sidebar-text"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -256,12 +256,7 @@ export default function DocumentViewer({
           style={{ minWidth: '350px' }}
         >
           <div className="px-4 py-2 border-b border-slate-200 bg-slate-50 shrink-0">
-            <h2 className="text-sm font-medium text-slate-700">
-              Chat with your document
-            </h2>
-            <p className="text-xs text-slate-500">
-              Ask questions about the PDF content
-            </p>
+            <h2 className="text-sm font-medium text-slate-700">Okra Agent</h2>
           </div>
           <ChatInterface onOpenSettings={onOpenSettings} />
         </div>
