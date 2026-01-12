@@ -90,6 +90,7 @@
     "@anthropic-ai/claude-code": "^2.0.76",
     "@clerk/clerk-js": "^5.117.0",
     "@electron/notarize": "^3.0.0",
+    "@okrapdf/plugin-types": "file:../okrapdf-sdk/packages/plugin-types",
     "@okrapdf/redux": "file:../okrapdf-sdk/packages/redux",
     "@okrapdf/workflow-runtime": "file:../okrapdf-sdk/packages/workflow-runtime",
     "@reduxjs/toolkit": "^2.11.2",

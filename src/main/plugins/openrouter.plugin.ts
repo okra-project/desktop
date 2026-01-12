@@ -1,3 +1,4 @@
+import { bboxToVertices } from '@okrapdf/plugin-types';
 import type {
   OcrProviderConfig,
   OcrPageResult,
@@ -6,7 +7,6 @@ import type {
 import type { OcrPlugin, OcrPluginModule } from './plugin-types';
 import { getManifest } from './registry';
 
-// Prompt phrasing triggers Qwen VL to output bbox_2d coordinates
 const ENTITY_EXTRACTION_PROMPT = `Detect all tables, figures, footnotes, signatures, and callout boxes in this document page and output their bbox coordinates in JSON format.
 
 Elements to detect:
@@ -44,19 +44,6 @@ interface ExtractedEntities {
   figures?: EntityItem[];
   footnotes?: EntityItem[];
   signatures?: EntityItem[];
-}
-
-// Qwen returns bbox_2d in 0-1000 scale, convert to vertices in 0-1 scale
-function bboxToVertices(
-  bbox_2d: [number, number, number, number],
-): { x: number; y: number }[] {
-  const [x1, y1, x2, y2] = bbox_2d.map((v) => v / 1000);
-  return [
-    { x: x1, y: y1 },
-    { x: x2, y: y1 },
-    { x: x2, y: y2 },
-    { x: x1, y: y2 },
-  ];
 }
 
 function entitiesToBboxes(entities: ExtractedEntities): OcrBoundingBox[] {
