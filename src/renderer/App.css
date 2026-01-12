@@ -157,10 +157,44 @@
     background: #e5e7eb;
     border-radius: 4px;
   }
+
+  /* Custom scrollbar utilities */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .scrollbar-track-transparent::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }
 
 #root {
   height: 100vh;
+}
+
+/* Window drag region for frameless window
+ * NOTE: -webkit-app-region operates at native level, BEFORE DOM events.
+ * pointer-events:none does NOT prevent drag capture!
+ *
+ * On macOS with titleBarStyle:'hiddenInset', the traffic light area
+ * is automatically draggable. Only add .drag-region to specific
+ * empty areas that should also be draggable (like header padding).
+ *
+ * NEVER use a full-width overlay - it blocks button clicks!
+ */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+/* Elements inside drag regions that should be clickable */
+.drag-region button,
+.drag-region input,
+.drag-region a,
+.drag-region select,
+.drag-region [role="button"],
+.no-drag {
+  -webkit-app-region: no-drag;
 }
 
 /* PDF.js Text Layer - enables text selection */

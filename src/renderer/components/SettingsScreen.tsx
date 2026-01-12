@@ -14,6 +14,7 @@ import {
 } from '../hooks/useOcrProviders';
 import { useToast } from './Toast';
 import CodingAgentsSection from './CodingAgentsSection';
+import McpServerSection from './McpServerSection';
 import PluginCard from './PluginCard';
 import PluginConfigModal from './PluginConfigModal';
 
@@ -172,42 +173,47 @@ function SettingsScreen({ onClose, onSettingsSaved }: SettingsScreenProps) {
 
   return (
     <div className="h-screen bg-cream flex flex-col">
+      {/* Sticky header - with drag region for macOS traffic lights */}
       <div className="sticky top-0 z-10 bg-cream border-b border-sidebar-border">
-        <div className="max-w-6xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-bold text-ink">Plugins</h1>
-              <div className="flex items-center gap-2 text-sm text-sidebar-text">
-                <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
-                  {configuredCount} ready
-                </span>
-                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">
-                  {installedCount} installed
-                </span>
+        <div className="max-w-6xl mx-auto pr-6 py-3 flex">
+          {/* Draggable spacer for traffic lights area - only this area is draggable */}
+          <div className="w-20 flex-shrink-0 drag-region self-stretch" />
+          {/* Content area - NOT draggable */}
+          <div className="flex-1">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <h1 className="text-xl font-bold text-ink">Plugins</h1>
+                <div className="flex items-center gap-2 text-sm text-sidebar-text">
+                  <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                    {configuredCount} ready
+                  </span>
+                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">
+                    {installedCount} installed
+                  </span>
+                </div>
               </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-sidebar-hover rounded-lg transition-colors"
-              aria-label="Close settings"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-sidebar-hover rounded-lg transition-colors"
+                aria-label="Close settings"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
 
-          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 mt-3">
             <div className="relative flex-1 max-w-md">
               <svg
                 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-sidebar-text"
@@ -266,6 +272,7 @@ function SettingsScreen({ onClose, onSettingsSaved }: SettingsScreenProps) {
                 </button>
               ))}
             </div>
+            </div>
           </div>
         </div>
       </div>
@@ -280,6 +287,8 @@ function SettingsScreen({ onClose, onSettingsSaved }: SettingsScreenProps) {
           </div>
 
           <CodingAgentsSection />
+
+          <McpServerSection />
 
           {loadingProviders ? (
             <div className="flex items-center justify-center py-12">

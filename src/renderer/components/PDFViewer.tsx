@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
+import { getOverlayScaleFactors } from '@okrapdf/plugin-types';
 import { ENTITY_COLORS, type EntityColorType } from '../lib/entity-colors';
 import { DomSearchProvider, useSearch } from '../search';
 
@@ -257,22 +258,30 @@ export default function PDFViewer({
 
   // Track rendered page dimensions for overlay scaling
   const [renderedPageDimensions, setRenderedPageDimensions] = useState<
-    Record<number, { width: number; height: number }>
+    Record<number, { width: number; height: number; top: number; left: number }>
   >({});
 
   const scaleBbox = useCallback(
     (
       bbox: BoundingBox,
-      _pageNum: number,
+      pageNum: number,
       renderedWidth: number,
       renderedHeight: number,
-    ) => ({
-      left: bbox.x * renderedWidth,
-      top: bbox.y * renderedHeight,
-      width: bbox.width * renderedWidth,
-      height: bbox.height * renderedHeight,
-    }),
-    [],
+    ) => {
+      const { scaleX, scaleY, offsetX, offsetY } = getOverlayScaleFactors(
+        renderedWidth,
+        renderedHeight,
+        pageDimensions[pageNum],
+      );
+
+      return {
+        left: offsetX + bbox.x * scaleX,
+        top: offsetY + bbox.y * scaleY,
+        width: bbox.width * scaleX,
+        height: bbox.height * scaleY,
+      };
+    },
+    [pageDimensions],
   );
 
   // Handle page render complete to capture dimensions
@@ -283,9 +292,16 @@ export default function PDFViewer({
       if (pageDiv) {
         const canvas = pageDiv.querySelector('canvas');
         if (canvas) {
-          setRenderedPageDimensions((prev) => ({
-            ...prev,
-            [pageNum]: { width: canvas.width, height: canvas.height },
+          const canvasRect = canvas.getBoundingClientRect();
+          const pageRect = pageDiv.getBoundingClientRect();
+          setRenderedPageDimensions((prevDims) => ({
+            ...prevDims,
+            [pageNum]: {
+              width: canvasRect.width,
+              height: canvasRect.height,
+              top: canvasRect.top - pageRect.top,
+              left: canvasRect.left - pageRect.left,
+            },
           }));
         }
       }
@@ -558,11 +574,10 @@ export default function PDFViewer({
                     <div
                       className="absolute inset-0 pointer-events-none"
                       style={{
-                        width: pageWidth * scale,
-                        height:
-                          (renderedDims.height / renderedDims.width) *
-                          pageWidth *
-                          scale,
+                        width: renderedDims.width,
+                        height: renderedDims.height,
+                        top: renderedDims.top,
+                        left: renderedDims.left,
                       }}
                     >
                       {pageEntities.map((entity) => {
@@ -573,10 +588,8 @@ export default function PDFViewer({
                         const scaled = scaleBbox(
                           entity.bbox,
                           pageNum,
-                          pageWidth * scale,
-                          (renderedDims.height / renderedDims.width) *
-                            pageWidth *
-                            scale,
+                          renderedDims.width,
+                          renderedDims.height,
                         );
 
                         return (

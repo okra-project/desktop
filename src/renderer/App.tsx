@@ -97,9 +97,10 @@ export default function App() {
   }, [hasApiKey, handleCloseSettings]);
 
   const handleSelectDocument = useCallback(
-    (doc: { id: string; name: string; workspacePath: string }) => {
+    (doc: { id: string; name: string; workspacePath: string; page?: number }) => {
       setSelectedDocument(doc);
       setScreen('viewer');
+      // TODO: if page is specified, navigate to that page in viewer
     },
     [],
   );
@@ -166,5 +167,9 @@ export default function App() {
     return null;
   };
 
-  return <ToastProvider>{renderScreen()}</ToastProvider>;
+  return (
+    <ToastProvider>
+      {renderScreen()}
+    </ToastProvider>
+  );
 }
