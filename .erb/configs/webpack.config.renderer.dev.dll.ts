@@ -14,6 +14,22 @@ checkNodeEnv('development');
 
 const dist = webpackPaths.dllPath;
 
+// Packages to exclude from DLL (workspace packages, main-process only, or problematic)
+const dllExclusions = [
+  '@modelcontextprotocol/sdk',
+  '@okrapdf/plugin-types',
+  '@okrapdf/redux',
+  '@okrapdf/workflow-runtime',
+  'express',
+  '@types/express',
+  'fsevents',
+  'crypto-browserify',
+];
+
+const dllDependencies = Object.keys(dependencies || {}).filter(
+  (dep) => !dllExclusions.includes(dep)
+);
+
 const configuration: webpack.Configuration = {
   context: webpackPaths.rootPath,
 
@@ -23,7 +39,7 @@ const configuration: webpack.Configuration = {
 
   target: 'electron-renderer',
 
-  externals: ['fsevents', 'crypto-browserify'],
+  externals: dllExclusions,
 
   /**
    * Use `module` from `webpack.config.renderer.dev.js`
@@ -31,7 +47,7 @@ const configuration: webpack.Configuration = {
   module: require('./webpack.config.renderer.dev').default.module,
 
   entry: {
-    renderer: Object.keys(dependencies || {}),
+    renderer: dllDependencies,
   },
 
   output: {
