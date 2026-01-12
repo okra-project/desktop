@@ -10,6 +10,7 @@ import DocumentViewer from './components/DocumentViewer';
 import SettingsScreen from './components/SettingsScreen';
 import DragDropOverlay from './components/DragDropOverlay';
 import { useExtractionInit } from './hooks/useExtractionRedux';
+import { useWorkflowExtraction } from './hooks/useWorkflowExtraction';
 import { ToastProvider } from './components/Toast';
 import './App.css';
 
@@ -19,6 +20,7 @@ function ExtractionInitializer({ workspaceId, workspacePath, children }: {
   children: React.ReactNode;
 }) {
   useExtractionInit(workspaceId, workspacePath);
+  useWorkflowExtraction(workspaceId, workspacePath);
   return <>{children}</>;
 }
 

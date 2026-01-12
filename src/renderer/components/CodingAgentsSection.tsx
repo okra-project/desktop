@@ -108,7 +108,7 @@ export default function CodingAgentsSection() {
     <div className="mb-8">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-violet-100 to-purple-100 rounded-lg flex items-center justify-center text-violet-600">
+          <div className="w-10 h-10 bg-gradient-to-br from-amber-100 to-okra-yellow/30 rounded-lg flex items-center justify-center text-amber-600">
             <svg
               className="w-5 h-5"
               fill="none"
@@ -157,7 +157,7 @@ export default function CodingAgentsSection() {
       {loading ? (
         <div className="flex items-center justify-center py-12 bg-white border border-sidebar-border rounded-xl">
           <div className="flex flex-col items-center gap-3">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500" />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-okra-yellow" />
             <p className="text-sm text-sidebar-text">
               Detecting installed agents...
             </p>

@@ -11,18 +11,27 @@ import React from 'react';
 // Types
 // ============================================================================
 
-export type FilterColor = 'emerald' | 'amber' | 'red' | 'orange' | 'blue' | 'slate' | 'purple' | 'cyan';
+export type FilterColor =
+  | 'emerald'
+  | 'amber'
+  | 'red'
+  | 'orange'
+  | 'blue'
+  | 'slate'
+  | 'teal'
+  | 'cyan';
 
-const FILTER_COLORS: Record<FilterColor, { active: string; inactive: string }> = {
-  emerald: { active: '#d1fae5', inactive: 'transparent' },
-  amber: { active: '#fef3c7', inactive: 'transparent' },
-  red: { active: '#fee2e2', inactive: 'transparent' },
-  orange: { active: '#fed7aa', inactive: 'transparent' },
-  blue: { active: '#dbeafe', inactive: 'transparent' },
-  slate: { active: '#e2e8f0', inactive: 'transparent' },
-  purple: { active: '#f3e8ff', inactive: 'transparent' },
-  cyan: { active: '#cffafe', inactive: 'transparent' },
-};
+const FILTER_COLORS: Record<FilterColor, { active: string; inactive: string }> =
+  {
+    emerald: { active: '#d1fae5', inactive: 'transparent' },
+    amber: { active: '#fef3c7', inactive: 'transparent' },
+    red: { active: '#fee2e2', inactive: 'transparent' },
+    orange: { active: '#fed7aa', inactive: 'transparent' },
+    blue: { active: '#dbeafe', inactive: 'transparent' },
+    slate: { active: '#e2e8f0', inactive: 'transparent' },
+    teal: { active: '#ccfbf1', inactive: 'transparent' },
+    cyan: { active: '#cffafe', inactive: 'transparent' },
+  };
 
 const FILTER_TEXT_COLORS: Record<FilterColor, string> = {
   emerald: '#059669',
@@ -31,7 +40,7 @@ const FILTER_TEXT_COLORS: Record<FilterColor, string> = {
   orange: '#ea580c',
   blue: '#2563eb',
   slate: '#475569',
-  purple: '#9333ea',
+  teal: '#0d9488',
   cyan: '#0891b2',
 };
 
@@ -47,8 +56,16 @@ export interface FilterBadgeProps {
   onClick: () => void;
 }
 
-export function FilterBadge({ label, count, color, active, onClick }: FilterBadgeProps) {
-  const bgColor = active ? FILTER_COLORS[color].active : FILTER_COLORS[color].inactive;
+export function FilterBadge({
+  label,
+  count,
+  color,
+  active,
+  onClick,
+}: FilterBadgeProps) {
+  const bgColor = active
+    ? FILTER_COLORS[color].active
+    : FILTER_COLORS[color].inactive;
   const textColor = FILTER_TEXT_COLORS[color];
 
   return (
@@ -97,8 +114,17 @@ export interface EntityFilterBadgeProps {
   onClick: () => void;
 }
 
-export function EntityFilterBadge({ icon, count, label, color, active, onClick }: EntityFilterBadgeProps) {
-  const bgColor = active ? FILTER_COLORS[color].active : FILTER_COLORS[color].inactive;
+export function EntityFilterBadge({
+  icon,
+  count,
+  label,
+  color,
+  active,
+  onClick,
+}: EntityFilterBadgeProps) {
+  const bgColor = active
+    ? FILTER_COLORS[color].active
+    : FILTER_COLORS[color].inactive;
   const textColor = FILTER_TEXT_COLORS[color];
 
   return (
@@ -147,7 +173,13 @@ export interface FilterChipProps {
   icon?: string;
 }
 
-export function FilterChip({ label, count, active, onClick, icon }: FilterChipProps) {
+export function FilterChip({
+  label,
+  count,
+  active,
+  onClick,
+  icon,
+}: FilterChipProps) {
   return (
     <button
       onClick={onClick}
@@ -226,41 +258,68 @@ export function FilterChipsRow({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       {/* Status filters */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '4px',
+          alignItems: 'center',
+        }}
+      >
         <FilterBadge
           label="complete"
           count={summary.complete}
           color="emerald"
           active={activeStatusFilter === 'complete'}
-          onClick={() => onStatusFilterChange(activeStatusFilter === 'complete' ? null : 'complete')}
+          onClick={() =>
+            onStatusFilterChange(
+              activeStatusFilter === 'complete' ? null : 'complete',
+            )
+          }
         />
         <FilterBadge
           label="partial"
           count={summary.partial}
           color="amber"
           active={activeStatusFilter === 'partial'}
-          onClick={() => onStatusFilterChange(activeStatusFilter === 'partial' ? null : 'partial')}
+          onClick={() =>
+            onStatusFilterChange(
+              activeStatusFilter === 'partial' ? null : 'partial',
+            )
+          }
         />
         <FilterBadge
           label="flagged"
           count={summary.flagged}
           color="orange"
           active={activeStatusFilter === 'flagged'}
-          onClick={() => onStatusFilterChange(activeStatusFilter === 'flagged' ? null : 'flagged')}
+          onClick={() =>
+            onStatusFilterChange(
+              activeStatusFilter === 'flagged' ? null : 'flagged',
+            )
+          }
         />
         <FilterBadge
           label="pending"
           count={summary.pending}
           color="blue"
           active={activeStatusFilter === 'pending'}
-          onClick={() => onStatusFilterChange(activeStatusFilter === 'pending' ? null : 'pending')}
+          onClick={() =>
+            onStatusFilterChange(
+              activeStatusFilter === 'pending' ? null : 'pending',
+            )
+          }
         />
         <FilterBadge
           label="empty"
           count={summary.empty}
           color="slate"
           active={activeStatusFilter === 'empty'}
-          onClick={() => onStatusFilterChange(activeStatusFilter === 'empty' ? null : 'empty')}
+          onClick={() =>
+            onStatusFilterChange(
+              activeStatusFilter === 'empty' ? null : 'empty',
+            )
+          }
         />
         {summary.gap > 0 && (
           <FilterBadge
@@ -268,20 +327,33 @@ export function FilterChipsRow({
             count={summary.gap}
             color="red"
             active={activeStatusFilter === 'gap'}
-            onClick={() => onStatusFilterChange(activeStatusFilter === 'gap' ? null : 'gap')}
+            onClick={() =>
+              onStatusFilterChange(activeStatusFilter === 'gap' ? null : 'gap')
+            }
           />
         )}
       </div>
 
       {/* Entity filters */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '4px',
+          alignItems: 'center',
+        }}
+      >
         <EntityFilterBadge
           icon="▤"
           label="tables"
           count={entityCounts.tables}
-          color="purple"
+          color="teal"
           active={activeEntityFilter === 'table'}
-          onClick={() => onEntityFilterChange(activeEntityFilter === 'table' ? null : 'table')}
+          onClick={() =>
+            onEntityFilterChange(
+              activeEntityFilter === 'table' ? null : 'table',
+            )
+          }
         />
         <EntityFilterBadge
           icon="▣"
@@ -289,7 +361,11 @@ export function FilterChipsRow({
           count={entityCounts.figures}
           color="cyan"
           active={activeEntityFilter === 'figure'}
-          onClick={() => onEntityFilterChange(activeEntityFilter === 'figure' ? null : 'figure')}
+          onClick={() =>
+            onEntityFilterChange(
+              activeEntityFilter === 'figure' ? null : 'figure',
+            )
+          }
         />
         <EntityFilterBadge
           icon="†"
@@ -297,7 +373,11 @@ export function FilterChipsRow({
           count={entityCounts.footnotes}
           color="amber"
           active={activeEntityFilter === 'footnote'}
-          onClick={() => onEntityFilterChange(activeEntityFilter === 'footnote' ? null : 'footnote')}
+          onClick={() =>
+            onEntityFilterChange(
+              activeEntityFilter === 'footnote' ? null : 'footnote',
+            )
+          }
         />
 
         {/* Clear all */}
