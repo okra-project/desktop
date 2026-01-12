@@ -29,6 +29,9 @@ interface SelectorResult {
   type: string;
   text: string;
   bbox: { xMin: number; yMin: number; xMax: number; yMax: number };
+  workspaceId: string;
+  workspaceName: string;
+  workspacePath: string;
 }
 
 interface DocumentViewerProps {
@@ -42,6 +45,7 @@ interface DocumentViewerProps {
   selector?: string | null;
   selectorResults?: SelectorResult[] | null;
   onSelectorUsed?: () => void;
+  onResultSelect: (result: SelectorResult) => void;
 }
 
 export default function DocumentViewer({
@@ -55,6 +59,7 @@ export default function DocumentViewer({
   selector,
   selectorResults,
   onSelectorUsed,
+  onResultSelect,
 }: DocumentViewerProps) {
   const dispatch = useAppDispatch();
   const entities = useAppSelector(selectVisibleEntities);
@@ -393,8 +398,7 @@ export default function DocumentViewer({
             <QueryResultsPanel
               selector={selector}
               results={selectorResults}
-              workspaceId={documentUuid}
-              workspacePath={workspacePath}
+              onResultSelect={onResultSelect}
               onClose={() => {
                 setShowResultsPanel(false);
                 onSelectorUsed?.();

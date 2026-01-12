@@ -43,6 +43,17 @@ interface SelectedDocument {
   workspacePath: string;
 }
 
+interface SelectorResult {
+  id: string;
+  page: number;
+  type: string;
+  text: string;
+  bbox: { xMin: number; yMin: number; xMax: number; yMax: number };
+  workspaceId: string;
+  workspaceName: string;
+  workspacePath: string;
+}
+
 export default function App() {
   const dispatch = useAppDispatch();
   const hasApiKey = useAppSelector(selectIsAnthropicConfigured);
@@ -52,13 +63,9 @@ export default function App() {
   const [selectedDocument, setSelectedDocument] =
     useState<SelectedDocument | null>(null);
   const [activeSelector, setActiveSelector] = useState<string | null>(null);
-  const [activeSelectorResults, setActiveSelectorResults] = useState<Array<{
-    id: string;
-    page: number;
-    type: string;
-    text: string;
-    bbox: { xMin: number; yMin: number; xMax: number; yMax: number };
-  }> | null>(null);
+  const [activeSelectorResults, setActiveSelectorResults] = useState<
+    SelectorResult[] | null
+  >(null);
 
   const openPdfFromPath = useCallback(async (filePath: string) => {
     try {
@@ -101,26 +108,34 @@ export default function App() {
       'mcp:show-result',
       (data: unknown) => {
         const event = data as {
-          workspaceId: string;
-          workspaceName: string;
-          workspacePath: string;
+          workspaceId?: string;
+          workspaceName?: string;
+          workspacePath?: string;
           selector: string;
-          results: Array<{
-            id: string;
-            page: number;
-            type: string;
-            text: string;
-            bbox: { xMin: number; yMin: number; xMax: number; yMax: number };
-          }>;
+          results: SelectorResult[];
         };
         setActiveSelector(event.selector);
         setActiveSelectorResults(event.results);
-        setSelectedDocument({
-          id: event.workspaceId,
-          name: event.workspaceName,
-          workspacePath: event.workspacePath,
-        });
-        setScreen('viewer');
+
+        const primaryWorkspace =
+          event.workspaceId && event.workspaceName && event.workspacePath
+            ? {
+                id: event.workspaceId,
+                name: event.workspaceName,
+                workspacePath: event.workspacePath,
+              }
+            : event.results[0]
+              ? {
+                  id: event.results[0].workspaceId,
+                  name: event.results[0].workspaceName,
+                  workspacePath: event.results[0].workspacePath,
+                }
+              : null;
+
+        if (primaryWorkspace) {
+          setSelectedDocument(primaryWorkspace);
+          setScreen('viewer');
+        }
       },
     );
 
@@ -159,6 +174,21 @@ export default function App() {
 
   // Initial page to navigate to (set by MCP show_result)
   const [initialPage, setInitialPage] = useState<number | null>(null);
+
+  const handleResultSelect = useCallback((result: SelectorResult) => {
+    setSelectedDocument((current) => {
+      if (!current || current.id !== result.workspaceId) {
+        return {
+          id: result.workspaceId,
+          name: result.workspaceName,
+          workspacePath: result.workspacePath,
+        };
+      }
+      return current;
+    });
+    setInitialPage(result.page);
+    setScreen('viewer');
+  }, []);
 
   const handleBackToBrowser = useCallback(() => {
     setSelectedDocument(null);
@@ -222,6 +252,7 @@ export default function App() {
               setActiveSelector(null);
               setActiveSelectorResults(null);
             }}
+            onResultSelect={handleResultSelect}
           />
         </ExtractionInitializer>
       );

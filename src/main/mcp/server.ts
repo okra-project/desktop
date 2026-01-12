@@ -350,33 +350,76 @@ function registerToolsWithZod(
           workspaces.map(async (w) => ({
             workspaceId: w.id,
             workspaceName: w.name,
+            workspacePath: w.workspacePath,
             results: await provider.queryBySelector(w.id, effectiveSelector),
           })),
         );
         return { results };
       },
     },
+
     {
       name: 'show_result',
       execute: async (args: unknown) => {
-        const { workspaceId, selector } = args as {
-          workspaceId: string;
-          selector: string;
+        const { workspaceId, selector, results, label } = args as {
+          workspaceId?: string;
+          selector?: string;
+          results?: Array<{
+            workspaceId: string;
+            page: number;
+            type: string;
+            text: string;
+            bbox: { xMin: number; yMin: number; xMax: number; yMax: number };
+            workspaceName?: string;
+            workspacePath?: string;
+          }>;
+          label?: string;
         };
-        const workspace = provider.getWorkspace(workspaceId);
-        if (!workspace) {
-          return { error: `Workspace not found: ${workspaceId}` };
+
+        const resolvedResults = results ?? [];
+
+        if (resolvedResults.length === 0) {
+          if (!workspaceId || !selector) {
+            return { results: [] };
+          }
+          const workspace = provider.getWorkspace(workspaceId);
+          if (!workspace) {
+            return { error: `Workspace not found: ${workspaceId}` };
+          }
+          const queried = await provider.queryBySelector(workspaceId, selector);
+          const enriched = queried.map((r) => ({
+            ...r,
+            workspaceId: workspace.id,
+            workspaceName: workspace.name,
+            workspacePath: workspace.workspacePath,
+          }));
+          progressQueue.send('mcp:show-result', {
+            workspaceId,
+            workspaceName: workspace.name,
+            workspacePath: workspace.workspacePath,
+            selector,
+            results: enriched,
+            timestamp: Date.now(),
+          });
+          return { results: enriched };
         }
-        const results = await provider.queryBySelector(workspaceId, selector);
+
+        const enriched = resolvedResults.map((r) => {
+          const ws = provider.getWorkspace(r.workspaceId);
+          return {
+            ...r,
+            workspaceName: r.workspaceName ?? ws?.name ?? r.workspaceId,
+            workspacePath: r.workspacePath ?? ws?.workspacePath ?? '',
+          };
+        });
+
         progressQueue.send('mcp:show-result', {
-          workspaceId,
-          workspaceName: workspace.name,
-          workspacePath: workspace.workspacePath,
-          selector,
-          results,
+          selector: selector ?? label ?? 'custom',
+          results: enriched,
           timestamp: Date.now(),
         });
-        return { results };
+
+        return { results: enriched };
       },
     },
     {
@@ -405,8 +448,8 @@ Available tools via 'mcp' object:
 - mcp.global_search({ query }) → { results: [...] }
 - mcp.query_selector({ workspaceId, selector }) → { results: [...] }
 - mcp.find_workspaces({ query }) → { results: [{ id, name }] }
-- mcp.search_all({ query?, selector? }) → { results: [{ workspaceId, workspaceName, results: [...] }] }
-- mcp.show_result({ workspaceId, selector }) → { results: [...] }
+- mcp.search_all({ query?, selector? }) → { results: [{ workspaceId, workspaceName, workspacePath, results: [...] }] }
+- mcp.show_result({ workspaceId?, selector?, results?, label? }) → { results: [...] }
 - mcp.query({ query, display? }) → { results: [...], totalCount, executionMs }
 
 Example:
