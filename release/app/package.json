@@ -1,6 +1,6 @@
 {
   "name": "electron-react-boilerplate",
-  "version": "5.1.12",
+  "version": "5.1.13",
   "description": "A foundation for scalable desktop apps",
   "license": "MIT",
   "author": {
@@ -17,17 +17,6 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.76",
     "@anthropic-ai/claude-code": "^2.0.76",
-    "@napi-rs/canvas": "^0.1.88",
     "chokidar": "^3.6.0"
-  },
-  "optionalDependencies": {
-    "@napi-rs/canvas-darwin-arm64": "^0.1.88",
-    "@napi-rs/canvas-darwin-x64": "^0.1.88",
-    "@napi-rs/canvas-linux-arm64-gnu": "^0.1.88",
-    "@napi-rs/canvas-linux-arm64-musl": "^0.1.88",
-    "@napi-rs/canvas-linux-x64-gnu": "^0.1.88",
-    "@napi-rs/canvas-linux-x64-musl": "^0.1.88",
-    "@napi-rs/canvas-win32-arm64-msvc": "^0.1.88",
-    "@napi-rs/canvas-win32-x64-msvc": "^0.1.88"
   }
 }
