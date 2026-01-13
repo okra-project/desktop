@@ -140,13 +140,44 @@ export function PluginConfigModal({
           </div>
 
           <div className="space-y-5">
+            {/* Auth mode selector for google-docai */}
+            {provider.id === 'google-docai' && (
+              <div>
+                <label className="block text-sm font-medium text-ink mb-2">
+                  Authentication Mode
+                </label>
+                <select
+                  value={
+                    (localConfig.options?.authMode as string) ?? 'okrapdf'
+                  }
+                  onChange={(e) =>
+                    setLocalConfig((c) => ({
+                      ...c,
+                      options: { ...c.options, authMode: e.target.value },
+                    }))
+                  }
+                  className="w-full px-4 py-3 border border-sidebar-border rounded-xl focus:outline-none focus:ring-2 focus:ring-okra-yellow/50 text-sm bg-white"
+                >
+                  <option value="okrapdf">
+                    okrapdf.com (Recommended - just API key)
+                  </option>
+                  <option value="direct">
+                    Direct Google Credentials (Advanced)
+                  </option>
+                </select>
+              </div>
+            )}
+
+            {/* API Key field */}
             <div>
               <label className="block text-sm font-medium text-ink mb-2">
-                {provider.id === 'google-docai'
+                {provider.id === 'google-docai' &&
+                (localConfig.options?.authMode as string) === 'direct'
                   ? 'Service Account Key (JSON)'
                   : 'API Key'}
               </label>
-              {provider.id === 'google-docai' ? (
+              {provider.id === 'google-docai' &&
+              (localConfig.options?.authMode as string) === 'direct' ? (
                 <textarea
                   value={localConfig.apiKey ?? ''}
                   onChange={(e) =>
@@ -164,7 +195,9 @@ export function PluginConfigModal({
                     onChange={(e) =>
                       setLocalConfig((c) => ({ ...c, apiKey: e.target.value }))
                     }
-                    placeholder="sk-..."
+                    placeholder={
+                      provider.id === 'google-docai' ? 'okra_...' : 'sk-...'
+                    }
                     className="w-full px-4 py-3 pr-12 border border-sidebar-border rounded-xl focus:outline-none focus:ring-2 focus:ring-okra-yellow/50 font-mono text-sm"
                   />
                   <button
@@ -210,46 +243,65 @@ export function PluginConfigModal({
                   </button>
                 </div>
               )}
+              {provider.id === 'google-docai' &&
+                (localConfig.options?.authMode as string) !== 'direct' && (
+                  <p className="mt-2 text-xs text-sidebar-text">
+                    Get your API key at{' '}
+                    <button
+                      onClick={() =>
+                        window.electron.ipcRenderer.invoke(
+                          'shell:open-external',
+                          'https://app.okrapdf.com/settings',
+                        )
+                      }
+                      className="text-okra-yellow underline hover:opacity-80"
+                    >
+                      app.okrapdf.com/settings
+                    </button>
+                  </p>
+                )}
             </div>
 
-            {provider.id === 'google-docai' && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-ink mb-2">
-                    Project ID
-                  </label>
-                  <input
-                    type="text"
-                    value={localConfig.projectId ?? ''}
-                    onChange={(e) =>
-                      setLocalConfig((c) => ({
-                        ...c,
-                        projectId: e.target.value,
-                      }))
-                    }
-                    placeholder="my-gcp-project"
-                    className="w-full px-4 py-3 border border-sidebar-border rounded-xl focus:outline-none focus:ring-2 focus:ring-okra-yellow/50 text-sm"
-                  />
+            {/* Direct mode fields for google-docai */}
+            {provider.id === 'google-docai' &&
+              (localConfig.options?.authMode as string) === 'direct' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-ink mb-2">
+                      Project ID
+                    </label>
+                    <input
+                      type="text"
+                      value={localConfig.projectId ?? ''}
+                      onChange={(e) =>
+                        setLocalConfig((c) => ({
+                          ...c,
+                          projectId: e.target.value,
+                        }))
+                      }
+                      placeholder="my-gcp-project"
+                      className="w-full px-4 py-3 border border-sidebar-border rounded-xl focus:outline-none focus:ring-2 focus:ring-okra-yellow/50 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-ink mb-2">
+                      Processor ID
+                    </label>
+                    <input
+                      type="text"
+                      value={localConfig.processorId ?? ''}
+                      onChange={(e) =>
+                        setLocalConfig((c) => ({
+                          ...c,
+                          processorId: e.target.value,
+                        }))
+                      }
+                      placeholder="abc123..."
+                      className="w-full px-4 py-3 border border-sidebar-border rounded-xl focus:outline-none focus:ring-2 focus:ring-okra-yellow/50 text-sm"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-ink mb-2">
-                    Processor ID
-                  </label>
-                  <input
-                    type="text"
-                    value={localConfig.processorId ?? ''}
-                    onChange={(e) =>
-                      setLocalConfig((c) => ({
-                        ...c,
-                        processorId: e.target.value,
-                      }))
-                    }
-                    placeholder="abc123..."
-                    className="w-full px-4 py-3 border border-sidebar-border rounded-xl focus:outline-none focus:ring-2 focus:ring-okra-yellow/50 text-sm"
-                  />
-                </div>
-              </div>
-            )}
+              )}
 
             {provider.id === 'openrouter' && (
               <div>
