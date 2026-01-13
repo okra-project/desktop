@@ -63,7 +63,7 @@ const PLUGIN_REGISTRY: PluginRegistryEntry[] = [
   {
     id: 'google-docai',
     pluginFile: 'google-docai.plugin',
-    npmPackages: ['google-auth-library'],
+    npmPackages: [], // okrapdf mode needs no deps; direct mode will error if google-auth-library missing
   },
   {
     id: 'openrouter',
