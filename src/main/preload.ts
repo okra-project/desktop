@@ -73,6 +73,8 @@ export type Channels =
   | 'ocr:get-page-bboxes'
   | 'ocr:check-extraction-status'
   | 'ocr:get-available-layers'
+  | 'ocr:get-workspace-types'
+  | 'ocr:progress'
   | 'plugin:install'
   | 'plugin:uninstall'
   | 'plugin:set-enabled'

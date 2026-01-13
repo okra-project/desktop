@@ -10,6 +10,8 @@ export interface LayerDefinition {
     fill: string;
   };
   category?: 'entity' | 'ocr';
+  available?: boolean;
+  pluginId?: string;
 }
 
 interface LayerOptionProps {
@@ -19,9 +21,13 @@ interface LayerOptionProps {
 }
 
 function LayerOption({ layer, active, onClick }: LayerOptionProps) {
+  const isAvailable = layer.available !== false;
+  const isDisabled = !isAvailable;
+
   return (
     <button
-      onClick={onClick}
+      onClick={isDisabled ? undefined : onClick}
+      disabled={isDisabled}
       style={{
         width: '100%',
         padding: '6px 12px',
@@ -30,13 +36,16 @@ function LayerOption({ layer, active, onClick }: LayerOptionProps) {
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        color: '#334155',
+        color: isDisabled ? '#94a3b8' : '#334155',
         backgroundColor: 'transparent',
         border: 'none',
-        cursor: 'pointer',
+        cursor: isDisabled ? 'default' : 'pointer',
         transition: 'background-color 0.1s',
+        opacity: isDisabled ? 0.6 : 1,
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+      onMouseEnter={(e) => {
+        if (!isDisabled) e.currentTarget.style.backgroundColor = '#f8fafc';
+      }}
       onMouseLeave={(e) =>
         (e.currentTarget.style.backgroundColor = 'transparent')
       }
@@ -46,21 +55,29 @@ function LayerOption({ layer, active, onClick }: LayerOptionProps) {
           width: '16px',
           height: '16px',
           borderRadius: '4px',
-          border: `2px solid ${active ? layer.color.border : '#cbd5e1'}`,
-          backgroundColor: active ? layer.color.hex : 'transparent',
+          border: `2px solid ${active && isAvailable ? layer.color.border : '#cbd5e1'}`,
+          backgroundColor:
+            active && isAvailable ? layer.color.hex : 'transparent',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
         }}
       >
-        {active && (
+        {active && isAvailable && (
           <span style={{ color: '#fff', fontSize: '10px', fontWeight: 'bold' }}>
             ✓
           </span>
         )}
       </div>
       <span>{layer.displayName}</span>
+      {isDisabled && (
+        <span
+          style={{ fontSize: '10px', color: '#94a3b8', marginLeft: 'auto' }}
+        >
+          no data
+        </span>
+      )}
     </button>
   );
 }

@@ -16,7 +16,7 @@ interface ViewerState {
   scale: number;
   pdfLoaded: boolean;
   overlayVisibility: OverlayVisibility;
-  entities: EntityOverlay[];
+  entitiesByPage: Record<number, EntityOverlay[]>;
   entitiesLoading: boolean;
   entitiesError: string | null;
   selectedEntityId: string | null;
@@ -33,7 +33,7 @@ const initialState: ViewerState = {
   scale: 1.0,
   pdfLoaded: false,
   overlayVisibility: {},
-  entities: [],
+  entitiesByPage: {},
   entitiesLoading: false,
   entitiesError: null,
   selectedEntityId: null,
@@ -42,6 +42,7 @@ const initialState: ViewerState = {
 
 export const fetchPageEntities = createAsyncThunk<
   {
+    page: number;
     entities: EntityOverlay[];
     pageDimensions: Record<
       number,
@@ -107,16 +108,14 @@ export const fetchPageEntities = createAsyncThunk<
               }
             : {};
 
-          return { entities, pageDimensions };
-
-          return { entities, pageDimensions };
+          return { page, entities, pageDimensions };
         }
       } catch (err) {
         console.warn(`[viewerSlice] Failed to fetch from ${providerId}:`, err);
       }
     }
 
-    return { entities: [], pageDimensions: {} };
+    return { page, entities: [], pageDimensions: {} };
   },
 );
 
@@ -126,7 +125,7 @@ const viewerSlice = createSlice({
   reducers: {
     setWorkspacePath: (state, action: PayloadAction<string | null>) => {
       state.workspacePath = action.payload;
-      state.entities = [];
+      state.entitiesByPage = {};
       state.pageDimensions = {};
       state.currentPage = 1;
     },
@@ -163,7 +162,7 @@ const viewerSlice = createSlice({
       state.selectedEntityId = action.payload;
     },
     clearEntities: (state) => {
-      state.entities = [];
+      state.entitiesByPage = {};
       state.pageDimensions = {};
       state.entitiesError = null;
     },
@@ -177,18 +176,18 @@ const viewerSlice = createSlice({
       })
       .addCase(fetchPageEntities.fulfilled, (state, action) => {
         state.entitiesLoading = false;
-        state.entities = action.payload.entities;
-        if (Object.keys(action.payload.pageDimensions).length > 0) {
+        const { page, entities, pageDimensions } = action.payload;
+        state.entitiesByPage[page] = entities;
+        if (Object.keys(pageDimensions).length > 0) {
           state.pageDimensions = {
             ...state.pageDimensions,
-            ...action.payload.pageDimensions,
+            ...pageDimensions,
           };
         }
       })
       .addCase(fetchPageEntities.rejected, (state, action) => {
         state.entitiesLoading = false;
         state.entitiesError = action.payload ?? 'Failed to fetch entities';
-        state.entities = [];
       });
   },
 });
@@ -214,7 +213,18 @@ export const selectScale = (state: RootState) => state.viewer.scale;
 export const selectPdfLoaded = (state: RootState) => state.viewer.pdfLoaded;
 export const selectOverlayVisibility = (state: RootState) =>
   state.viewer.overlayVisibility;
-export const selectEntities = (state: RootState) => state.viewer.entities;
+export const selectEntitiesByPage = (state: RootState) =>
+  state.viewer.entitiesByPage;
+
+export const selectEntities = createSelector(
+  [selectEntitiesByPage, selectCurrentPage],
+  (entitiesByPage, currentPage) => entitiesByPage[currentPage] ?? [],
+);
+
+export const selectAllEntities = createSelector(
+  [selectEntitiesByPage],
+  (entitiesByPage) => Object.values(entitiesByPage).flat(),
+);
 export const selectEntitiesLoading = (state: RootState) =>
   state.viewer.entitiesLoading;
 export const selectEntitiesError = (state: RootState) =>

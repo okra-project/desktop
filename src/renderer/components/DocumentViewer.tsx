@@ -10,7 +10,7 @@ import { QueryResultsPanel } from './QueryResultsPanel';
 import { SENTRY_ENABLED } from '../../config/sentry';
 import { useAppDispatch, useAppSelector } from '../store';
 import { useExtractionProgress } from '../hooks/useExtractionProgress';
-import { useAvailableLayers } from '../hooks/useAvailableLayers';
+import { useWorkspaceLayers } from '../hooks/useWorkspaceLayers';
 import { useWorkflow } from '../hooks/useWorkflow';
 import type { OcrProviderConfig } from '../hooks/useOcrProviders';
 import {
@@ -102,7 +102,7 @@ export default function DocumentViewer({
   }, [selector]);
 
   useExtractionProgress(workspacePath);
-  const { layers: availableLayers } = useAvailableLayers();
+  const { layers: availableLayers } = useWorkspaceLayers(workspacePath);
 
   const visibleLayers = useMemo(() => {
     return new Set(

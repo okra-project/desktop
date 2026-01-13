@@ -558,6 +558,62 @@ export async function setupOcrIpcHandlers(
       };
     },
   );
+
+  ipcMain.handle(
+    'ocr:get-workspace-types',
+    async (
+      _event,
+      workspacePath: string,
+    ): Promise<{ types: string[]; byPlugin: Record<string, string[]> }> => {
+      const pluginsDir = path.join(workspacePath, 'plugins');
+      if (!fs.existsSync(pluginsDir)) {
+        return { types: [], byPlugin: {} };
+      }
+
+      const allTypes = new Set<string>();
+      const byPlugin: Record<string, Set<string>> = {};
+
+      const pluginDirs = fs
+        .readdirSync(pluginsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name);
+
+      for (const pluginId of pluginDirs) {
+        const pluginDir = path.join(pluginsDir, pluginId);
+        const pageFiles = fs
+          .readdirSync(pluginDir)
+          .filter((f) => f.startsWith('page-') && f.endsWith('.json'));
+
+        if (!byPlugin[pluginId]) byPlugin[pluginId] = new Set();
+
+        for (const pageFile of pageFiles) {
+          try {
+            const pagePath = path.join(pluginDir, pageFile);
+            const content = JSON.parse(fs.readFileSync(pagePath, 'utf-8'));
+            const bboxes = content.bboxes || [];
+            for (const bbox of bboxes) {
+              if (bbox.type) {
+                const namespacedType = bbox.type.includes(':')
+                  ? bbox.type
+                  : `${pluginId}:${bbox.type}`;
+                allTypes.add(namespacedType);
+                byPlugin[pluginId].add(namespacedType);
+              }
+            }
+          } catch {
+            /* empty */
+          }
+        }
+      }
+
+      return {
+        types: Array.from(allTypes).sort(),
+        byPlugin: Object.fromEntries(
+          Object.entries(byPlugin).map(([k, v]) => [k, Array.from(v).sort()]),
+        ),
+      };
+    },
+  );
 }
 
 export function cleanupOcrIpcHandlers(): void {
