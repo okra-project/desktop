@@ -6,7 +6,8 @@
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { ENTITY_COLORS } from '../lib/entity-colors';
+import { getLayerColor } from '../lib/entity-colors';
+import { useAvailableLayers } from '../hooks/useAvailableLayers';
 import type { OcrBoundingBox, OcrProviderId } from '../hooks/useOcrProviders';
 
 // ============================================================================
@@ -79,6 +80,7 @@ export const BboxOverlay = React.memo(
     comparisonMode = false,
   }: BboxOverlayProps) {
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+    const { layers: availableLayers } = useAvailableLayers();
 
     // Filter bboxes by type and confidence
     const filteredBboxes = useMemo(() => {
@@ -142,20 +144,10 @@ export const BboxOverlay = React.memo(
         if (comparisonMode && providerId && PROVIDER_COLORS[providerId]) {
           return PROVIDER_COLORS[providerId];
         }
-
-        const entityColor =
-          ENTITY_COLORS[bbox.type as keyof typeof ENTITY_COLORS];
-        if (entityColor) {
-          return { border: entityColor.border, fill: entityColor.fill };
-        }
-
-        // Default fallback
-        return {
-          border: 'rgba(100, 116, 139, 0.7)',
-          fill: 'rgba(100, 116, 139, 0.08)',
-        };
+        const c = getLayerColor(bbox.type, availableLayers);
+        return { border: c.border, fill: c.fill };
       },
-      [comparisonMode, providerId],
+      [comparisonMode, providerId, availableLayers],
     );
 
     // Handle bbox click

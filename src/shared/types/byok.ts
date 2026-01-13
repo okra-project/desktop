@@ -87,7 +87,7 @@ export interface LocalPageState {
 
 export interface LocalEntityInfo {
   id: string;
-  type: 'table' | 'figure' | 'footnote' | 'summary' | 'signature';
+  type: string;
   title?: string;
   page: number;
   bbox?: {

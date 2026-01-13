@@ -33,16 +33,44 @@ export interface OcrProviderCapabilities {
   maxPagesPerRequest: number;
 }
 
+/**
+ * Layer definition for plugin-declared entity types
+ *
+ * Plugins declare what entity layers they can extract, along with
+ * UI metadata (icon, color, label). The host app renders layers
+ * dynamically based on this - no hardcoding required.
+ *
+ * @example
+ * ```ts
+ * const tableLayer: LayerDefinition = {
+ *   id: 'table',
+ *   displayName: 'Tables',
+ *   icon: 'Table2',  // lucide icon name
+ *   color: { hex: '#3b82f6', border: 'rgba(59,130,246,0.9)', fill: 'rgba(59,130,246,0.15)' },
+ *   category: 'entity'
+ * };
+ * ```
+ */
+export interface LayerDefinition {
+  /** Unique layer ID - matches OcrBoundingBox.type */
+  id: string;
+  /** Display label for UI */
+  displayName: string;
+  /** Icon: unicode char ('▤') or lucide icon name ('Table2') */
+  icon: string;
+  /** Color scheme for overlays and UI */
+  color: {
+    hex: string;
+    border: string;
+    fill: string;
+  };
+  /** Category for UI grouping: 'entity' for semantic, 'ocr' for text blocks */
+  category?: 'entity' | 'ocr';
+}
+
 export interface OcrBoundingBox {
-  type:
-    | 'text'
-    | 'table'
-    | 'figure'
-    | 'heading'
-    | 'paragraph'
-    | 'line'
-    | 'footnote'
-    | 'signature';
+  /** Layer type - matches LayerDefinition.id from plugin manifest */
+  type: string;
   vertices: { x: number; y: number }[];
   text?: string;
   confidence?: number;
@@ -96,6 +124,8 @@ export interface OcrProviderMetadata {
   /** Provider category: 'ocr' for extraction, 'agent' for chat, 'vlm' for vision-language */
   category: OcrProviderCategory;
   capabilities: OcrProviderCapabilities;
+  /** Entity types this plugin extracts - required for bbox-producing plugins */
+  layers: LayerDefinition[];
   /** JSON Schema for provider config fields (n8n-style properties) */
   configSchema?: {
     type: 'object';

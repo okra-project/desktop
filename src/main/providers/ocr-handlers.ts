@@ -18,6 +18,7 @@ import type {
   OcrExtractionRequest,
   OcrComparisonRequest,
   OcrComparisonResult,
+  LayerDefinition,
 } from './ocr-types';
 import {
   loadPlugins,
@@ -128,6 +129,19 @@ export async function setupOcrIpcHandlers(
   ipcMain.handle('ocr:list-providers', async () => {
     const plugins = getAvailablePlugins();
     return { builtIn: [], plugins };
+  });
+
+  ipcMain.handle('ocr:get-available-layers', async () => {
+    const plugins = getAvailablePlugins();
+    const layerMap = new Map<string, LayerDefinition>();
+    for (const plugin of plugins) {
+      for (const layer of plugin.metadata.layers ?? []) {
+        if (!layerMap.has(layer.id)) {
+          layerMap.set(layer.id, layer);
+        }
+      }
+    }
+    return Array.from(layerMap.values());
   });
 
   ipcMain.handle(

@@ -21,16 +21,6 @@ const OKRAPDF_DIR = path.join(app.getPath('home'), '.okrapdf');
 const WORKSPACES_DIR = path.join(OKRAPDF_DIR, 'workspaces');
 const INDEX_FILE = path.join(OKRAPDF_DIR, 'search-index.json');
 
-const ENTITY_TYPES: EntityType[] = [
-  'table',
-  'figure',
-  'footnote',
-  'signature',
-  'callout',
-  'text',
-  'unknown',
-];
-
 function debounce<T extends (...args: string[]) => void>(
   fn: T,
   ms: number,
@@ -433,14 +423,11 @@ class IndexService implements IService {
   }
 
   getStats(): IndexStats {
-    const byType: Record<EntityType, number> = {} as Record<EntityType, number>;
-    for (const type of ENTITY_TYPES) {
-      byType[type] = 0;
-    }
+    const byType: Record<EntityType, number> = {};
 
     for (const stats of this.documentStats.values()) {
       for (const [type, count] of Object.entries(stats.byType)) {
-        byType[type as EntityType] += count || 0;
+        byType[type] = (byType[type] || 0) + (count || 0);
       }
     }
 

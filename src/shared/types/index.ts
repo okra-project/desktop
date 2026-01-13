@@ -1,11 +1,4 @@
-export type EntityType =
-  | 'table'
-  | 'figure'
-  | 'footnote'
-  | 'signature'
-  | 'callout'
-  | 'text'
-  | 'unknown';
+export type EntityType = string;
 
 export interface NormalizedBbox {
   xMin: number;

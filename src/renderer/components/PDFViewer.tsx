@@ -9,7 +9,8 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import { getOverlayScaleFactors } from '@okrapdf/plugin-types';
-import { ENTITY_COLORS, type EntityColorType } from '../lib/entity-colors';
+import { buildOverlayColors } from '../lib/entity-colors';
+import { useAvailableLayers } from '../hooks/useAvailableLayers';
 import { DomSearchProvider, useSearch } from '../search';
 import { QueryResultsOverlay } from './QueryResultsOverlay';
 
@@ -32,7 +33,7 @@ export interface BoundingBox {
 
 export interface EntityOverlay {
   id: string;
-  type: 'table' | 'figure' | 'footnote' | 'summary' | 'paragraph' | 'signature';
+  type: string;
   title: string | null;
   bbox?: BoundingBox;
   page: number;
@@ -56,46 +57,6 @@ interface PDFViewerProps {
   /** DocAI dimensions per page for bbox scaling */
   pageDimensions?: Record<number, PageDimension>;
 }
-
-// ============================================================================
-// Overlay Colors Configuration
-// ============================================================================
-
-const OVERLAY_COLORS: Record<
-  string,
-  { border: string; fill: string; label: string }
-> = {
-  table: {
-    border: ENTITY_COLORS.table.border,
-    fill: ENTITY_COLORS.table.fill,
-    label: ENTITY_COLORS.table.hex,
-  },
-  figure: {
-    border: ENTITY_COLORS.figure.border,
-    fill: ENTITY_COLORS.figure.fill,
-    label: ENTITY_COLORS.figure.hex,
-  },
-  footnote: {
-    border: ENTITY_COLORS.footnote.border,
-    fill: ENTITY_COLORS.footnote.fill,
-    label: ENTITY_COLORS.footnote.hex,
-  },
-  summary: {
-    border: ENTITY_COLORS.summary.border,
-    fill: ENTITY_COLORS.summary.fill,
-    label: ENTITY_COLORS.summary.hex,
-  },
-  paragraph: {
-    border: ENTITY_COLORS.paragraph.border,
-    fill: ENTITY_COLORS.paragraph.fill,
-    label: ENTITY_COLORS.paragraph.hex,
-  },
-  signature: {
-    border: ENTITY_COLORS.signature.border,
-    fill: ENTITY_COLORS.signature.fill,
-    label: ENTITY_COLORS.signature.hex,
-  },
-};
 
 // ============================================================================
 // Main Component
@@ -126,6 +87,12 @@ export default function PDFViewer({
 
   const { total, currentIndex, isSearching, search, next, prev, clear } =
     useSearch(searchProvider);
+
+  const { layers: availableLayers } = useAvailableLayers();
+  const OVERLAY_COLORS = useMemo(
+    () => buildOverlayColors(availableLayers),
+    [availableLayers],
+  );
 
   // Convert local path to file:// URL or use as-is if already URL
   useEffect(() => {
@@ -620,6 +587,7 @@ export default function PDFViewer({
                   renderedDims={renderedDims}
                   scaleBbox={scaleBbox}
                   onEntityClick={handleOverlayClick}
+                  overlayColors={OVERLAY_COLORS}
                 />
 
                 {renderedDims && (
@@ -654,6 +622,10 @@ interface PageEntityOverlaysProps {
     height: number,
   ) => { left: number; top: number; width: number; height: number };
   onEntityClick: (entity: EntityOverlay, event: React.MouseEvent) => void;
+  overlayColors: Record<
+    string,
+    { border: string; fill: string; label: string }
+  >;
 }
 
 const PageEntityOverlays = React.memo(
@@ -663,6 +635,7 @@ const PageEntityOverlays = React.memo(
     renderedDims,
     scaleBbox,
     onEntityClick,
+    overlayColors,
   }: PageEntityOverlaysProps) {
     if (!entities.length || !renderedDims) return null;
 
@@ -678,8 +651,7 @@ const PageEntityOverlays = React.memo(
       >
         {entities.map((entity) => {
           if (!entity.bbox) return null;
-          const colors =
-            OVERLAY_COLORS[entity.type] || OVERLAY_COLORS.paragraph;
+          const colors = overlayColors[entity.type] || overlayColors._default;
           const scaled = scaleBbox(
             entity.bbox,
             pageNum,

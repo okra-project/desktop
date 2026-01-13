@@ -1,52 +1,24 @@
-/**
- * Layer Menu Component for Review Tab
- *
- * Dropdown menu for toggling entity overlay visibility.
- * Adapted from okrapdf/components/review/LayerMenu.tsx for desktop.
- */
-
 import React from 'react';
 
-// ============================================================================
-// Entity Colors (matching web)
-// ============================================================================
-
-const ENTITY_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-  table: { bg: '#9333ea', border: '#9333ea', text: '#9333ea' },
-  figure: { bg: '#0891b2', border: '#0891b2', text: '#0891b2' },
-  footnote: { bg: '#d97706', border: '#d97706', text: '#d97706' },
-  ocr: { bg: '#64748b', border: '#64748b', text: '#64748b' },
-};
-
-const LAYER_ICONS: Record<string, string> = {
-  table: '▤',
-  figure: '▣',
-  footnote: '†',
-  ocr: '▭',
-};
-
-const LAYER_LABELS: Record<string, string> = {
-  table: 'Tables',
-  figure: 'Figures',
-  footnote: 'Footnotes',
-  ocr: 'OCR blocks',
-};
-
-// ============================================================================
-// Layer Option Component
-// ============================================================================
+export interface LayerDefinition {
+  id: string;
+  displayName: string;
+  icon: string;
+  color: {
+    hex: string;
+    border: string;
+    fill: string;
+  };
+  category?: 'entity' | 'ocr';
+}
 
 interface LayerOptionProps {
-  layer: string;
+  layer: LayerDefinition;
   active: boolean;
   onClick: () => void;
 }
 
 function LayerOption({ layer, active, onClick }: LayerOptionProps) {
-  const color = ENTITY_COLORS[layer] ?? ENTITY_COLORS.ocr;
-  const icon = LAYER_ICONS[layer] ?? '▪';
-  const label = LAYER_LABELS[layer] ?? layer;
-
   return (
     <button
       onClick={onClick}
@@ -65,16 +37,17 @@ function LayerOption({ layer, active, onClick }: LayerOptionProps) {
         transition: 'background-color 0.1s',
       }}
       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
-      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+      onMouseLeave={(e) =>
+        (e.currentTarget.style.backgroundColor = 'transparent')
+      }
     >
-      {/* Checkbox */}
       <div
         style={{
           width: '16px',
           height: '16px',
           borderRadius: '4px',
-          border: `2px solid ${active ? color.border : '#cbd5e1'}`,
-          backgroundColor: active ? color.bg : 'transparent',
+          border: `2px solid ${active ? layer.color.border : '#cbd5e1'}`,
+          backgroundColor: active ? layer.color.hex : 'transparent',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -82,26 +55,25 @@ function LayerOption({ layer, active, onClick }: LayerOptionProps) {
         }}
       >
         {active && (
-          <span style={{ color: '#fff', fontSize: '10px', fontWeight: 'bold' }}>✓</span>
+          <span style={{ color: '#fff', fontSize: '10px', fontWeight: 'bold' }}>
+            ✓
+          </span>
         )}
       </div>
-      {/* Icon */}
-      <span style={{ color: color.text, fontSize: '14px' }}>{icon}</span>
-      {/* Label */}
-      <span>{label}</span>
+      <span style={{ color: layer.color.hex, fontSize: '14px' }}>
+        {layer.icon}
+      </span>
+      <span>{layer.displayName}</span>
     </button>
   );
 }
-
-// ============================================================================
-// Layer Menu Component
-// ============================================================================
 
 export interface LayerMenuProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   visibleLayers: Set<string>;
   onToggleLayer: (layer: string) => void;
+  layers: LayerDefinition[];
 }
 
 export function LayerMenu({
@@ -109,12 +81,17 @@ export function LayerMenu({
   onOpenChange,
   visibleLayers,
   onToggleLayer,
+  layers,
 }: LayerMenuProps) {
   const activeCount = visibleLayers.size;
 
+  const entityLayers = layers.filter(
+    (l) => l.category === 'entity' || !l.category,
+  );
+  const ocrLayers = layers.filter((l) => l.category === 'ocr');
+
   return (
     <div style={{ position: 'relative' }}>
-      {/* Trigger button */}
       <button
         onClick={() => onOpenChange(!open)}
         style={{
@@ -131,14 +108,14 @@ export function LayerMenu({
           color: '#475569',
           transition: 'all 0.15s',
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.backgroundColor = '#f8fafc')
+        }
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fff')}
         title="Toggle overlay layers"
       >
-        {/* Layers icon */}
         <span style={{ fontSize: '14px' }}>⧉</span>
         <span>Layers</span>
-        {/* Count badge */}
         <span
           style={{
             fontSize: '10px',
@@ -151,23 +128,15 @@ export function LayerMenu({
         >
           {activeCount}
         </span>
-        {/* Chevron */}
         <span style={{ fontSize: '10px', color: '#94a3b8' }}>▼</span>
       </button>
 
-      {/* Dropdown */}
       {open && (
         <>
-          {/* Backdrop */}
           <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 9998,
-            }}
+            style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
             onClick={() => onOpenChange(false)}
           />
-          {/* Menu */}
           <div
             style={{
               position: 'absolute',
@@ -177,34 +146,38 @@ export function LayerMenu({
               backgroundColor: '#fff',
               border: '1px solid #e2e8f0',
               borderRadius: '8px',
-              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
+              boxShadow:
+                '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
               padding: '4px 0',
               zIndex: 9999,
               minWidth: '150px',
             }}
           >
-            <LayerOption
-              layer="table"
-              active={visibleLayers.has('table')}
-              onClick={() => onToggleLayer('table')}
-            />
-            <LayerOption
-              layer="figure"
-              active={visibleLayers.has('figure')}
-              onClick={() => onToggleLayer('figure')}
-            />
-            <LayerOption
-              layer="footnote"
-              active={visibleLayers.has('footnote')}
-              onClick={() => onToggleLayer('footnote')}
-            />
-            {/* Separator */}
-            <div style={{ height: '1px', backgroundColor: '#f1f5f9', margin: '4px 0' }} />
-            <LayerOption
-              layer="ocr"
-              active={visibleLayers.has('ocr')}
-              onClick={() => onToggleLayer('ocr')}
-            />
+            {entityLayers.map((layer) => (
+              <LayerOption
+                key={layer.id}
+                layer={layer}
+                active={visibleLayers.has(layer.id)}
+                onClick={() => onToggleLayer(layer.id)}
+              />
+            ))}
+            {ocrLayers.length > 0 && entityLayers.length > 0 && (
+              <div
+                style={{
+                  height: '1px',
+                  backgroundColor: '#f1f5f9',
+                  margin: '4px 0',
+                }}
+              />
+            )}
+            {ocrLayers.map((layer) => (
+              <LayerOption
+                key={layer.id}
+                layer={layer}
+                active={visibleLayers.has(layer.id)}
+                onClick={() => onToggleLayer(layer.id)}
+              />
+            ))}
           </div>
         </>
       )}

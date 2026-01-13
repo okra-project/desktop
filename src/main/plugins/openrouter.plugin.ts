@@ -3,50 +3,111 @@ import type {
   OcrProviderConfig,
   OcrPageResult,
   OcrBoundingBox,
+  LayerDefinition,
+  OcrProviderMetadata,
 } from '../providers/ocr-types';
 import type { OcrPlugin, OcrPluginModule } from './plugin-types';
-import { getManifest } from './registry';
-
-const ENTITY_EXTRACTION_PROMPT = `Detect all tables, figures, footnotes, signatures, and callout boxes in this document page and output their bbox coordinates in JSON format.
-
-Elements to detect:
-- Tables (data tables with rows and columns)
-- Figures (pie charts, bar charts, diagrams, images)
-- Footnotes (small text at bottom with asterisks or reference numbers)
-- Signatures (handwritten signatures, sign-off blocks, signature lines)
-- Callout/info boxes (highlighted sections with statistics or key points)
-
-Return JSON with format:
-{
-  "tables": [{"title": "table name (required - use descriptive narration if no visible title)", "schema": ["col1", "col2"], "is_complete": true, "bbox_2d": [x1, y1, x2, y2]}],
-  "figures": [{"title": "figure caption (required - use descriptive narration if no visible caption)", "bbox_2d": [x1, y1, x2, y2]}],
-  "footnotes": [{"title": "footnote text (required)", "bbox_2d": [x1, y1, x2, y2]}],
-  "signatures": [{"title": "signer name or 'Signature' (required)", "bbox_2d": [x1, y1, x2, y2]}]
-}
-
-Rules:
-- bbox_2d coordinates are in 0-1000 normalized scale
-- Annotate metadata and titles in the same language as the document provided
-- schema = column headers if visible
-- is_complete = false if table continues on next page
-- Return valid JSON only`;
 
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1000;
 
+const METADATA: OcrProviderMetadata = {
+  id: 'openrouter',
+  name: 'OpenRouter VLM',
+  description: 'Vision LLMs via OpenRouter (Qwen, Claude, Gemini)',
+  runtime: 'api',
+  category: 'vlm',
+  capabilities: {
+    supportsText: false,
+    supportsTables: true,
+    supportsBboxes: true,
+    supportsFigures: true,
+    supportsHandwriting: false,
+    supportsMultiLanguage: true,
+    outputFormats: ['markdown'],
+    maxPagesPerRequest: 1,
+  },
+  layers: [
+    {
+      id: 'table',
+      displayName: 'Tables',
+      icon: '▤',
+      color: {
+        hex: '#3b82f6',
+        border: 'rgba(59,130,246,0.9)',
+        fill: 'rgba(59,130,246,0.15)',
+      },
+      category: 'entity',
+    },
+    {
+      id: 'figure',
+      displayName: 'Figures',
+      icon: '□',
+      color: {
+        hex: '#22c55e',
+        border: 'rgba(34,197,94,0.9)',
+        fill: 'rgba(34,197,94,0.15)',
+      },
+      category: 'entity',
+    },
+    {
+      id: 'footnote',
+      displayName: 'Footnotes',
+      icon: '†',
+      color: {
+        hex: '#6b7280',
+        border: 'rgba(107,114,128,0.9)',
+        fill: 'rgba(107,114,128,0.15)',
+      },
+      category: 'entity',
+    },
+    {
+      id: 'signature',
+      displayName: 'Signatures',
+      icon: '✎',
+      color: {
+        hex: '#d97706',
+        border: 'rgba(217,119,6,0.9)',
+        fill: 'rgba(217,119,6,0.15)',
+      },
+      category: 'entity',
+    },
+  ],
+  authenticate: { type: 'bearer' },
+  documentationUrl: 'https://openrouter.ai/docs',
+  costPerPage: 0.005,
+  isCloud: true,
+  configSchema: {
+    type: 'object',
+    properties: {
+      apiKey: {
+        type: 'string',
+        title: 'OpenRouter API Key',
+        description: 'Get from openrouter.ai/keys',
+        format: 'password',
+      },
+      modelId: {
+        type: 'string',
+        title: 'Model',
+        description: 'VLM model for extraction',
+        enum: [
+          'qwen/qwen3-vl-235b-a22b-instruct',
+          'qwen/qwen2.5-vl-72b-instruct',
+          'anthropic/claude-3.5-sonnet',
+          'google/gemini-pro-vision',
+        ],
+        default: 'qwen/qwen3-vl-235b-a22b-instruct',
+      },
+    },
+    required: ['apiKey'],
+  },
+};
+
 interface EntityItem {
   title: string | null;
   bbox_2d?: [number, number, number, number];
-  bbox?: { x: number; y: number; width: number; height: number };
   schema?: string[];
   is_complete?: boolean;
-}
-
-interface ExtractedEntities {
-  tables?: EntityItem[];
-  figures?: EntityItem[];
-  footnotes?: EntityItem[];
-  signatures?: EntityItem[];
 }
 
 type ErrorCode =
@@ -109,7 +170,6 @@ function classifyError(error: unknown, status?: number): ClassifiedError {
       retryable: false,
     };
   }
-
   return { code: 'unknown', message, retryable: true };
 }
 
@@ -127,10 +187,7 @@ async function fetchWithRetry(
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const response = await fetch(url, options);
-
-      if (response.ok) {
-        return response;
-      }
+      if (response.ok) return response;
 
       const errorText = await response.text();
       lastError = classifyError(new Error(errorText), response.status);
@@ -145,12 +202,10 @@ async function fetchWithRetry(
       );
       await sleep(delay);
     } catch (error) {
-      if (error instanceof Error && error.message.startsWith('rate_limit:')) {
+      if (error instanceof Error && error.message.startsWith('rate_limit:'))
         throw error;
-      }
 
       lastError = classifyError(error);
-
       if (!lastError.retryable || attempt === maxRetries - 1) {
         throw new Error(`${lastError.code}: ${lastError.message}`);
       }
@@ -168,34 +223,38 @@ async function fetchWithRetry(
   );
 }
 
-function entitiesToBboxes(entities: ExtractedEntities): OcrBoundingBox[] {
-  const bboxes: OcrBoundingBox[] = [];
-
-  const processItems = (
-    items: EntityItem[] | undefined,
-    type: OcrBoundingBox['type'],
-  ) => {
-    if (!items) return;
-    for (const item of items) {
-      if (item.bbox_2d && item.bbox_2d.length === 4) {
-        bboxes.push({
-          type,
-          vertices: bboxToVertices(item.bbox_2d),
-          text: item.title || undefined,
-        });
+function buildPromptFromLayers(layers: LayerDefinition[]): string {
+  const entityList = layers
+    .map((l) => `- ${l.displayName} (${l.id})`)
+    .join('\n');
+  const jsonFields = layers
+    .map((l) => {
+      if (l.id === 'table') {
+        return `  "${l.id}s": [{"title": "...", "schema": ["col1", "col2"], "is_complete": true, "bbox_2d": [x1, y1, x2, y2]}]`;
       }
-    }
-  };
+      return `  "${l.id}s": [{"title": "...", "bbox_2d": [x1, y1, x2, y2]}]`;
+    })
+    .join(',\n');
 
-  processItems(entities.tables, 'table');
-  processItems(entities.figures, 'figure');
-  processItems(entities.footnotes, 'footnote');
-  processItems(entities.signatures, 'signature');
+  return `Detect all ${layers.map((l) => l.id + 's').join(', ')} in this document page and output their bbox coordinates in JSON format.
 
-  return bboxes;
+Elements to detect:
+${entityList}
+
+Return JSON with format:
+{
+${jsonFields}
 }
 
-function parseJsonResponse(content: string): ExtractedEntities | null {
+Rules:
+- bbox_2d coordinates are in 0-1000 normalized scale
+- title is required - use descriptive narration if no visible title
+- Return valid JSON only`;
+}
+
+function parseJsonResponse(
+  content: string,
+): Record<string, EntityItem[]> | null {
   try {
     const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || [
       null,
@@ -209,9 +268,34 @@ function parseJsonResponse(content: string): ExtractedEntities | null {
   }
 }
 
+function entitiesToBboxes(
+  entities: Record<string, EntityItem[]>,
+  layers: LayerDefinition[],
+): OcrBoundingBox[] {
+  const bboxes: OcrBoundingBox[] = [];
+
+  for (const layer of layers) {
+    const key = `${layer.id}s`;
+    const items = entities[key];
+    if (!items) continue;
+
+    for (const item of items) {
+      if (item.bbox_2d && item.bbox_2d.length === 4) {
+        bboxes.push({
+          type: layer.id,
+          vertices: bboxToVertices(item.bbox_2d),
+          text: item.title || undefined,
+        });
+      }
+    }
+  }
+
+  return bboxes;
+}
+
 class OpenRouterPlugin implements OcrPlugin {
   id = 'openrouter';
-  metadata = getManifest('openrouter')!.metadata;
+  metadata = METADATA;
 
   async extract(
     imageBuffer: Buffer,
@@ -219,10 +303,12 @@ class OpenRouterPlugin implements OcrPlugin {
     config: OcrProviderConfig,
   ): Promise<OcrPageResult> {
     const startTime = Date.now();
+    const layers = this.metadata.layers ?? [];
 
     try {
       const imageBase64 = imageBuffer.toString('base64');
       const model = config.modelId ?? 'qwen/qwen3-vl-235b-a22b-instruct';
+      const prompt = buildPromptFromLayers(layers);
 
       const response = await fetchWithRetry(
         'https://openrouter.ai/api/v1/chat/completions',
@@ -240,7 +326,7 @@ class OpenRouterPlugin implements OcrPlugin {
               {
                 role: 'user',
                 content: [
-                  { type: 'text', text: ENTITY_EXTRACTION_PROMPT },
+                  { type: 'text', text: prompt },
                   {
                     type: 'image_url',
                     image_url: { url: `data:image/png;base64,${imageBase64}` },
@@ -266,7 +352,6 @@ class OpenRouterPlugin implements OcrPlugin {
       }
 
       const entities = parseJsonResponse(content);
-
       if (!entities) {
         return {
           pageNumber,
@@ -277,8 +362,7 @@ class OpenRouterPlugin implements OcrPlugin {
         };
       }
 
-      const bboxes = entitiesToBboxes(entities);
-
+      const bboxes = entitiesToBboxes(entities, layers);
       console.log(
         `[openrouter] Page ${pageNumber}: extracted ${bboxes.length} entities`,
       );
@@ -294,7 +378,6 @@ class OpenRouterPlugin implements OcrPlugin {
       console.error(
         `[openrouter] Page ${pageNumber} failed: ${classified.message}`,
       );
-
       return {
         pageNumber,
         bboxes: [],
@@ -338,9 +421,5 @@ export function createPlugin(): OcrPlugin {
   return new OpenRouterPlugin();
 }
 
-const pluginModule: OcrPluginModule = {
-  checkDependencies,
-  createPlugin,
-};
-
+const pluginModule: OcrPluginModule = { checkDependencies, createPlugin };
 export default pluginModule;

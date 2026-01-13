@@ -1,7 +1,7 @@
 import type {
   OcrProviderConfig,
-  OcrProviderMetadata,
   OcrPageResult,
+  OcrProviderMetadata,
 } from '../providers/ocr-types';
 import type { OcrPlugin, OcrPluginModule } from './plugin-types';
 
@@ -20,33 +20,32 @@ function getGoogleAuth() {
 const METADATA: OcrProviderMetadata = {
   id: 'google-docai',
   name: 'Google Document AI',
-  description: 'Google Cloud Document AI with bounding box extraction',
+  description: 'OCR with bounding boxes via Google Cloud Document AI',
   runtime: 'api',
   category: 'ocr',
   capabilities: {
     supportsText: true,
-    supportsTables: true,
+    supportsTables: false,
     supportsBboxes: true,
-    supportsFigures: true,
+    supportsFigures: false,
     supportsHandwriting: true,
     supportsMultiLanguage: true,
     outputFormats: ['json', 'markdown'],
     maxPagesPerRequest: 15,
   },
-  authenticate: {
-    type: 'service-account',
-  },
+  layers: [],
+  authenticate: { type: 'service-account' },
   documentationUrl: 'https://cloud.google.com/document-ai',
   costPerPage: 0.01,
   isCloud: true,
   configSchema: {
-    type: 'object' as const,
+    type: 'object',
     properties: {
       apiKey: {
         type: 'string',
         title: 'Service Account Key (JSON)',
         description: 'Paste the full JSON key file contents',
-        format: 'file' as const,
+        format: 'file',
       },
       projectId: {
         type: 'string',
@@ -64,7 +63,7 @@ const METADATA: OcrProviderMetadata = {
 };
 
 class GoogleDocAIPlugin implements OcrPlugin {
-  id = METADATA.id;
+  id = 'google-docai';
   metadata = METADATA;
 
   async extract(

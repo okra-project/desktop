@@ -116,20 +116,9 @@ class McpService implements IService {
       },
 
       queryBySelector: async (id: string, selector: string) => {
-        const types: Array<
-          'table' | 'figure' | 'footnote' | 'signature' | 'callout' | 'text'
-        > = [];
+        const types: string[] = [];
         let textContains: string | null = null;
         let pageFilter: number[] | null = null;
-
-        const validTypes = [
-          'table',
-          'figure',
-          'footnote',
-          'signature',
-          'callout',
-          'text',
-        ] as const;
 
         let limit: number | null = null;
         let offset: number | null = null;
@@ -137,10 +126,7 @@ class McpService implements IService {
         const typeMatches = selector.match(/\.(\w+)/g);
         if (typeMatches) {
           for (const m of typeMatches) {
-            const t = m.slice(1) as (typeof validTypes)[number];
-            if (validTypes.includes(t)) {
-              types.push(t);
-            }
+            types.push(m.slice(1));
           }
         }
 
@@ -150,10 +136,7 @@ class McpService implements IService {
             const value = m.match(/\[type=["']([^"']+)["']\]/)?.[1];
             if (!value) continue;
             for (const t of value.split(',')) {
-              const trimmed = t.trim() as (typeof validTypes)[number];
-              if (validTypes.includes(trimmed)) {
-                types.push(trimmed);
-              }
+              types.push(t.trim());
             }
           }
         }
@@ -164,10 +147,7 @@ class McpService implements IService {
             const value = m.match(/:type\(([^)]+)\)/)?.[1];
             if (!value) continue;
             for (const t of value.split(',')) {
-              const trimmed = t.trim() as (typeof validTypes)[number];
-              if (validTypes.includes(trimmed)) {
-                types.push(trimmed);
-              }
+              types.push(t.trim());
             }
           }
         }

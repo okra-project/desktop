@@ -58,7 +58,7 @@ export interface OcrProviderConfig {
 }
 
 export interface OcrBoundingBox {
-  type: 'text' | 'table' | 'figure' | 'heading' | 'paragraph' | 'line';
+  type: string;
   vertices: { x: number; y: number }[];
   text?: string;
   confidence?: number;
@@ -357,7 +357,7 @@ export function convertOcrBboxToEntity(
   index: number,
 ): {
   id: string;
-  type: 'table' | 'figure' | 'footnote' | 'summary' | 'paragraph' | 'signature';
+  type: string;
   title: string | null;
   bbox: { x: number; y: number; width: number; height: number };
   page: number;
@@ -373,22 +373,9 @@ export function convertOcrBboxToEntity(
   const maxX = Math.max(...xs);
   const maxY = Math.max(...ys);
 
-  // Map OCR types to entity types
-  const typeMap: Record<
-    string,
-    'table' | 'figure' | 'footnote' | 'summary' | 'paragraph' | 'signature'
-  > = {
-    table: 'table',
-    figure: 'figure',
-    paragraph: 'paragraph',
-    heading: 'paragraph', // Heading maps to paragraph for now
-    text: 'paragraph',
-    line: 'paragraph',
-  };
-
   return {
     id: `ocr-p${pageNumber}-${index}`,
-    type: typeMap[bbox.type] ?? 'paragraph',
+    type: bbox.type,
     title: bbox.text?.slice(0, 50) ?? null,
     bbox: {
       x: minX,

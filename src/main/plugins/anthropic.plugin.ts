@@ -1,10 +1,59 @@
-import type { OcrProviderConfig, OcrPageResult } from '../providers/ocr-types';
+import type {
+  OcrProviderConfig,
+  OcrPageResult,
+  OcrProviderMetadata,
+} from '../providers/ocr-types';
 import type { OcrPlugin, OcrPluginModule } from './plugin-types';
-import { getManifest } from './registry';
+
+const METADATA: OcrProviderMetadata = {
+  id: 'anthropic',
+  name: 'Anthropic Claude',
+  description: 'Claude AI for document chat and vision analysis',
+  runtime: 'api',
+  category: 'agent',
+  capabilities: {
+    supportsText: true,
+    supportsTables: true,
+    supportsBboxes: false,
+    supportsFigures: false,
+    supportsHandwriting: false,
+    supportsMultiLanguage: true,
+    outputFormats: ['markdown'],
+    maxPagesPerRequest: 100,
+  },
+  layers: [],
+  authenticate: { type: 'header', headerName: 'x-api-key' },
+  documentationUrl: 'https://console.anthropic.com/settings/keys',
+  costPerPage: 0.003,
+  isCloud: true,
+  configSchema: {
+    type: 'object',
+    properties: {
+      apiKey: {
+        type: 'string',
+        title: 'Anthropic API Key',
+        description: 'Get from console.anthropic.com',
+        format: 'password',
+      },
+      modelId: {
+        type: 'string',
+        title: 'Model',
+        description: 'Claude model for chat',
+        enum: [
+          'claude-sonnet-4-20250514',
+          'claude-3-5-sonnet-20241022',
+          'claude-3-5-haiku-20241022',
+        ],
+        default: 'claude-sonnet-4-20250514',
+      },
+    },
+    required: ['apiKey'],
+  },
+};
 
 class AnthropicPlugin implements OcrPlugin {
   id = 'anthropic';
-  metadata = getManifest('anthropic')!.metadata;
+  metadata = METADATA;
 
   async extract(
     imageBuffer: Buffer,

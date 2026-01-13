@@ -9,13 +9,7 @@
 // Entity Types
 // ============================================
 
-export type EntitySelector =
-  | 'table'
-  | 'figure'
-  | 'footnote'
-  | 'signature'
-  | 'text'
-  | 'all';
+export type EntitySelector = string | 'all';
 
 // ============================================
 // Query Source

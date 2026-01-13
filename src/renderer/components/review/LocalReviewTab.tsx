@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import PDFViewer, { type EntityOverlay } from '../PDFViewer';
 import { useReviewData } from '../../providers/ReviewDataContext';
 import { LayerMenu } from './LayerMenu';
+import { useAvailableLayers } from '../../hooks/useAvailableLayers';
 
 export interface LocalReviewTabProps {
   jobId: string;
@@ -35,10 +36,18 @@ export function LocalReviewTab({
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedContent, setEditedContent] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [visibleLayers, setVisibleLayers] = useState<Set<string>>(
-    new Set(['table', 'figure', 'footnote']),
-  );
+  const { layers: availableLayers } = useAvailableLayers();
+  const [visibleLayers, setVisibleLayers] = useState<Set<string>>(new Set());
   const [layerMenuOpen, setLayerMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (availableLayers.length > 0 && visibleLayers.size === 0) {
+      const entityLayers = availableLayers
+        .filter((l) => l.category === 'entity' || !l.category)
+        .map((l) => l.id);
+      setVisibleLayers(new Set(entityLayers));
+    }
+  }, [availableLayers, visibleLayers.size]);
 
   const handleToggleLayer = useCallback((layer: string) => {
     setVisibleLayers((prev) => {
@@ -154,6 +163,7 @@ export function LocalReviewTab({
                 onOpenChange={setLayerMenuOpen}
                 visibleLayers={visibleLayers}
                 onToggleLayer={handleToggleLayer}
+                layers={availableLayers}
               />
               <button
                 onClick={() => handlePreviewPage(Math.max(1, currentPage - 1))}

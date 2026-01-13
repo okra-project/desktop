@@ -7,13 +7,13 @@ const getBaseUrl = () => process.env.OKRAPDF_API_URL || '';
 // ============================================================================
 
 export type VerificationPageStatus =
-  | 'complete'    // All entities verified
-  | 'partial'     // Some entities verified
-  | 'flagged'     // Has flagged items
-  | 'pending'     // Has entities but none verified
-  | 'empty'       // No entities
-  | 'gap'         // OCR content but no entities
-  | 'error';      // Verification error
+  | 'complete' // All entities verified
+  | 'partial' // Some entities verified
+  | 'flagged' // Has flagged items
+  | 'pending' // Has entities but none verified
+  | 'empty' // No entities
+  | 'gap' // OCR content but no entities
+  | 'error'; // Verification error
 
 export interface VerificationTreePage {
   page: number;
@@ -82,7 +82,7 @@ export interface EntityBBox {
   height: number;
 }
 
-export type EntityType = 'table' | 'figure' | 'footnote' | 'summary' | 'signature' | 'paragraph';
+export type EntityType = string;
 
 export interface Entity {
   id: string;
@@ -104,7 +104,14 @@ export interface EntitiesResponse {
     summaries: number;
     signatures?: number;
   };
-  extractionStatus?: 'not_started' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'paused';
+  extractionStatus?:
+    | 'not_started'
+    | 'pending'
+    | 'running'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
+    | 'paused';
   totalPages?: number;
 }
 
@@ -240,7 +247,8 @@ const desktopBaseQuery = fetchBaseQuery({
     // Get token via IPC (main process handles refresh if expired)
     if (typeof window !== 'undefined' && window.electron?.ipcRenderer) {
       try {
-        const result = await window.electron.ipcRenderer.invoke('auth:get-token');
+        const result =
+          await window.electron.ipcRenderer.invoke('auth:get-token');
         if (result?.token) {
           headers.set('Authorization', `Bearer ${result.token}`);
         }
@@ -259,22 +267,34 @@ const desktopBaseQuery = fetchBaseQuery({
 export const desktopApi = createApi({
   reducerPath: 'desktopApi',
   baseQuery: desktopBaseQuery,
-  tagTypes: ['VerificationTree', 'PageContent', 'Entities', 'Tables', 'History'],
+  tagTypes: [
+    'VerificationTree',
+    'PageContent',
+    'Entities',
+    'Tables',
+    'History',
+  ],
   endpoints: (build) => ({
     /**
      * Get verification tree for a job
      */
     getVerificationTree: build.query<VerificationTreeResponse, string>({
       query: (jobId) => `/api/desktop/ocr/jobs/${jobId}/verification-tree`,
-      providesTags: (result, error, jobId) => [{ type: 'VerificationTree', id: jobId }],
+      providesTags: (result, error, jobId) => [
+        { type: 'VerificationTree', id: jobId },
+      ],
       keepUnusedDataFor: 60,
     }),
 
     /**
      * Get page content
      */
-    getPageContent: build.query<PageContent, { jobId: string; pageNum: number }>({
-      query: ({ jobId, pageNum }) => `/api/desktop/ocr/jobs/${jobId}/pages/${pageNum}`,
+    getPageContent: build.query<
+      PageContent,
+      { jobId: string; pageNum: number }
+    >({
+      query: ({ jobId, pageNum }) =>
+        `/api/desktop/ocr/jobs/${jobId}/pages/${pageNum}`,
       providesTags: (result, error, { jobId, pageNum }) => [
         { type: 'PageContent', id: `${jobId}-${pageNum}` },
       ],
@@ -290,8 +310,15 @@ export const desktopApi = createApi({
     /**
      * Get entities for a job
      */
-    getEntities: build.query<EntitiesResponse, { jobId: string; type?: 'tables' | 'figures' | 'footnotes' | 'summaries' | 'all' }>({
-      query: ({ jobId, type = 'all' }) => `/api/desktop/ocr/jobs/${jobId}/entities?type=${type}`,
+    getEntities: build.query<
+      EntitiesResponse,
+      {
+        jobId: string;
+        type?: 'tables' | 'figures' | 'footnotes' | 'summaries' | 'all';
+      }
+    >({
+      query: ({ jobId, type = 'all' }) =>
+        `/api/desktop/ocr/jobs/${jobId}/entities?type=${type}`,
       providesTags: ['Entities'],
       keepUnusedDataFor: 30,
     }),
@@ -299,10 +326,14 @@ export const desktopApi = createApi({
     /**
      * Get tables for a job
      */
-    getTablesByJobId: build.query<TablesResponse, { jobId: string; page?: number }>({
-      query: ({ jobId, page }) => page
-        ? `/api/desktop/ocr/jobs/${jobId}/tables?page=${page}`
-        : `/api/desktop/ocr/jobs/${jobId}/tables`,
+    getTablesByJobId: build.query<
+      TablesResponse,
+      { jobId: string; page?: number }
+    >({
+      query: ({ jobId, page }) =>
+        page
+          ? `/api/desktop/ocr/jobs/${jobId}/tables?page=${page}`
+          : `/api/desktop/ocr/jobs/${jobId}/tables`,
       providesTags: ['Tables'],
       keepUnusedDataFor: 60,
     }),
@@ -310,9 +341,15 @@ export const desktopApi = createApi({
     /**
      * Get verification history
      */
-    getVerificationHistory: build.query<VerificationHistoryResponse, { jobId: string; limit?: number }>({
-      query: ({ jobId, limit = 50 }) => `/api/desktop/ocr/jobs/${jobId}/history?limit=${limit}`,
-      providesTags: (result, error, { jobId }) => [{ type: 'History', id: jobId }],
+    getVerificationHistory: build.query<
+      VerificationHistoryResponse,
+      { jobId: string; limit?: number }
+    >({
+      query: ({ jobId, limit = 50 }) =>
+        `/api/desktop/ocr/jobs/${jobId}/history?limit=${limit}`,
+      providesTags: (result, error, { jobId }) => [
+        { type: 'History', id: jobId },
+      ],
     }),
 
     /**
@@ -326,28 +363,42 @@ export const desktopApi = createApi({
     /**
      * Save page content as new version
      */
-    savePageVersion: build.mutation<SavePageVersionResponse, SavePageVersionRequest>({
+    savePageVersion: build.mutation<
+      SavePageVersionResponse,
+      SavePageVersionRequest
+    >({
       query: ({ jobId, pageNum, content }) => ({
         url: `/api/desktop/ocr/jobs/${jobId}/pages/${pageNum}`,
         method: 'PATCH',
         body: { content },
       }),
-      async onQueryStarted({ jobId, pageNum, content }, { dispatch, queryFulfilled }) {
+      async onQueryStarted(
+        { jobId, pageNum, content },
+        { dispatch, queryFulfilled },
+      ) {
         // Optimistic update
         const patchPageContent = dispatch(
-          desktopApi.util.updateQueryData('getPageContent', { jobId, pageNum }, (draft) => {
-            draft.content = content;
-            draft.version = (draft.version || 1) + 1;
-          })
+          desktopApi.util.updateQueryData(
+            'getPageContent',
+            { jobId, pageNum },
+            (draft) => {
+              draft.content = content;
+              draft.version = (draft.version || 1) + 1;
+            },
+          ),
         );
 
         try {
           const { data } = await queryFulfilled;
           if (data.version) {
             dispatch(
-              desktopApi.util.updateQueryData('getPageContent', { jobId, pageNum }, (draft) => {
-                draft.version = data.version;
-              })
+              desktopApi.util.updateQueryData(
+                'getPageContent',
+                { jobId, pageNum },
+                (draft) => {
+                  draft.version = data.version;
+                },
+              ),
             );
           }
         } catch {
@@ -359,7 +410,10 @@ export const desktopApi = createApi({
     /**
      * Update table verification status
      */
-    updateTableStatus: build.mutation<UpdateTableStatusResponse, UpdateTableStatusRequest>({
+    updateTableStatus: build.mutation<
+      UpdateTableStatusResponse,
+      UpdateTableStatusRequest
+    >({
       query: ({ tableId, status }) => ({
         url: `/api/desktop/refinery/tables/${tableId}`,
         method: 'PATCH',
@@ -371,7 +425,10 @@ export const desktopApi = createApi({
     /**
      * Fix and accept table
      */
-    fixAndAcceptTable: build.mutation<FixAndAcceptTableResponse, FixAndAcceptTableRequest>({
+    fixAndAcceptTable: build.mutation<
+      FixAndAcceptTableResponse,
+      FixAndAcceptTableRequest
+    >({
       query: ({ tableId, correctedMarkdown }) => ({
         url: `/api/desktop/refinery/tables/${tableId}/fix`,
         method: 'POST',
@@ -383,13 +440,18 @@ export const desktopApi = createApi({
     /**
      * Resolve page status
      */
-    resolvePageStatus: build.mutation<{ success: boolean }, ResolvePageStatusRequest>({
+    resolvePageStatus: build.mutation<
+      { success: boolean },
+      ResolvePageStatusRequest
+    >({
       query: ({ jobId, pageNum, ...body }) => ({
         url: `/api/desktop/ocr/jobs/${jobId}/pages/${pageNum}/resolve`,
         method: 'POST',
         body,
       }),
-      invalidatesTags: (result, error, { jobId }) => [{ type: 'VerificationTree', id: jobId }],
+      invalidatesTags: (result, error, { jobId }) => [
+        { type: 'VerificationTree', id: jobId },
+      ],
     }),
   }),
 });

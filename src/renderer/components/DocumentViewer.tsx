@@ -9,6 +9,7 @@ import { QueryResultsPanel } from './QueryResultsPanel';
 import { SENTRY_ENABLED } from '../../config/sentry';
 import { useAppDispatch, useAppSelector } from '../store';
 import { useExtractionProgress } from '../hooks/useExtractionProgress';
+import { useAvailableLayers } from '../hooks/useAvailableLayers';
 import {
   setWorkspacePath,
   setCurrentPage as setReduxPage,
@@ -19,7 +20,6 @@ import {
   selectCurrentPage,
   selectOverlayVisibility,
   selectPageDimensions,
-  type OverlayType,
 } from '../store/viewerSlice';
 import { selectHasActiveQuery, clearQuery } from '../store/querySlice';
 
@@ -93,15 +93,14 @@ export default function DocumentViewer({
   }, [selector]);
 
   useExtractionProgress(workspacePath);
+  const { layers: availableLayers } = useAvailableLayers();
 
-  // Convert overlayVisibility to Set for LayerMenu
   const visibleLayers = useMemo(() => {
-    const layers = new Set<string>();
-    if (overlayVisibility.table) layers.add('table');
-    if (overlayVisibility.figure) layers.add('figure');
-    if (overlayVisibility.footnote) layers.add('footnote');
-    if (overlayVisibility.ocr) layers.add('ocr');
-    return layers;
+    return new Set(
+      Object.entries(overlayVisibility)
+        .filter(([, visible]) => visible)
+        .map(([layerId]) => layerId),
+    );
   }, [overlayVisibility]);
   const [pdfPath, setPdfPath] = useState<string>('');
   const isDragging = useRef(false);
@@ -130,7 +129,7 @@ export default function DocumentViewer({
   };
 
   const handleToggleLayer = (layer: string) => {
-    dispatch(toggleOverlay(layer as OverlayType));
+    dispatch(toggleOverlay(layer));
   };
 
   useEffect(() => {
@@ -269,6 +268,7 @@ export default function DocumentViewer({
               onOpenChange={setLayerMenuOpen}
               visibleLayers={visibleLayers}
               onToggleLayer={handleToggleLayer}
+              layers={availableLayers}
             />
             <button
               onClick={() =>

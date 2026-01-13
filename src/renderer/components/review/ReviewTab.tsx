@@ -11,7 +11,10 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAppDispatch } from '../../store';
-import PDFViewer, { type EntityOverlay, type PageDimension as PDFPageDimension } from '../PDFViewer';
+import PDFViewer, {
+  type EntityOverlay,
+  type PageDimension as PDFPageDimension,
+} from '../PDFViewer';
 import {
   useGetVerificationTreeQuery,
   useGetEntitiesQuery,
@@ -28,12 +31,20 @@ import {
 import { PageNode, SimplePageNode, STATUS_CONFIG } from './TreeNodes';
 import { FilterChip } from './FilterChips';
 import { LayerMenu } from './LayerMenu';
+import { useAvailableLayers } from '../../hooks/useAvailableLayers';
 import { TableVerificationPanel } from './TableVerificationPanel';
 import { HistoryModal } from './HistoryModal';
 import { PageVerificationControl } from './PageVerificationControl';
-import { EntityActionPopover, type EntityAction, type EntityOverlayInfo } from './EntityActionPopover';
+import {
+  EntityActionPopover,
+  type EntityAction,
+  type EntityOverlayInfo,
+} from './EntityActionPopover';
 import { DockedChat } from './DockedChat';
-import { SelectableMarkdownRenderer, type SelectionData } from './SelectableMarkdownRenderer';
+import {
+  SelectableMarkdownRenderer,
+  type SelectionData,
+} from './SelectableMarkdownRenderer';
 import { setContext } from '../../store/reviewAgentSlice';
 
 // ============================================================================
@@ -53,70 +64,108 @@ export interface ReviewTabProps {
 // Main Component
 // ============================================================================
 
-export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageChange, onBack }: ReviewTabProps) {
+export function ReviewTab({
+  jobId,
+  documentName,
+  pdfPath,
+  currentPage,
+  onPageChange,
+  onBack,
+}: ReviewTabProps) {
   // State
   const [expandedPages, setExpandedPages] = useState<Set<number>>(new Set());
-  const [previewPage, setPreviewPage] = useState<number | null>(currentPage ?? 1);
-  const [activeStatusFilter, setActiveStatusFilter] = useState<string | null>(null);
-  const [activeEntityFilter, setActiveEntityFilter] = useState<string | null>(null);
+  const [previewPage, setPreviewPage] = useState<number | null>(
+    currentPage ?? 1,
+  );
+  const [activeStatusFilter, setActiveStatusFilter] = useState<string | null>(
+    null,
+  );
+  const [activeEntityFilter, setActiveEntityFilter] = useState<string | null>(
+    null,
+  );
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedContent, setEditedContent] = useState<string>('');
 
   // Table verification state
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [verificationPanelOpen, setVerificationPanelOpen] = useState(false);
-  const [syntheticTable, setSyntheticTable] = useState<ExtractedTable | null>(null);
+  const [syntheticTable, setSyntheticTable] = useState<ExtractedTable | null>(
+    null,
+  );
 
   // History modal state
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  // Entity overlay state - now with per-layer visibility
-  const [visibleLayers, setVisibleLayers] = useState<Set<string>>(new Set(['table', 'figure', 'footnote']));
+  // Entity overlay state - layers come from plugins
+  const { layers: availableLayers } = useAvailableLayers();
+  const [visibleLayers, setVisibleLayers] = useState<Set<string>>(new Set());
   const [layerMenuOpen, setLayerMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (availableLayers.length > 0 && visibleLayers.size === 0) {
+      const entityLayers = availableLayers
+        .filter((l) => l.category === 'entity' || !l.category)
+        .map((l) => l.id);
+      setVisibleLayers(new Set(entityLayers));
+    }
+  }, [availableLayers, visibleLayers.size]);
 
   // Sidebar collapsed state (web-style 165px collapsible)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Entity action popover state
-  const [popoverEntity, setPopoverEntity] = useState<EntityOverlayInfo | null>(null);
-  const [popoverPosition, setPopoverPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [popoverEntity, setPopoverEntity] = useState<EntityOverlayInfo | null>(
+    null,
+  );
+  const [popoverPosition, setPopoverPosition] = useState<{
+    x: number;
+    y: number;
+  }>({ x: 0, y: 0 });
 
   // Chat state
   const [chatPrefill, setChatPrefill] = useState<string>('');
   const [chatAutoSend, setChatAutoSend] = useState(false);
-  const [tableSelection, setTableSelection] = useState<SelectionData | null>(null);
+  const [tableSelection, setTableSelection] = useState<SelectionData | null>(
+    null,
+  );
   const dispatch = useAppDispatch();
 
   // RTK Query
-  const { data: treeData, isLoading: treeLoading, refetch: refetchTree } = useGetVerificationTreeQuery(jobId, {
+  const {
+    data: treeData,
+    isLoading: treeLoading,
+    refetch: refetchTree,
+  } = useGetVerificationTreeQuery(jobId, {
     skip: !jobId,
     pollingInterval: 30000, // Poll every 30s
   });
 
-  const { data: entitiesData, isLoading: entitiesLoading } = useGetEntitiesQuery(
-    { jobId },
-    { skip: !jobId }
-  );
+  const { data: entitiesData, isLoading: entitiesLoading } =
+    useGetEntitiesQuery({ jobId }, { skip: !jobId });
 
   const { data: tablesData, refetch: refetchTables } = useGetTablesByJobIdQuery(
     { jobId },
-    { skip: !jobId }
+    { skip: !jobId },
   );
 
-  const { data: pageContent, isLoading: contentLoading } = useGetPageContentQuery(
-    { jobId, pageNum: previewPage! },
-    { skip: !jobId || !previewPage }
-  );
+  const { data: pageContent, isLoading: contentLoading } =
+    useGetPageContentQuery(
+      { jobId, pageNum: previewPage! },
+      { skip: !jobId || !previewPage },
+    );
 
-  const [savePageVersion, { isLoading: isSaving }] = useSavePageVersionMutation();
-  const [updateTableStatus, { isLoading: isUpdatingTable }] = useUpdateTableStatusMutation();
+  const [savePageVersion, { isLoading: isSaving }] =
+    useSavePageVersionMutation();
+  const [updateTableStatus, { isLoading: isUpdatingTable }] =
+    useUpdateTableStatusMutation();
   const [fixAndAcceptTable] = useFixAndAcceptTableMutation();
 
   // Verification history - only fetch when modal is open
-  const { data: historyData, isLoading: historyLoading } = useGetVerificationHistoryQuery(
-    { jobId, limit: 100 },
-    { skip: !jobId || !historyOpen }
-  );
+  const { data: historyData, isLoading: historyLoading } =
+    useGetVerificationHistoryQuery(
+      { jobId, limit: 100 },
+      { skip: !jobId || !historyOpen },
+    );
 
   // Group entities by page
   const entitiesByPage = useMemo(() => {
@@ -160,7 +209,10 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
 
   // Page dimensions map - currently empty, relies on PDFViewer fallback
   // TODO: Fetch from API when available
-  const pageDimensions = useMemo<Record<number, PDFPageDimension>>(() => ({}), []);
+  const pageDimensions = useMemo<Record<number, PDFPageDimension>>(
+    () => ({}),
+    [],
+  );
 
   // Filter pages based on active filters
   const filteredPages = useMemo(() => {
@@ -175,7 +227,9 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
       // Entity filter
       if (activeEntityFilter) {
         const pageEntities = entitiesByPage.get(page.page) ?? [];
-        const hasEntityType = pageEntities.some((e) => e.type === activeEntityFilter);
+        const hasEntityType = pageEntities.some(
+          (e) => e.type === activeEntityFilter,
+        );
         if (!hasEntityType) return false;
       }
 
@@ -196,11 +250,13 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
   const previewPageInfo = useMemo(() => {
     if (!previewPage || !treeData?.pages) return null;
     const pageData = treeData.pages.find((p) => p.page === previewPage);
-    return pageData ? {
-      resolution: pageData.resolution,
-      isStale: pageData.isStale,
-      status: pageData.status,
-    } : null;
+    return pageData
+      ? {
+          resolution: pageData.resolution,
+          isStale: pageData.isStale,
+          status: pageData.status,
+        }
+      : null;
   }, [previewPage, treeData?.pages]);
 
   // Sync edited content when page content changes
@@ -223,11 +279,14 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
     });
   }, []);
 
-  const handlePreviewPage = useCallback((pageNum: number) => {
-    setPreviewPage(pageNum);
-    setIsEditMode(false);
-    onPageChange?.(pageNum);
-  }, [onPageChange]);
+  const handlePreviewPage = useCallback(
+    (pageNum: number) => {
+      setPreviewPage(pageNum);
+      setIsEditMode(false);
+      onPageChange?.(pageNum);
+    },
+    [onPageChange],
+  );
 
   const handleExpandAll = useCallback(() => {
     if (!filteredPages.length) return;
@@ -255,50 +314,60 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
   }, [jobId, previewPage, editedContent, savePageVersion, refetchTree]);
 
   // Table verification handlers
-  const handleEntityClick = useCallback((entity: Entity) => {
-    if (entity.type !== 'table') return;
+  const handleEntityClick = useCallback(
+    (entity: Entity) => {
+      if (entity.type !== 'table') return;
 
-    // Find matching extracted table
-    const pageTable = tablesData?.tables?.find((t) => t.page_number === entity.page);
+      // Find matching extracted table
+      const pageTable = tablesData?.tables?.find(
+        (t) => t.page_number === entity.page,
+      );
 
-    if (pageTable) {
-      setSyntheticTable(null);
-      setSelectedTableId(pageTable.id);
-    } else {
-      // Create synthetic placeholder
-      setSelectedTableId(null);
-      setSyntheticTable({
-        id: entity.id,
-        page_number: entity.page,
-        markdown: '',
-        bbox: entity.bbox ? {
-          xmin: entity.bbox.x,
-          ymin: entity.bbox.y,
-          xmax: entity.bbox.x + entity.bbox.width,
-          ymax: entity.bbox.y + entity.bbox.height,
-        } : { xmin: 0, ymin: 0, xmax: 1, ymax: 1 },
-        confidence: null,
-        verification_status: 'pending',
-        verified_by: null,
-        verified_at: null,
-        created_at: new Date().toISOString(),
-      });
-    }
-    setVerificationPanelOpen(true);
-    setPreviewPage(entity.page);
-  }, [tablesData?.tables]);
+      if (pageTable) {
+        setSyntheticTable(null);
+        setSelectedTableId(pageTable.id);
+      } else {
+        // Create synthetic placeholder
+        setSelectedTableId(null);
+        setSyntheticTable({
+          id: entity.id,
+          page_number: entity.page,
+          markdown: '',
+          bbox: entity.bbox
+            ? {
+                xmin: entity.bbox.x,
+                ymin: entity.bbox.y,
+                xmax: entity.bbox.x + entity.bbox.width,
+                ymax: entity.bbox.y + entity.bbox.height,
+              }
+            : { xmin: 0, ymin: 0, xmax: 1, ymax: 1 },
+          confidence: null,
+          verification_status: 'pending',
+          verified_by: null,
+          verified_at: null,
+          created_at: new Date().toISOString(),
+        });
+      }
+      setVerificationPanelOpen(true);
+      setPreviewPage(entity.page);
+    },
+    [tablesData?.tables],
+  );
 
   // Handle entity overlay click from PDFViewer - show popover
-  const handleOverlayEntityClick = useCallback((overlay: EntityOverlay, event: React.MouseEvent) => {
-    // Set popover entity info
-    setPopoverEntity({
-      id: overlay.id,
-      type: overlay.type,
-      title: overlay.title,
-      page: overlay.page,
-    });
-    setPopoverPosition({ x: event.clientX, y: event.clientY });
-  }, []);
+  const handleOverlayEntityClick = useCallback(
+    (overlay: EntityOverlay, event: React.MouseEvent) => {
+      // Set popover entity info
+      setPopoverEntity({
+        id: overlay.id,
+        type: overlay.type,
+        title: overlay.title,
+        page: overlay.page,
+      });
+      setPopoverPosition({ x: event.clientX, y: event.clientY });
+    },
+    [],
+  );
 
   // Handle popover close
   const handlePopoverClose = useCallback(() => {
@@ -306,51 +375,63 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
   }, []);
 
   // Handle popover action
-  const handlePopoverAction = useCallback((action: EntityAction, entity: EntityOverlayInfo) => {
-    // For tables with verify-schema, open verification panel
-    if (entity.type === 'table' && action.id === 'verify-schema') {
-      const fullEntity = entitiesData?.entities.find((e) => e.id === entity.id);
-      if (fullEntity) {
-        handleEntityClick(fullEntity);
+  const handlePopoverAction = useCallback(
+    (action: EntityAction, entity: EntityOverlayInfo) => {
+      // For tables with verify-schema, open verification panel
+      if (entity.type === 'table' && action.id === 'verify-schema') {
+        const fullEntity = entitiesData?.entities.find(
+          (e) => e.id === entity.id,
+        );
+        if (fullEntity) {
+          handleEntityClick(fullEntity);
+        }
+      } else {
+        // Build context message for the chat
+        const contextMessage = `[${entity.type.toUpperCase()}${entity.title ? `: ${entity.title}` : ''} on page ${entity.page}]\n\n${action.prompt}`;
+
+        // Set the context for the agent
+        dispatch(
+          setContext({
+            jobId,
+            documentName,
+            currentPage: entity.page,
+            selectedEntityId: entity.id,
+            selectedEntityType: entity.type,
+          }),
+        );
+
+        // Set prefill and auto-send
+        setChatPrefill(contextMessage);
+        setChatAutoSend(action.autoSend);
       }
-    } else {
-      // Build context message for the chat
-      const contextMessage = `[${entity.type.toUpperCase()}${entity.title ? `: ${entity.title}` : ''} on page ${entity.page}]\n\n${action.prompt}`;
+    },
+    [entitiesData?.entities, handleEntityClick, dispatch, jobId, documentName],
+  );
+
+  // Handle chat with table selection
+  const handleChatWithSelection = useCallback(
+    (selection: SelectionData) => {
+      // Build a message with the selection
+      const label = `${selection.headers.slice(0, 3).join(', ')} p${previewPage}`;
+      const contextMessage = `[TABLE SELECTION: ${label}]\n\n${selection.asMarkdown}\n\nPlease analyze this table selection.`;
 
       // Set the context for the agent
-      dispatch(setContext({
-        jobId,
-        documentName,
-        currentPage: entity.page,
-        selectedEntityId: entity.id,
-        selectedEntityType: entity.type,
-      }));
+      dispatch(
+        setContext({
+          jobId,
+          documentName,
+          currentPage: previewPage ?? undefined,
+          tableMarkdown: selection.asMarkdown,
+        }),
+      );
 
       // Set prefill and auto-send
       setChatPrefill(contextMessage);
-      setChatAutoSend(action.autoSend);
-    }
-  }, [entitiesData?.entities, handleEntityClick, dispatch, jobId, documentName]);
-
-  // Handle chat with table selection
-  const handleChatWithSelection = useCallback((selection: SelectionData) => {
-    // Build a message with the selection
-    const label = `${selection.headers.slice(0, 3).join(', ')} p${previewPage}`;
-    const contextMessage = `[TABLE SELECTION: ${label}]\n\n${selection.asMarkdown}\n\nPlease analyze this table selection.`;
-
-    // Set the context for the agent
-    dispatch(setContext({
-      jobId,
-      documentName,
-      currentPage: previewPage ?? undefined,
-      tableMarkdown: selection.asMarkdown,
-    }));
-
-    // Set prefill and auto-send
-    setChatPrefill(contextMessage);
-    setChatAutoSend(true);
-    setTableSelection(selection);
-  }, [previewPage, dispatch, jobId, documentName]);
+      setChatAutoSend(true);
+      setTableSelection(selection);
+    },
+    [previewPage, dispatch, jobId, documentName],
+  );
 
   const handleCloseVerificationPanel = useCallback(() => {
     setVerificationPanelOpen(false);
@@ -370,10 +451,22 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
       return;
     }
     if (!selectedTableId) return;
-    await updateTableStatus({ tableId: selectedTableId, jobId, status: 'verified' }).unwrap();
+    await updateTableStatus({
+      tableId: selectedTableId,
+      jobId,
+      status: 'verified',
+    }).unwrap();
     refetchTree();
     refetchTables();
-  }, [selectedTableId, jobId, updateTableStatus, refetchTree, refetchTables, syntheticTable, handleCloseVerificationPanel]);
+  }, [
+    selectedTableId,
+    jobId,
+    updateTableStatus,
+    refetchTree,
+    refetchTables,
+    syntheticTable,
+    handleCloseVerificationPanel,
+  ]);
 
   const handleFlagTable = useCallback(async () => {
     if (syntheticTable) {
@@ -381,10 +474,22 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
       return;
     }
     if (!selectedTableId) return;
-    await updateTableStatus({ tableId: selectedTableId, jobId, status: 'flagged' }).unwrap();
+    await updateTableStatus({
+      tableId: selectedTableId,
+      jobId,
+      status: 'flagged',
+    }).unwrap();
     refetchTree();
     refetchTables();
-  }, [selectedTableId, jobId, updateTableStatus, refetchTree, refetchTables, syntheticTable, handleCloseVerificationPanel]);
+  }, [
+    selectedTableId,
+    jobId,
+    updateTableStatus,
+    refetchTree,
+    refetchTables,
+    syntheticTable,
+    handleCloseVerificationPanel,
+  ]);
 
   const handleRejectTable = useCallback(async () => {
     if (syntheticTable) {
@@ -392,36 +497,61 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
       return;
     }
     if (!selectedTableId) return;
-    await updateTableStatus({ tableId: selectedTableId, jobId, status: 'rejected' }).unwrap();
+    await updateTableStatus({
+      tableId: selectedTableId,
+      jobId,
+      status: 'rejected',
+    }).unwrap();
     refetchTree();
     refetchTables();
-  }, [selectedTableId, jobId, updateTableStatus, refetchTree, refetchTables, syntheticTable, handleCloseVerificationPanel]);
+  }, [
+    selectedTableId,
+    jobId,
+    updateTableStatus,
+    refetchTree,
+    refetchTables,
+    syntheticTable,
+    handleCloseVerificationPanel,
+  ]);
 
-  const handleFixAndAcceptTable = useCallback(async (correctedMarkdown: string) => {
-    if (!selectedTableId && !syntheticTable) return;
+  const handleFixAndAcceptTable = useCallback(
+    async (correctedMarkdown: string) => {
+      if (!selectedTableId && !syntheticTable) return;
 
-    if (syntheticTable) {
-      // For synthetic tables, we'd need to create a new table
-      // For now, just close the panel
-      handleCloseVerificationPanel();
-      return;
-    }
+      if (syntheticTable) {
+        // For synthetic tables, we'd need to create a new table
+        // For now, just close the panel
+        handleCloseVerificationPanel();
+        return;
+      }
 
-    if (selectedTableId) {
-      await fixAndAcceptTable({
-        tableId: selectedTableId,
-        jobId,
-        correctedMarkdown,
-      }).unwrap();
-      refetchTree();
-      refetchTables();
-    }
-  }, [selectedTableId, jobId, fixAndAcceptTable, refetchTree, refetchTables, syntheticTable, handleCloseVerificationPanel]);
+      if (selectedTableId) {
+        await fixAndAcceptTable({
+          tableId: selectedTableId,
+          jobId,
+          correctedMarkdown,
+        }).unwrap();
+        refetchTree();
+        refetchTables();
+      }
+    },
+    [
+      selectedTableId,
+      jobId,
+      fixAndAcceptTable,
+      refetchTree,
+      refetchTables,
+      syntheticTable,
+      handleCloseVerificationPanel,
+    ],
+  );
 
   // Table queue navigation
   const tableQueue = useMemo(() => {
     if (!tablesData?.tables || !selectedTable) return null;
-    const currentIdx = tablesData.tables.findIndex((t) => t.id === selectedTable.id);
+    const currentIdx = tablesData.tables.findIndex(
+      (t) => t.id === selectedTable.id,
+    );
     return {
       currentIndex: currentIdx,
       totalCount: tablesData.tables.length,
@@ -472,9 +602,7 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
               ← Back
             </button>
           )}
-          <h1 style={styles.title}>
-            {documentName || 'Document Review'}
-          </h1>
+          <h1 style={styles.title}>{documentName || 'Document Review'}</h1>
         </div>
         <div style={styles.headerRight}>
           <div style={styles.progressContainer}>
@@ -518,25 +646,40 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
                   icon="▤"
                   count={entitiesData.counts.tables}
                   active={activeEntityFilter === 'table'}
-                  onClick={() => setActiveEntityFilter(activeEntityFilter === 'table' ? null : 'table')}
+                  onClick={() =>
+                    setActiveEntityFilter(
+                      activeEntityFilter === 'table' ? null : 'table',
+                    )
+                  }
                 />
                 <FilterChip
                   label=""
                   icon="▣"
                   count={entitiesData.counts.figures}
                   active={activeEntityFilter === 'figure'}
-                  onClick={() => setActiveEntityFilter(activeEntityFilter === 'figure' ? null : 'figure')}
+                  onClick={() =>
+                    setActiveEntityFilter(
+                      activeEntityFilter === 'figure' ? null : 'figure',
+                    )
+                  }
                 />
                 <FilterChip
                   label=""
                   icon="†"
                   count={entitiesData.counts.footnotes}
                   active={activeEntityFilter === 'footnote'}
-                  onClick={() => setActiveEntityFilter(activeEntityFilter === 'footnote' ? null : 'footnote')}
+                  onClick={() =>
+                    setActiveEntityFilter(
+                      activeEntityFilter === 'footnote' ? null : 'footnote',
+                    )
+                  }
                 />
                 {(activeStatusFilter || activeEntityFilter) && (
                   <button
-                    onClick={() => { setActiveStatusFilter(null); setActiveEntityFilter(null); }}
+                    onClick={() => {
+                      setActiveStatusFilter(null);
+                      setActiveEntityFilter(null);
+                    }}
                     style={styles.clearFilterButton}
                     title="Clear filters"
                   >
@@ -555,17 +698,24 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
                 ))}
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}
+              >
                 {treeData?.pages.map((page) => {
                   const pageEntities = entitiesByPage.get(page.page) ?? [];
                   const entityCounts = {
-                    tables: pageEntities.filter((e) => e.type === 'table').length,
-                    figures: pageEntities.filter((e) => e.type === 'figure').length,
-                    footnotes: pageEntities.filter((e) => e.type === 'footnote').length,
+                    tables: pageEntities.filter((e) => e.type === 'table')
+                      .length,
+                    figures: pageEntities.filter((e) => e.type === 'figure')
+                      .length,
+                    footnotes: pageEntities.filter((e) => e.type === 'footnote')
+                      .length,
                   };
                   const isFilteredOut = Boolean(
-                    (activeStatusFilter && page.status !== activeStatusFilter) ||
-                    (activeEntityFilter && !pageEntities.some((e) => e.type === activeEntityFilter))
+                    (activeStatusFilter &&
+                      page.status !== activeStatusFilter) ||
+                    (activeEntityFilter &&
+                      !pageEntities.some((e) => e.type === activeEntityFilter)),
                   );
 
                   return (
@@ -617,13 +767,19 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
                 onOpenChange={setLayerMenuOpen}
                 visibleLayers={visibleLayers}
                 onToggleLayer={handleToggleLayer}
+                layers={availableLayers}
               />
               {previewPage && treeData && (
                 <>
                   <button
-                    onClick={() => setPreviewPage((p) => Math.max(1, (p ?? 1) - 1))}
+                    onClick={() =>
+                      setPreviewPage((p) => Math.max(1, (p ?? 1) - 1))
+                    }
                     disabled={previewPage <= 1}
-                    style={{...styles.navButton, opacity: previewPage <= 1 ? 0.5 : 1}}
+                    style={{
+                      ...styles.navButton,
+                      opacity: previewPage <= 1 ? 0.5 : 1,
+                    }}
                   >
                     ←
                   </button>
@@ -631,9 +787,16 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
                     {previewPage}/{treeData.totalPages}
                   </span>
                   <button
-                    onClick={() => setPreviewPage((p) => Math.min(treeData.totalPages, (p ?? 1) + 1))}
+                    onClick={() =>
+                      setPreviewPage((p) =>
+                        Math.min(treeData.totalPages, (p ?? 1) + 1),
+                      )
+                    }
                     disabled={previewPage >= treeData.totalPages}
-                    style={{...styles.navButton, opacity: previewPage >= treeData.totalPages ? 0.5 : 1}}
+                    style={{
+                      ...styles.navButton,
+                      opacity: previewPage >= treeData.totalPages ? 0.5 : 1,
+                    }}
                   >
                     →
                   </button>
@@ -674,7 +837,9 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
             </div>
             <div style={styles.panelActions}>
               <span style={styles.charCountSmall}>
-                {pageContent?.content ? `${pageContent.content.length.toLocaleString()} chars` : ''}
+                {pageContent?.content
+                  ? `${pageContent.content.length.toLocaleString()} chars`
+                  : ''}
               </span>
               {/* Save button when edited */}
               {isEditMode && editedContent !== (pageContent?.content ?? '') && (
@@ -819,23 +984,65 @@ export function ReviewTab({ jobId, documentName, pdfPath, currentPage, onPageCha
 
 function MarkdownContent({ content }: { content: string }) {
   return (
-    <div style={{ fontFamily: 'ui-sans-serif, system-ui, sans-serif', fontSize: '14px', lineHeight: 1.6 }}>
+    <div
+      style={{
+        fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+        fontSize: '14px',
+        lineHeight: 1.6,
+      }}
+    >
       {content.split('\n').map((line, idx) => {
         // Headers
         if (line.startsWith('# ')) {
-          return <h1 key={idx} style={{ fontSize: '20px', fontWeight: 'bold', margin: '16px 0 8px' }}>{line.slice(2)}</h1>;
+          return (
+            <h1
+              key={idx}
+              style={{
+                fontSize: '20px',
+                fontWeight: 'bold',
+                margin: '16px 0 8px',
+              }}
+            >
+              {line.slice(2)}
+            </h1>
+          );
         }
         if (line.startsWith('## ')) {
-          return <h2 key={idx} style={{ fontSize: '18px', fontWeight: 'bold', margin: '14px 0 6px' }}>{line.slice(3)}</h2>;
+          return (
+            <h2
+              key={idx}
+              style={{
+                fontSize: '18px',
+                fontWeight: 'bold',
+                margin: '14px 0 6px',
+              }}
+            >
+              {line.slice(3)}
+            </h2>
+          );
         }
         if (line.startsWith('### ')) {
-          return <h3 key={idx} style={{ fontSize: '16px', fontWeight: 'bold', margin: '12px 0 4px' }}>{line.slice(4)}</h3>;
+          return (
+            <h3
+              key={idx}
+              style={{
+                fontSize: '16px',
+                fontWeight: 'bold',
+                margin: '12px 0 4px',
+              }}
+            >
+              {line.slice(4)}
+            </h3>
+          );
         }
 
         // Table row
         if (line.trim().startsWith('|')) {
-          const cells = line.split('|').filter(Boolean).map(c => c.trim());
-          const isHeaderSep = cells.every(c => /^[-:]+$/.test(c));
+          const cells = line
+            .split('|')
+            .filter(Boolean)
+            .map((c) => c.trim());
+          const isHeaderSep = cells.every((c) => /^[-:]+$/.test(c));
           if (isHeaderSep) return null;
 
           return (
@@ -853,7 +1060,8 @@ function MarkdownContent({ content }: { content: string }) {
                   style={{
                     flex: 1,
                     padding: '6px 10px',
-                    borderRight: cidx < cells.length - 1 ? '1px solid #e2e8f0' : 'none',
+                    borderRight:
+                      cidx < cells.length - 1 ? '1px solid #e2e8f0' : 'none',
                     fontSize: '13px',
                   }}
                 >
@@ -866,7 +1074,11 @@ function MarkdownContent({ content }: { content: string }) {
 
         // Regular paragraph
         if (line.trim()) {
-          return <p key={idx} style={{ margin: '8px 0' }}>{line}</p>;
+          return (
+            <p key={idx} style={{ margin: '8px 0' }}>
+              {line}
+            </p>
+          );
         }
 
         return null;

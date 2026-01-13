@@ -7,22 +7,7 @@ import {
 import type { RootState } from './index';
 import type { EntityOverlay } from '../components/PDFViewer';
 
-export type OverlayType =
-  | 'ocr'
-  | 'table'
-  | 'figure'
-  | 'footnote'
-  | 'signature'
-  | 'paragraph';
-
-export interface OverlayVisibility {
-  ocr: boolean;
-  table: boolean;
-  figure: boolean;
-  footnote: boolean;
-  signature: boolean;
-  paragraph: boolean;
-}
+export type OverlayVisibility = Record<string, boolean>;
 
 interface ViewerState {
   workspacePath: string | null;
@@ -102,20 +87,9 @@ export const fetchPageEntities = createAsyncThunk<
             const maxX = Math.max(...xs);
             const maxY = Math.max(...ys);
 
-            const typeMap: Record<string, EntityOverlay['type']> = {
-              table: 'table',
-              figure: 'figure',
-              footnote: 'footnote',
-              signature: 'signature',
-              paragraph: 'paragraph',
-              heading: 'paragraph',
-              text: 'paragraph',
-              line: 'paragraph',
-            };
-
             entities.push({
               id: `ocr-p${page}-${idx}`,
-              type: typeMap[bbox.type] ?? 'paragraph',
+              type: bbox.type,
               title: bbox.text?.slice(0, 50) ?? null,
               bbox: {
                 x: minX,
@@ -180,18 +154,17 @@ const viewerSlice = createSlice({
     setPdfLoaded: (state, action: PayloadAction<boolean>) => {
       state.pdfLoaded = action.payload;
     },
-    toggleOverlay: (state, action: PayloadAction<OverlayType>) => {
+    toggleOverlay: (state, action: PayloadAction<string>) => {
       state.overlayVisibility[action.payload] =
         !state.overlayVisibility[action.payload];
     },
     setOverlayVisibility: (
       state,
-      action: PayloadAction<Partial<OverlayVisibility>>,
+      action: PayloadAction<Record<string, boolean>>,
     ) => {
-      state.overlayVisibility = {
-        ...state.overlayVisibility,
-        ...action.payload,
-      };
+      Object.entries(action.payload).forEach(([key, value]) => {
+        state.overlayVisibility[key] = value;
+      });
     },
     setSelectedEntity: (state, action: PayloadAction<string | null>) => {
       state.selectedEntityId = action.payload;
@@ -261,14 +234,12 @@ export const selectPageDimensions = (state: RootState) =>
 export const selectVisibleEntities = createSelector(
   [selectEntities, selectOverlayVisibility],
   (entities, overlayVisibility) =>
-    entities.filter((e) => overlayVisibility[e.type as OverlayType] ?? false),
+    entities.filter((e) => overlayVisibility[e.type] ?? false),
 );
 
 export const selectShowAnyOverlay = (state: RootState) => {
   const vis = state.viewer.overlayVisibility;
-  return (
-    vis.table || vis.figure || vis.footnote || vis.signature || vis.paragraph
-  );
+  return Object.values(vis).some(Boolean);
 };
 
 export default viewerSlice.reducer;

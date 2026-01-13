@@ -1,61 +1,39 @@
-/**
- * Shared color definitions for entity types (tables, figures, footnotes, summaries, ocr)
- * Used by PDF overlays, filter UI, and layers dropdown to ensure visual consistency
- * Ported from okrapdf/lib/entity-colors.ts
- */
+import type { LayerDefinition } from '../hooks/useAvailableLayers';
 
-export const ENTITY_COLORS = {
-  ocr: {
-    hex: '#f59e0b',      // amber-500
-    border: 'rgba(245, 158, 11, 0.9)',
-    fill: 'rgba(245, 158, 11, 0.15)',
-  },
-  table: {
-    hex: '#3b82f6',      // blue-500
-    border: 'rgba(59, 130, 246, 0.9)',
-    fill: 'rgba(59, 130, 246, 0.15)',
-  },
-  figure: {
-    hex: '#22c55e',      // green-500
-    border: 'rgba(34, 197, 94, 0.9)',
-    fill: 'rgba(34, 197, 94, 0.15)',
-  },
-  footnote: {
-    hex: '#6b7280',      // gray-500
-    border: 'rgba(107, 114, 128, 0.9)',
-    fill: 'rgba(107, 114, 128, 0.15)',
-  },
-  summary: {
-    hex: '#a855f7',      // purple-500
-    border: 'rgba(168, 85, 247, 0.9)',
-    fill: 'rgba(168, 85, 247, 0.15)',
-  },
-  signature: {
-    hex: '#d97706',      // amber-600
-    border: 'rgba(217, 119, 6, 0.9)',
-    fill: 'rgba(217, 119, 6, 0.15)',
-  },
-  paragraph: {
-    hex: '#64748b',      // slate-500
-    border: 'rgba(100, 116, 139, 0.9)',
-    fill: 'rgba(100, 116, 139, 0.15)',
-  },
-  // OCR-specific types (from Google Doc AI, OpenRouter, etc.)
-  heading: {
-    hex: '#8b5cf6',      // violet-500
-    border: 'rgba(139, 92, 246, 0.9)',
-    fill: 'rgba(139, 92, 246, 0.15)',
-  },
-  line: {
-    hex: '#06b6d4',      // cyan-500
-    border: 'rgba(6, 182, 212, 0.7)',
-    fill: 'rgba(6, 182, 212, 0.08)',
-  },
-  text: {
-    hex: '#94a3b8',      // slate-400
-    border: 'rgba(148, 163, 184, 0.7)',
-    fill: 'rgba(148, 163, 184, 0.08)',
-  },
-} as const;
+const DEFAULT_COLOR = {
+  hex: '#64748b',
+  border: 'rgba(100, 116, 139, 0.9)',
+  fill: 'rgba(100, 116, 139, 0.15)',
+};
 
-export type EntityColorType = keyof typeof ENTITY_COLORS;
+export function getLayerColor(
+  layerId: string,
+  layers?: LayerDefinition[],
+): { hex: string; border: string; fill: string } {
+  return layers?.find((l) => l.id === layerId)?.color ?? DEFAULT_COLOR;
+}
+
+export function buildOverlayColors(
+  layers?: LayerDefinition[],
+): Record<string, { border: string; fill: string; label: string }> {
+  const colors: Record<
+    string,
+    { border: string; fill: string; label: string }
+  > = {};
+
+  for (const layer of layers ?? []) {
+    colors[layer.id] = {
+      border: layer.color.border,
+      fill: layer.color.fill,
+      label: layer.color.hex,
+    };
+  }
+
+  colors._default = {
+    border: DEFAULT_COLOR.border,
+    fill: DEFAULT_COLOR.fill,
+    label: DEFAULT_COLOR.hex,
+  };
+
+  return colors;
+}
