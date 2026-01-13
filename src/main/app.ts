@@ -14,6 +14,7 @@ import { progressQueue } from './utils/progress-queue';
 import { storeService } from './services/store.service';
 import { mcpService } from './services/mcp.service';
 import { indexService } from './services/index.service';
+import { pdfWorkerService } from './services/pdf-worker.service';
 import {
   registerAllHandlers,
   setHandlerContext,
@@ -157,6 +158,7 @@ export class Application {
   async cleanup(): Promise<void> {
     cleanupVerificationIpcHandlers();
     cleanupOcrIpcHandlers();
+    pdfWorkerService.dispose();
     await mcpService.stop();
     await indexService.dispose();
   }

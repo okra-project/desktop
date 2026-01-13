@@ -97,7 +97,10 @@ export type Channels =
   | 'query:parse'
   | 'query:set-current-workspace'
   | 'query:parse-display-mode'
-  | 'query:results';
+  | 'query:results'
+  | 'pdf-worker:request'
+  | 'pdf-worker:response'
+  | 'pdf-worker:ready';
 
 const electronHandler = {
   ipcRenderer: {

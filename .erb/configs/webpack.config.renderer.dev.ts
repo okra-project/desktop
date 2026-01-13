@@ -45,16 +45,19 @@ const configuration: webpack.Configuration = {
 
   target: ['web', 'electron-renderer'],
 
-  entry: [
-    `webpack-dev-server/client?http://localhost:${port}/dist`,
-    'webpack/hot/only-dev-server',
-    path.join(webpackPaths.srcRendererPath, 'index.tsx'),
-  ],
+  entry: {
+    renderer: [
+      `webpack-dev-server/client?http://localhost:${port}/dist`,
+      'webpack/hot/only-dev-server',
+      path.join(webpackPaths.srcRendererPath, 'index.tsx'),
+    ],
+    'pdf-worker': [path.join(webpackPaths.srcRendererPath, 'pdf-worker.ts')],
+  },
 
   output: {
     path: webpackPaths.distRendererPath,
     publicPath: '/',
-    filename: 'renderer.dev.js',
+    filename: '[name].dev.js',
     library: {
       type: 'umd',
     },
@@ -113,6 +116,11 @@ const configuration: webpack.Configuration = {
           'file-loader',
         ],
       },
+      // PDF.js worker
+      {
+        test: /pdf\.worker\.min\.mjs$/,
+        type: 'asset/resource',
+      },
     ],
   },
   plugins: [
@@ -169,6 +177,22 @@ const configuration: webpack.Configuration = {
       env: process.env.NODE_ENV,
       isDevelopment: process.env.NODE_ENV !== 'production',
       nodeModules: webpackPaths.appNodeModulesPath,
+      chunks: ['renderer'],
+    }),
+
+    new HtmlWebpackPlugin({
+      filename: path.join('pdf-worker.html'),
+      template: path.join(webpackPaths.srcRendererPath, 'pdf-worker.ejs'),
+      minify: {
+        collapseWhitespace: true,
+        removeAttributeQuotes: true,
+        removeComments: true,
+      },
+      isBrowser: false,
+      env: process.env.NODE_ENV,
+      isDevelopment: process.env.NODE_ENV !== 'production',
+      nodeModules: webpackPaths.appNodeModulesPath,
+      chunks: ['pdf-worker'],
     }),
   ],
 
@@ -184,6 +208,7 @@ const configuration: webpack.Configuration = {
     headers: { 'Access-Control-Allow-Origin': '*' },
     static: {
       publicPath: '/',
+      directory: path.join(webpackPaths.rootPath, 'assets'),
     },
     historyApiFallback: {
       verbose: true,

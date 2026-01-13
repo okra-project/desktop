@@ -135,15 +135,6 @@ export default async function beforeBuild(_context) {
   const sdkDeps = [
     '@anthropic-ai/claude-agent-sdk',
     '@anthropic-ai/claude-code',
-    '@napi-rs/canvas',
-    '@napi-rs/canvas-darwin-arm64',
-    '@napi-rs/canvas-darwin-x64',
-    '@napi-rs/canvas-linux-arm64-gnu',
-    '@napi-rs/canvas-linux-arm64-musl',
-    '@napi-rs/canvas-linux-x64-gnu',
-    '@napi-rs/canvas-linux-x64-musl',
-    '@napi-rs/canvas-win32-arm64-msvc',
-    '@napi-rs/canvas-win32-x64-msvc',
     'pdfjs-dist',
   ];
   for (const depName of sdkDeps) {

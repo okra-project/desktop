@@ -5,6 +5,8 @@ import type {
   OcrBoundingBox,
   LayerDefinition,
   OcrProviderMetadata,
+  WorkflowExecutionContext,
+  WorkflowNodeResult,
 } from '../providers/ocr-types';
 import type { OcrPlugin, OcrPluginModule } from './plugin-types';
 
@@ -73,6 +75,12 @@ const METADATA: OcrProviderMetadata = {
       category: 'entity',
     },
   ],
+  // Workflow integration - enables this plugin in extraction workflows
+  workflowNode: {
+    inputs: ['page-images'],
+    outputs: ['entities', 'markdown'],
+    group: 'processor',
+  },
   authenticate: { type: 'bearer' },
   documentationUrl: 'https://openrouter.ai/docs',
   costPerPage: 0.005,
@@ -177,6 +185,39 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function summarizeRequestBody(
+  body: RequestInit['body'],
+): Record<string, unknown> | null {
+  if (typeof body !== 'string') return null;
+  try {
+    const parsed = JSON.parse(body);
+    const content = parsed?.messages?.[0]?.content;
+    const contentSummary = Array.isArray(content)
+      ? content.map((item: { type?: string; image_url?: unknown }) => {
+          const imageUrl = item?.image_url as { url?: unknown } | undefined;
+          return {
+            type: item?.type,
+            image_url_type: typeof item?.image_url,
+            image_url_has_url: typeof imageUrl?.url === 'string',
+            image_url_url_prefix:
+              typeof imageUrl?.url === 'string'
+                ? imageUrl.url.slice(0, 32)
+                : typeof item?.image_url === 'string'
+                  ? item.image_url.slice(0, 32)
+                  : undefined,
+          };
+        })
+      : typeof content;
+    return {
+      model: parsed?.model,
+      max_tokens: parsed?.max_tokens,
+      content: contentSummary,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchWithRetry(
   url: string,
   options: RequestInit,
@@ -190,6 +231,11 @@ async function fetchWithRetry(
       if (response.ok) return response;
 
       const errorText = await response.text();
+      const summary = summarizeRequestBody(options.body);
+      if (summary) {
+        console.warn('[openrouter] Request payload summary:', summary);
+      }
+      console.warn('[openrouter] Error response:', errorText);
       lastError = classifyError(new Error(errorText), response.status);
 
       if (!lastError.retryable) {
@@ -310,6 +356,33 @@ class OpenRouterPlugin implements OcrPlugin {
       const model = config.modelId ?? 'qwen/qwen3-vl-235b-a22b-instruct';
       const prompt = buildPromptFromLayers(layers);
 
+      console.log('[openrouter] Payload debug', {
+        pageNumber,
+        model,
+        imageBytes: imageBuffer.length,
+        imageBase64Prefix: imageBase64.slice(0, 32),
+        promptLength: prompt.length,
+      });
+
+      const requestBody = JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              {
+                type: 'image_url',
+                image_url: { url: `data:image/png;base64,${imageBase64}` },
+              },
+            ],
+          },
+        ],
+        max_tokens: 10000,
+      });
+
+      console.log('[openrouter] Request Body Preview:', requestBody.slice(0, 500) + '...');
+
       const response = await fetchWithRetry(
         'https://openrouter.ai/api/v1/chat/completions',
         {
@@ -320,22 +393,7 @@ class OpenRouterPlugin implements OcrPlugin {
             'HTTP-Referer': 'https://github.com/okrapdf/okrapdf-desktop',
             'X-Title': 'OkraPDF Desktop',
           },
-          body: JSON.stringify({
-            model,
-            messages: [
-              {
-                role: 'user',
-                content: [
-                  { type: 'text', text: prompt },
-                  {
-                    type: 'image_url',
-                    image_url: { url: `data:image/png;base64,${imageBase64}` },
-                  },
-                ],
-              },
-            ],
-            max_tokens: 10000,
-          }),
+          body: requestBody,
         },
       );
 
@@ -378,6 +436,7 @@ class OpenRouterPlugin implements OcrPlugin {
       console.error(
         `[openrouter] Page ${pageNumber} failed: ${classified.message}`,
       );
+      console.error('[openrouter] Raw error:', error);
       return {
         pageNumber,
         bboxes: [],
@@ -408,6 +467,51 @@ class OpenRouterPlugin implements OcrPlugin {
         ok: false,
         error: error instanceof Error ? error.message : String(error),
         latencyMs: Date.now() - startTime,
+      };
+    }
+  }
+
+  /**
+   * Execute as workflow node - called by workflow handler per-page
+   */
+  async executeWorkflow(
+    ctx: WorkflowExecutionContext,
+  ): Promise<WorkflowNodeResult> {
+    const startTime = Date.now();
+    ctx.reportProgress(`Processing page ${ctx.pageNumber} with OpenRouter VLM`);
+
+    try {
+      // Check for abort signal
+      if (ctx.signal.aborted) {
+        return {
+          durationMs: Date.now() - startTime,
+          error: 'Aborted',
+        };
+      }
+
+      // Use existing extract method
+      const result = await this.extract(
+        ctx.input.pageImage!,
+        ctx.pageNumber,
+        ctx.config,
+      );
+
+      if (result.error) {
+        return {
+          durationMs: result.durationMs ?? Date.now() - startTime,
+          error: result.error,
+        };
+      }
+
+      return {
+        entities: result,
+        markdown: result.markdown,
+        durationMs: result.durationMs ?? Date.now() - startTime,
+      };
+    } catch (error) {
+      return {
+        durationMs: Date.now() - startTime,
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }

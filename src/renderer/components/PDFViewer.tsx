@@ -15,10 +15,14 @@ import { DomSearchProvider, useSearch } from '../search';
 import { QueryResultsOverlay } from './QueryResultsOverlay';
 
 // Bundle worker locally - all pdfjs-dist unified to 5.4.530 via npm overrides
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString();
+if (process.env.NODE_ENV === 'development') {
+  pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+} else {
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url,
+  ).toString();
+}
 
 // ============================================================================
 // Types

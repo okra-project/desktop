@@ -17,6 +17,11 @@ interface PluginConfigModalProps {
   onUninstall?: () => Promise<{ success: boolean; error?: string }>;
 }
 
+/**
+ * Plugins that support okrapdf.com proxy mode
+ */
+const OKRAPDF_SUPPORTED_PLUGINS = ['google-docai'];
+
 export function PluginConfigModal({
   provider,
   config,
@@ -37,13 +42,41 @@ export function PluginConfigModal({
     latencyMs?: number;
   } | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [globalOkrapdfKey, setGlobalOkrapdfKey] = useState<string | null>(null);
+  const [useGlobalKey, setUseGlobalKey] = useState(false);
 
   const pluginState = provider.state ?? PluginState.Installed;
   const isUninstalling = pluginState === PluginState.Uninstalling;
+  const supportsOkrapdf = OKRAPDF_SUPPORTED_PLUGINS.includes(provider.id);
+  const isOkrapdfMode =
+    supportsOkrapdf &&
+    (localConfig.options?.authMode as string) !== 'direct';
 
   useEffect(() => {
-    if (config) setLocalConfig(config);
+    if (config) {
+      setLocalConfig(config);
+      // Restore useGlobalKey from saved config
+      if (config.options?.useGlobalKey) {
+        setUseGlobalKey(true);
+      }
+    }
   }, [config]);
+
+  // Fetch global okrapdf key on open
+  useEffect(() => {
+    if (isOpen && supportsOkrapdf) {
+      window.electron.ipcRenderer
+        .invoke('byok:get-okrapdf-key')
+        .then((key: string | null) => {
+          setGlobalOkrapdfKey(key);
+          // Auto-enable if global key exists and no local key configured and not explicitly saved before
+          if (key && !config?.apiKey && config?.options?.useGlobalKey !== false) {
+            setUseGlobalKey(true);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [isOpen, supportsOkrapdf, config?.apiKey, config?.options?.useGlobalKey]);
 
   useEffect(() => {
     if (isOpen) {
@@ -51,10 +84,22 @@ export function PluginConfigModal({
     }
   }, [isOpen]);
 
+  // Get effective config (with global key if selected)
+  const getEffectiveConfig = (): OcrProviderConfig => {
+    if (useGlobalKey && globalOkrapdfKey && isOkrapdfMode) {
+      return { ...localConfig, apiKey: globalOkrapdfKey };
+    }
+    return localConfig;
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await onSave(localConfig);
+      // If using global key, don't save the key in provider config
+      const configToSave = useGlobalKey && isOkrapdfMode
+        ? { ...localConfig, apiKey: undefined, options: { ...localConfig.options, useGlobalKey: true } }
+        : { ...localConfig, options: { ...localConfig.options, useGlobalKey: false } };
+      await onSave(configToSave);
       onClose();
     } finally {
       setIsSaving(false);
@@ -65,7 +110,7 @@ export function PluginConfigModal({
     setIsTesting(true);
     setTestResult(null);
     try {
-      const result = await onTest(localConfig);
+      const result = await onTest(getEffectiveConfig());
       setTestResult(result);
     } finally {
       setIsTesting(false);
@@ -168,13 +213,57 @@ export function PluginConfigModal({
               </div>
             )}
 
+            {/* Global okrapdf key option */}
+            {isOkrapdfMode && globalOkrapdfKey && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useGlobalKey}
+                    onChange={(e) => setUseGlobalKey(e.target.checked)}
+                    className="w-4 h-4 rounded border-green-300 text-green-600 focus:ring-green-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-green-800">
+                      Use global okrapdf API key
+                    </span>
+                    <p className="text-xs text-green-600 mt-0.5">
+                      Key configured in Settings • okra_{globalOkrapdfKey.slice(5, 13)}...
+                    </p>
+                  </div>
+                </label>
+              </div>
+            )}
+
+            {/* Link to configure global key if not set */}
+            {isOkrapdfMode && !globalOkrapdfKey && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                <p className="text-sm text-amber-700">
+                  <span className="font-medium">Tip:</span> Configure a global okrapdf API key in Settings to avoid re-entering it for each plugin.{' '}
+                  <button
+                    onClick={() =>
+                      window.electron.ipcRenderer.invoke(
+                        'shell:open-external',
+                        'https://app.okrapdf.com/settings',
+                      )
+                    }
+                    className="underline hover:opacity-80"
+                  >
+                    Get your key
+                  </button>
+                </p>
+              </div>
+            )}
+
             {/* API Key field */}
-            <div>
+            <div className={useGlobalKey && isOkrapdfMode ? 'opacity-50 pointer-events-none' : ''}>
               <label className="block text-sm font-medium text-ink mb-2">
                 {provider.id === 'google-docai' &&
                 (localConfig.options?.authMode as string) === 'direct'
                   ? 'Service Account Key (JSON)'
-                  : 'API Key'}
+                  : useGlobalKey && isOkrapdfMode
+                    ? 'API Key (using global)'
+                    : 'API Key'}
               </label>
               {provider.id === 'google-docai' &&
               (localConfig.options?.authMode as string) === 'direct' ? (
@@ -434,7 +523,7 @@ export function PluginConfigModal({
             <div className="flex items-center gap-3">
               <button
                 onClick={handleTest}
-                disabled={!localConfig.apiKey || isTesting}
+                disabled={(!localConfig.apiKey && !useGlobalKey) || isTesting}
                 className="px-4 py-2 bg-white border border-sidebar-border hover:bg-slate-50 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isTesting ? 'Testing...' : 'Test Connection'}

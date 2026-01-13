@@ -8,8 +8,6 @@ export * from './ocr-types';
 export {
   setupOcrIpcHandlers,
   cleanupOcrIpcHandlers,
-  renderPageToBuffer,
   renderPageFromFile,
   extractWithProvider,
-  ensureDomMatrix,
 } from './ocr-handlers';

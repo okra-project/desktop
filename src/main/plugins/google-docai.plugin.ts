@@ -2,6 +2,8 @@ import type {
   OcrProviderConfig,
   OcrPageResult,
   OcrProviderMetadata,
+  WorkflowExecutionContext,
+  WorkflowNodeResult,
 } from '../providers/ocr-types';
 import type { OcrPlugin, OcrPluginModule } from './plugin-types';
 
@@ -25,7 +27,7 @@ const METADATA: OcrProviderMetadata = {
   category: 'ocr',
   capabilities: {
     supportsText: true,
-    supportsTables: false,
+    supportsTables: true,
     supportsBboxes: true,
     supportsFigures: false,
     supportsHandwriting: true,
@@ -33,7 +35,13 @@ const METADATA: OcrProviderMetadata = {
     outputFormats: ['json', 'markdown'],
     maxPagesPerRequest: 15,
   },
-  layers: [],
+  layers: [], // OCR provider - outputs text, not semantic entities
+  // Workflow integration - text extraction node
+  workflowNode: {
+    inputs: ['page-images'],
+    outputs: ['text'],
+    group: 'processor',
+  },
   authenticate: { type: 'bearer' },
   documentationUrl: 'https://cloud.google.com/document-ai',
   costPerPage: 0.01,
@@ -98,7 +106,7 @@ class GoogleDocAIPlugin implements OcrPlugin {
     const page = document.pages?.[0];
 
     if (page?.blocks) {
-      for (const block of page.blocks) {
+      for (const block of (page.blocks as any[])) {
         if (block.layout?.boundingPoly?.normalizedVertices) {
           bboxes.push({
             type: 'paragraph',
@@ -113,7 +121,7 @@ class GoogleDocAIPlugin implements OcrPlugin {
     const tables: OcrPageResult['tables'] = [];
     if (page?.tables) {
       for (let i = 0; i < page.tables.length; i++) {
-        const table = page.tables[i];
+        const table = page.tables[i] as any;
         const rows: string[][] = [];
 
         for (const row of table.bodyRows || []) {
@@ -294,6 +302,52 @@ class GoogleDocAIPlugin implements OcrPlugin {
         ok: false,
         error: error instanceof Error ? error.message : String(error),
         latencyMs: Date.now() - startTime,
+      };
+    }
+  }
+
+  /**
+   * Execute as workflow node - called by workflow handler per-page
+   */
+  async executeWorkflow(
+    ctx: WorkflowExecutionContext,
+  ): Promise<WorkflowNodeResult> {
+    const startTime = Date.now();
+    ctx.reportProgress(
+      `Processing page ${ctx.pageNumber} with Google Document AI`,
+    );
+
+    try {
+      // Check for abort signal
+      if (ctx.signal.aborted) {
+        return {
+          durationMs: Date.now() - startTime,
+          error: 'Aborted',
+        };
+      }
+
+      // Use existing extract method
+      const result = await this.extract(
+        ctx.input.pageImage!,
+        ctx.pageNumber,
+        ctx.config,
+      );
+
+      if (result.error) {
+        return {
+          durationMs: result.durationMs ?? Date.now() - startTime,
+          error: result.error,
+        };
+      }
+
+      return {
+        text: result.markdown,
+        durationMs: result.durationMs ?? Date.now() - startTime,
+      };
+    } catch (error) {
+      return {
+        durationMs: Date.now() - startTime,
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }

@@ -23,6 +23,9 @@ export interface BYOKSettings {
   /** @deprecated Use OCR Providers settings instead */
   openrouterApiKey?: string;
 
+  /** Global okrapdf.com API key for plugins that support okrapdf proxy mode */
+  okrapdfApiKey?: string;
+
   /** Whether BYOK mode is enabled (has at least anthropicApiKey) */
   enabled: boolean;
 

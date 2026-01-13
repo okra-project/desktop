@@ -25,12 +25,15 @@ const configuration: webpack.Configuration = {
 
   target: ['web', 'electron-renderer'],
 
-  entry: [path.join(webpackPaths.srcRendererPath, 'index.tsx')],
+  entry: {
+    renderer: [path.join(webpackPaths.srcRendererPath, 'index.tsx')],
+    'pdf-worker': [path.join(webpackPaths.srcRendererPath, 'pdf-worker.ts')],
+  },
 
   output: {
     path: webpackPaths.distRendererPath,
     publicPath: './',
-    filename: 'renderer.js',
+    filename: '[name].js',
     library: {
       type: 'umd',
     },
@@ -94,6 +97,11 @@ const configuration: webpack.Configuration = {
           'file-loader',
         ],
       },
+      // PDF.js worker
+      {
+        test: /pdf\.worker\.min\.mjs$/,
+        type: 'asset/resource',
+      },
     ],
   },
 
@@ -143,6 +151,20 @@ const configuration: webpack.Configuration = {
       },
       isBrowser: false,
       isDevelopment: false,
+      chunks: ['renderer'],
+    }),
+
+    new HtmlWebpackPlugin({
+      filename: 'pdf-worker.html',
+      template: path.join(webpackPaths.srcRendererPath, 'pdf-worker.ejs'),
+      minify: {
+        collapseWhitespace: true,
+        removeAttributeQuotes: true,
+        removeComments: true,
+      },
+      isBrowser: false,
+      isDevelopment: false,
+      chunks: ['pdf-worker'],
     }),
 
     new webpack.DefinePlugin({

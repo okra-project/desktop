@@ -3,9 +3,17 @@ import { useWorkflow, useWorkspaceWorkflow } from './useWorkflow';
 import { useAppSelector } from '../store';
 import { selectTotalPages, selectExtractionStatus } from '@okrapdf/redux';
 
+/**
+ * Hook for managing workflow extraction with dynamic provider support
+ *
+ * @param workspaceId - Unique workspace identifier
+ * @param workspacePath - Path to workspace directory
+ * @param providerId - Optional provider ID (defaults to 'openrouter' for entity extraction)
+ */
 export function useWorkflowExtraction(
   workspaceId: string,
   workspacePath: string,
+  providerId: string = 'openrouter',
 ) {
   const { startRun } = useWorkflow();
   const { latestRun, status, progress, isRunning, isComplete } =
@@ -30,12 +38,12 @@ export function useWorkflowExtraction(
         const status = await window.electron.ipcRenderer.invoke(
           'ocr:check-extraction-status',
           workspacePath,
-          'openrouter',
+          providerId,
         );
-        console.log('[workflow] Manifest check result:', status);
+        console.log(`[workflow] Manifest check result for ${providerId}:`, status);
         if (status.completed) {
           console.log(
-            '[workflow] Extraction already completed (from manifest)',
+            `[workflow] Extraction already completed for ${providerId} (from manifest)`,
           );
           setExtractionComplete(true);
         }
@@ -48,7 +56,7 @@ export function useWorkflowExtraction(
     };
 
     checkManifest();
-  }, [workspacePath, manifestChecked]);
+  }, [workspacePath, manifestChecked, providerId]);
 
   const startExtraction = useCallback(async () => {
     if (totalPages === 0) {
@@ -73,13 +81,13 @@ export function useWorkflowExtraction(
     }
 
     console.log(
-      `[workflow] Starting entity extraction for ${totalPages} pages`,
+      `[workflow] Starting extraction with ${providerId} for ${totalPages} pages`,
     );
 
     try {
-      const apiKey = await window.electron.ipcRenderer.invoke(
+      const config = await window.electron.ipcRenderer.invoke(
         'ocr:get-config',
-        'openrouter',
+        providerId,
       );
 
       await startRun({
@@ -88,9 +96,9 @@ export function useWorkflowExtraction(
         totalPages,
         nodes: [
           {
-            nodeId: 'entity-extractor',
-            nodeType: 'entityExtractor',
-            config: { apiKey: apiKey?.apiKey },
+            nodeId: `${providerId}-extractor`,
+            nodeType: providerId,
+            config: config || {},
           },
         ],
       });
@@ -104,6 +112,7 @@ export function useWorkflowExtraction(
     latestRun,
     startRun,
     extractionComplete,
+    providerId,
   ]);
 
   useEffect(() => {

@@ -1,5 +1,8 @@
 /**
  * Workflow Handlers - Workflow runtime execution
+ *
+ * Uses plugin's executeWorkflow method for generic dispatch.
+ * Plugins declare their workflow capabilities via metadata.workflowNode.
  */
 
 import { ipcMain } from 'electron';
@@ -10,12 +13,36 @@ import { findPdfInWorkspace } from '../utils/pdf.utils';
 import { extractTextFromPDF, type ExtractionProgress } from '../pdf-extraction';
 import {
   renderPageFromFile,
-  extractWithProvider,
   type OcrProviderConfig,
   type OcrProgress,
+  type WorkflowExecutionContext,
 } from '../providers';
+import { getPlugin, getAvailablePlugins } from '../plugins/plugin-loader';
+import { storeService } from '../services/store.service';
 
 const workflowAbortControllers = new Map<string, AbortController>();
+
+/**
+ * Resolve config by injecting global okrapdf API key if useGlobalKey is true
+ */
+function resolveConfig(config: OcrProviderConfig): OcrProviderConfig {
+  if (config.options?.useGlobalKey && !config.apiKey) {
+    const globalKey = storeService.getOkrapdfApiKey();
+    if (globalKey) {
+      return { ...config, apiKey: globalKey };
+    }
+  }
+  return config;
+}
+
+/**
+ * Get list of workflow-capable providers
+ */
+export function getWorkflowProviders(): string[] {
+  return getAvailablePlugins()
+    .filter((p) => p.metadata.workflowNode)
+    .map((p) => p.id);
+}
 
 // Track active runs - fully serializable state (no promises/functions)
 interface ActiveRunState {
@@ -74,6 +101,11 @@ export function registerWorkflowHandlers(): void {
       return [];
     }
   });
+  // List workflow-capable providers
+  ipcMain.handle('workflow:list-providers', () => {
+    return getWorkflowProviders();
+  });
+
   ipcMain.handle(
     'workflow:execute-node',
     async (
@@ -99,7 +131,8 @@ export function registerWorkflowHandlers(): void {
       }
 
       try {
-        if (nodeType === 'textExtractor' || nodeType === 'googleDocAi') {
+        // Legacy text extractor fallback (pdfjs-based, no plugin)
+        if (nodeType === 'textExtractor') {
           const pluginDir = path.join(
             workspacePath,
             'plugins',
@@ -140,212 +173,258 @@ export function registerWorkflowHandlers(): void {
           return { success: result.success, error: result.error };
         }
 
-        if (nodeType === 'entityExtractor' || nodeType === 'openrouter') {
-          const providerId = 'openrouter';
-          const outputDir = path.join(workspacePath, 'plugins', providerId);
-          fs.mkdirSync(outputDir, { recursive: true });
+        // Generic plugin dispatch - check if plugin supports workflow
+        const providerId = nodeType === 'entityExtractor' ? 'openrouter' : nodeType;
+        const plugin = getPlugin(providerId);
 
-          const providerConfig = config as OcrProviderConfig;
-          if (!providerConfig.apiKey) {
-            return {
-              success: false,
-              error: 'OpenRouter API key not configured',
-            };
-          }
+        if (!plugin) {
+          return { success: false, error: `Plugin not found: ${providerId}` };
+        }
 
-          const manifestPath = path.join(outputDir, 'manifest.json');
-          if (fs.existsSync(manifestPath)) {
-            const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
-            if (manifest.completed && manifest.pageCount === totalPages) {
-              console.log('[entityExtractor] Already completed, skipping');
-              progressQueue.send('ocr:progress', {
-                providerId,
-                phase: 'completed',
-                currentPage: totalPages,
-                totalPages,
-              } as OcrProgress);
-              return { success: true };
-            }
-          }
+        if (!plugin.metadata.workflowNode) {
+          return {
+            success: false,
+            error: `Plugin ${providerId} does not support workflow execution`,
+          };
+        }
 
-          const failedPages: number[] = [];
-          const MAX_RETRIES = 2;
-          const TIMEOUT_MS = 90000;
+        if (!plugin.executeWorkflow) {
+          return {
+            success: false,
+            error: `Plugin ${providerId} missing executeWorkflow method`,
+          };
+        }
 
-          // Track this run
-          const runKey = `${workspacePath}:${nodeId}`;
-          activeRuns.set(runKey, {
-            runId,
-            nodeId,
-            nodeType,
-            workspacePath,
-            totalPages,
-            currentPage: 0,
-            status: 'running',
-            startedAt: new Date().toISOString(),
-          });
+        // Setup output directory
+        const outputDir = path.join(workspacePath, 'plugins', providerId);
+        fs.mkdirSync(outputDir, { recursive: true });
 
-          for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
-            if (abortController.signal.aborted) {
-              // Update tracking on cancel
-              const cancelledRun = activeRuns.get(runKey);
-              if (cancelledRun) {
-                cancelledRun.status = 'cancelled';
-                setTimeout(() => activeRuns.delete(runKey), 5000);
-              }
-              return { success: false, error: 'Extraction cancelled' };
-            }
+        // Resolve config with global key if needed
+        const providerConfig = resolveConfig(config as OcrProviderConfig);
+        if (!providerConfig.apiKey) {
+          return {
+            success: false,
+            error: `${plugin.metadata.name} API key not configured`,
+          };
+        }
 
-            const outputPath = path.join(
-              outputDir,
-              `page-${String(pageNum).padStart(3, '0')}.json`,
-            );
-
-            if (fs.existsSync(outputPath)) {
-              const existing = JSON.parse(fs.readFileSync(outputPath, 'utf-8'));
-              if (existing.bboxes && !existing.error) {
-                console.log(
-                  `[entityExtractor] Page ${pageNum} already done, skipping`,
-                );
-                continue;
-              }
-            }
-
-            progressQueue.send('workflow:node-progress', {
-              runId,
-              nodeId,
-              type: 'page_complete',
-              page: pageNum,
-              totalPages,
-            });
-
-            // Update tracking
-            const activeRun = activeRuns.get(runKey);
-            if (activeRun) {
-              activeRun.currentPage = pageNum;
-            }
-
+        // Check for existing completed extraction
+        const manifestPath = path.join(outputDir, 'manifest.json');
+        if (fs.existsSync(manifestPath)) {
+          const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+          if (manifest.completed && manifest.pageCount === totalPages) {
+            console.log(`[workflow] ${providerId} already completed, skipping`);
             progressQueue.send('ocr:progress', {
               providerId,
-              phase: 'processing',
-              currentPage: pageNum,
+              phase: 'completed',
+              currentPage: totalPages,
               totalPages,
-              message: `Extracting page ${pageNum}/${totalPages}`,
             } as OcrProgress);
+            return { success: true };
+          }
+        }
 
-            let pageResult = null;
-            let lastError = null;
+        const failedPages: number[] = [];
+        const MAX_RETRIES = 2;
+        const TIMEOUT_MS = 90000;
 
-            for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-              try {
-                const {
-                  buffer: imageBuffer,
-                  width,
-                  height,
-                } = await renderPageFromFile(pdfPath, pageNum);
+        // Track this run
+        const runKey = `${workspacePath}:${nodeId}`;
+        activeRuns.set(runKey, {
+          runId,
+          nodeId,
+          nodeType: providerId,
+          workspacePath,
+          totalPages,
+          currentPage: 0,
+          status: 'running',
+          startedAt: new Date().toISOString(),
+        });
 
-                const extractPromise = extractWithProvider(
-                  providerId,
-                  imageBuffer,
-                  pageNum,
-                  providerConfig,
-                );
-
-                const timeoutPromise = new Promise<never>((_, reject) =>
-                  setTimeout(
-                    () => reject(new Error('Timeout after 90s')),
-                    TIMEOUT_MS,
-                  ),
-                );
-
-                pageResult = await Promise.race([
-                  extractPromise,
-                  timeoutPromise,
-                ]);
-                if (pageResult && !pageResult.imageSize) {
-                  pageResult.imageSize = { width, height };
-                }
-                break;
-              } catch (err) {
-                lastError = err instanceof Error ? err.message : String(err);
-                console.error(
-                  `[entityExtractor] Page ${pageNum} attempt ${attempt + 1} failed:`,
-                  lastError,
-                );
-                if (attempt < MAX_RETRIES) {
-                  await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
-                }
-              }
+        // Process each page
+        for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+          if (abortController.signal.aborted) {
+            const cancelledRun = activeRuns.get(runKey);
+            if (cancelledRun) {
+              cancelledRun.status = 'cancelled';
+              setTimeout(() => activeRuns.delete(runKey), 5000);
             }
+            return { success: false, error: 'Extraction cancelled' };
+          }
 
-            if (pageResult) {
-              fs.writeFileSync(outputPath, JSON.stringify(pageResult, null, 2));
-              if (pageResult.markdown) {
-                const mdPath = path.join(
-                  outputDir,
-                  `page-${String(pageNum).padStart(3, '0')}.md`,
-                );
-                fs.writeFileSync(mdPath, pageResult.markdown);
-              }
-            } else {
-              failedPages.push(pageNum);
-              fs.writeFileSync(
-                outputPath,
-                JSON.stringify(
-                  {
-                    pageNumber: pageNum,
-                    bboxes: [],
-                    error: lastError,
-                  },
-                  null,
-                  2,
-                ),
-              );
+          const outputPath = path.join(
+            outputDir,
+            `page-${String(pageNum).padStart(3, '0')}.json`,
+          );
+
+          // Skip already completed pages
+          if (fs.existsSync(outputPath)) {
+            const existing = JSON.parse(fs.readFileSync(outputPath, 'utf-8'));
+            if (!existing.error) {
+              console.log(`[workflow] ${providerId} page ${pageNum} done, skipping`);
+              continue;
             }
           }
 
-          const manifest = {
-            providerId,
-            completed: failedPages.length === 0,
-            pageCount: totalPages,
-            failedPages,
-            extractedAt: new Date().toISOString(),
-          };
-          fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+          // Update progress
+          progressQueue.send('workflow:node-progress', {
+            runId,
+            nodeId,
+            type: 'page_complete',
+            page: pageNum,
+            totalPages,
+          });
 
-          // Update tracking - mark complete or failed
-          const finalRun = activeRuns.get(runKey);
-          if (finalRun) {
-            finalRun.status = failedPages.length === 0 ? 'completed' : 'failed';
-            finalRun.currentPage = totalPages;
-            if (failedPages.length > 0) {
-              finalRun.error = `Failed pages: ${failedPages.join(', ')}`;
-            }
-            // Clean up after a delay (keep for reconnection window)
-            setTimeout(() => activeRuns.delete(runKey), 30000);
+          const activeRun = activeRuns.get(runKey);
+          if (activeRun) {
+            activeRun.currentPage = pageNum;
           }
 
           progressQueue.send('ocr:progress', {
             providerId,
-            phase: failedPages.length === 0 ? 'completed' : 'failed',
-            currentPage: totalPages,
+            phase: 'processing',
+            currentPage: pageNum,
             totalPages,
-            error:
-              failedPages.length > 0
-                ? `Failed pages: ${failedPages.join(', ')}`
-                : undefined,
+            message: `Processing page ${pageNum}/${totalPages}`,
           } as OcrProgress);
 
-          return {
-            success: failedPages.length === 0,
-            error:
-              failedPages.length > 0
-                ? `Failed: ${failedPages.length} pages`
-                : undefined,
-          };
+          let pageResult = null;
+          let lastError = null;
+
+          // Retry loop
+          for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+              const {
+                buffer: imageBuffer,
+                width,
+                height,
+              } = await renderPageFromFile(pdfPath, pageNum);
+
+              // Build execution context
+              const context: WorkflowExecutionContext = {
+                workspacePath,
+                pdfPath,
+                pageNumber: pageNum,
+                totalPages,
+                config: providerConfig,
+                input: { pageImage: imageBuffer },
+                reportProgress: (msg) => {
+                  progressQueue.send('ocr:progress', {
+                    providerId,
+                    phase: 'processing',
+                    currentPage: pageNum,
+                    totalPages,
+                    message: msg,
+                  } as OcrProgress);
+                },
+                signal: abortController.signal,
+              };
+
+              // Execute with timeout
+              const executePromise = plugin.executeWorkflow(context);
+              const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(
+                  () => reject(new Error('Timeout after 90s')),
+                  TIMEOUT_MS,
+                ),
+              );
+
+              const result = await Promise.race([executePromise, timeoutPromise]);
+
+              if (result.error) {
+                lastError = result.error;
+                throw new Error(result.error);
+              }
+
+              // Build page result from workflow result
+              pageResult = result.entities || {
+                pageNumber: pageNum,
+                bboxes: [],
+                markdown: result.markdown || result.text,
+                durationMs: result.durationMs,
+              };
+
+              if (!pageResult.imageSize) {
+                pageResult.imageSize = { width, height };
+              }
+              break;
+            } catch (err) {
+              lastError = err instanceof Error ? err.message : String(err);
+              console.error(
+                `[workflow] ${providerId} page ${pageNum} attempt ${attempt + 1} failed:`,
+                lastError,
+              );
+              if (err instanceof Error && err.stack) {
+                console.error(`[workflow] Stack trace:`, err.stack);
+              }
+              if (attempt < MAX_RETRIES) {
+                await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+              }
+            }
+          }
+
+          // Save result
+          if (pageResult) {
+            fs.writeFileSync(outputPath, JSON.stringify(pageResult, null, 2));
+            if (pageResult.markdown) {
+              const mdPath = path.join(
+                outputDir,
+                `page-${String(pageNum).padStart(3, '0')}.md`,
+              );
+              fs.writeFileSync(mdPath, pageResult.markdown);
+            }
+          } else {
+            failedPages.push(pageNum);
+            fs.writeFileSync(
+              outputPath,
+              JSON.stringify(
+                { pageNumber: pageNum, bboxes: [], error: lastError },
+                null,
+                2,
+              ),
+            );
+          }
         }
 
-        return { success: false, error: `Unknown node type: ${nodeType}` };
+        // Write manifest
+        const manifest = {
+          providerId,
+          completed: failedPages.length === 0,
+          pageCount: totalPages,
+          failedPages,
+          extractedAt: new Date().toISOString(),
+        };
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+        // Update tracking
+        const finalRun = activeRuns.get(runKey);
+        if (finalRun) {
+          finalRun.status = failedPages.length === 0 ? 'completed' : 'failed';
+          finalRun.currentPage = totalPages;
+          if (failedPages.length > 0) {
+            finalRun.error = `Failed pages: ${failedPages.join(', ')}`;
+          }
+          setTimeout(() => activeRuns.delete(runKey), 30000);
+        }
+
+        progressQueue.send('ocr:progress', {
+          providerId,
+          phase: failedPages.length === 0 ? 'completed' : 'failed',
+          currentPage: totalPages,
+          totalPages,
+          error:
+            failedPages.length > 0
+              ? `Failed pages: ${failedPages.join(', ')}`
+              : undefined,
+        } as OcrProgress);
+
+        return {
+          success: failedPages.length === 0,
+          error:
+            failedPages.length > 0
+              ? `Failed: ${failedPages.length} pages`
+              : undefined,
+        };
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unknown error';

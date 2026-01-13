@@ -56,6 +56,7 @@ export function registerTelemetryHandlers(): void {
         enabled: boolean;
         anthropicApiKey?: string;
         openrouterApiKey?: string;
+        okrapdfApiKey?: string;
       },
     ) => {
       storeService.setByokSettings({
@@ -66,6 +67,11 @@ export function registerTelemetryHandlers(): void {
       return { success: true };
     },
   );
+
+  // Get global okrapdf API key
+  ipcMain.handle('byok:get-okrapdf-key', async () => {
+    return storeService.getOkrapdfApiKey();
+  });
 
   ipcMain.handle(
     'byok:validate-key',

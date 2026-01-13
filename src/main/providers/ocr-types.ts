@@ -150,6 +150,13 @@ export interface OcrProviderMetadata {
   installInstructions?: string;
   /** npm packages required by this plugin (installed on-demand) */
   npmDependencies?: string[];
+  /**
+   * Workflow node definition - if present, plugin can be used in extraction workflows
+   *
+   * This enables the workflow system to dynamically dispatch to any provider
+   * that declares workflow support, rather than hardcoding provider logic.
+   */
+  workflowNode?: WorkflowNodeDefinition;
 }
 
 export interface OcrProgress {
@@ -185,5 +192,79 @@ export interface OcrComparisonResult {
   providerId: OcrProviderId;
   pages: OcrPageResult[];
   totalDurationMs: number;
+  error?: string;
+}
+
+// ============================================================================
+// Workflow Node Types (ComfyUI/n8n-inspired)
+// ============================================================================
+
+/**
+ * Data types that workflow nodes can consume/produce
+ *
+ * Inspired by ComfyUI's typed I/O system - nodes declare what they
+ * accept as input and produce as output.
+ */
+export type WorkflowIOType =
+  | 'pdf' // Raw PDF file path
+  | 'page-images' // Rendered page images (Buffer)
+  | 'text' // Extracted plain text
+  | 'entities' // OcrPageResult with bboxes, tables
+  | 'markdown'; // Final markdown output
+
+/**
+ * Workflow node definition in plugin metadata
+ *
+ * If present, the plugin can be used as a workflow node.
+ * This is how plugins declare their workflow integration.
+ */
+export interface WorkflowNodeDefinition {
+  /** What this node consumes from previous node */
+  inputs: WorkflowIOType[];
+  /** What this node produces for next node */
+  outputs: WorkflowIOType[];
+  /** Visual grouping in workflow editor */
+  group: 'source' | 'processor' | 'output';
+}
+
+/**
+ * Context passed to plugin's executeWorkflow method
+ *
+ * Contains everything the plugin needs to do its work,
+ * plus utilities for progress reporting and cancellation.
+ */
+export interface WorkflowExecutionContext {
+  workspacePath: string;
+  pdfPath: string;
+  pageNumber: number;
+  totalPages: number;
+  config: OcrProviderConfig;
+  /** Input from previous node (based on declared inputs) */
+  input: {
+    pageImage?: Buffer;
+    text?: string;
+    entities?: OcrPageResult;
+  };
+  /** Report progress to UI */
+  reportProgress(message: string, percent?: number): void;
+  /** Abort signal for cancellation */
+  signal: AbortSignal;
+}
+
+/**
+ * Result from plugin's executeWorkflow method
+ *
+ * Contains output data (based on declared outputs) plus metadata.
+ */
+export interface WorkflowNodeResult {
+  /** Extracted plain text */
+  text?: string;
+  /** Entities with bboxes, tables */
+  entities?: OcrPageResult;
+  /** Formatted markdown */
+  markdown?: string;
+  /** Time taken for this page */
+  durationMs: number;
+  /** Error message if failed */
   error?: string;
 }

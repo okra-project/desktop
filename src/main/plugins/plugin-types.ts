@@ -22,6 +22,8 @@ import type {
   OcrProviderConfig,
   OcrProviderMetadata,
   OcrPageResult,
+  WorkflowExecutionContext,
+  WorkflowNodeResult,
 } from '../providers/ocr-types';
 
 /**
@@ -49,6 +51,26 @@ export interface OcrPlugin {
   checkHealth(
     config: OcrProviderConfig,
   ): Promise<{ ok: boolean; error?: string; latencyMs?: number }>;
+
+  /**
+   * Execute as workflow node (called per-page)
+   *
+   * Only required if metadata.workflowNode is defined.
+   * This is the new way for plugins to integrate with the workflow system.
+   *
+   * @example
+   * ```ts
+   * async executeWorkflow(ctx) {
+   *   const start = Date.now();
+   *   ctx.reportProgress(`Processing page ${ctx.pageNumber}`);
+   *   const result = await this.extract(ctx.input.pageImage!, ctx.pageNumber, ctx.config);
+   *   return { entities: result, markdown: result.markdown, durationMs: Date.now() - start };
+   * }
+   * ```
+   */
+  executeWorkflow?(
+    context: WorkflowExecutionContext,
+  ): Promise<WorkflowNodeResult>;
 }
 
 /**

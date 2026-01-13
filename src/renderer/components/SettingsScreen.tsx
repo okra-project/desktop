@@ -17,6 +17,7 @@ import CodingAgentsSection from './CodingAgentsSection';
 import McpServerSection from './McpServerSection';
 import PluginCard from './PluginCard';
 import PluginConfigModal from './PluginConfigModal';
+import OkrapdfApiKeySection from './OkrapdfApiKeySection';
 
 interface SettingsScreenProps {
   onClose: () => void;
@@ -285,6 +286,8 @@ function SettingsScreen({ onClose, onSettingsSaved }: SettingsScreenProps) {
               computer. All API keys are stored locally and encrypted.
             </p>
           </div>
+
+          <OkrapdfApiKeySection />
 
           <CodingAgentsSection />
 

@@ -12,6 +12,7 @@ const ByokSettingsSchema = z
     enabled: z.boolean(),
     anthropicApiKey: z.string().nullable(),
     openrouterApiKey: z.string().nullable(),
+    okrapdfApiKey: z.string().nullable().optional(),
   })
   .nullable();
 

@@ -8,7 +8,6 @@ import { ipcMain, BrowserWindow } from 'electron';
 import Store from 'electron-store';
 import fs from 'fs';
 import path from 'path';
-import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type {
   OcrProviderId,
   OcrProviderConfig,
@@ -28,6 +27,21 @@ import {
   uninstallPlugin,
 } from '../plugins/plugin-loader';
 import { getRegistry } from '../plugins/registry';
+import { storeService } from '../services/store.service';
+import { pdfWorkerService } from '../services/pdf-worker.service';
+
+/**
+ * Resolve config by injecting global okrapdf API key if useGlobalKey is true
+ */
+function resolveConfig(config: OcrProviderConfig): OcrProviderConfig {
+  if (config.options?.useGlobalKey && !config.apiKey) {
+    const globalKey = storeService.getOkrapdfApiKey();
+    if (globalKey) {
+      return { ...config, apiKey: globalKey };
+    }
+  }
+  return config;
+}
 
 const PROVIDER_CONFIGS: Map<OcrProviderId, OcrProviderConfig> = new Map();
 
@@ -46,57 +60,25 @@ const store = new Store({
 // PDF Rendering Utilities
 // ============================================================================
 
-export function ensureDomMatrix(): void {
-  if (typeof (global as typeof globalThis).DOMMatrix === 'undefined') {
-    const { DOMMatrix, DOMPoint, DOMRect } = require('@napi-rs/canvas');
-    (global as typeof globalThis).DOMMatrix = DOMMatrix;
-    (global as typeof globalThis).DOMPoint = DOMPoint;
-    (global as typeof globalThis).DOMRect = DOMRect;
-  }
-}
-
-export async function renderPageToBuffer(
-  pdf: PDFDocumentProxy,
-  pageNum: number,
-  scale = 2.0,
-): Promise<{ buffer: Buffer; width: number; height: number }> {
-  const page = await pdf.getPage(pageNum);
-  const viewport = page.getViewport({ scale });
-
-  const { createCanvas } = await import('@napi-rs/canvas');
-  const canvas = createCanvas(viewport.width, viewport.height);
-  const context = canvas.getContext('2d');
-
-  await page.render({
-    canvasContext: context as unknown as CanvasRenderingContext2D,
-    viewport,
-  } as Parameters<typeof page.render>[0]).promise;
-
-  return {
-    buffer: canvas.toBuffer('image/png'),
-    width: viewport.width,
-    height: viewport.height,
-  };
-}
-
 export async function renderPageFromFile(
   pdfPath: string,
   pageNum: number,
   scale = 2.0,
 ): Promise<{ buffer: Buffer; width: number; height: number }> {
-  ensureDomMatrix();
-  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const data = new Uint8Array(fs.readFileSync(pdfPath));
-  const pdf: PDFDocumentProxy = await getDocument({
-    data,
-    disableFontFace: true,
-    verbosity: 0,
-  }).promise;
-
   try {
-    return await renderPageToBuffer(pdf, pageNum, scale);
-  } finally {
-    await pdf.cleanup();
+    const { base64, width, height } = await pdfWorkerService.renderPage(
+      pdfPath,
+      pageNum,
+      scale,
+    );
+    return {
+      buffer: Buffer.from(base64, 'base64'),
+      width,
+      height,
+    };
+  } catch (error) {
+    console.error('[ocr-handlers] Error in renderPageFromFile:', error);
+    throw error;
   }
 }
 
@@ -202,7 +184,8 @@ export async function setupOcrIpcHandlers(
     async (_event, providerId: OcrProviderId, config: OcrProviderConfig) => {
       const plugin = getPlugin(providerId);
       if (plugin) {
-        return plugin.checkHealth(config);
+        const resolvedConfig = resolveConfig(config);
+        return plugin.checkHealth(resolvedConfig);
       }
       return { ok: false, error: 'Provider not installed' };
     },
@@ -219,7 +202,8 @@ export async function setupOcrIpcHandlers(
       config: OcrProviderConfig,
     ): Promise<OcrPageResult> => {
       const imageBuffer = Buffer.from(imageBase64, 'base64');
-      return extractWithProvider(providerId, imageBuffer, pageNumber, config);
+      const resolvedConfig = resolveConfig(config);
+      return extractWithProvider(providerId, imageBuffer, pageNumber, resolvedConfig);
     },
   );
 
@@ -227,7 +211,8 @@ export async function setupOcrIpcHandlers(
   ipcMain.handle(
     'ocr:extract-document',
     async (_event, request: OcrExtractionRequest) => {
-      const { providerId, workspacePath, config, options } = request;
+      const { providerId, workspacePath, config: rawConfig, options } = request;
+      const config = resolveConfig(rawConfig);
 
       // Find PDF in workspace
       const files = fs.readdirSync(workspacePath);
@@ -241,16 +226,7 @@ export async function setupOcrIpcHandlers(
       fs.mkdirSync(outputDir, { recursive: true });
 
       try {
-        ensureDomMatrix();
-        const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
-        const data = new Uint8Array(fs.readFileSync(pdfPath));
-        const pdf: PDFDocumentProxy = await getDocument({
-          data,
-          disableFontFace: true,
-          verbosity: 0,
-        }).promise;
-
-        const totalPages = pdf.numPages;
+        const totalPages = await pdfWorkerService.getPageCount(pdfPath);
         const startPage = options?.startPage ?? 1;
         const endPage = Math.min(options?.endPage ?? totalPages, totalPages);
 
@@ -272,7 +248,7 @@ export async function setupOcrIpcHandlers(
             buffer: imageBuffer,
             width,
             height,
-          } = await renderPageToBuffer(pdf, pageNum);
+          } = await renderPageFromFile(pdfPath, pageNum);
 
           // Extract with provider
           const pageResult = await extractWithProvider(

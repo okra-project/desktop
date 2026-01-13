@@ -24,6 +24,7 @@ export interface ByokSettings {
   enabled: boolean;
   anthropicApiKey: string | null;
   openrouterApiKey: string | null;
+  okrapdfApiKey: string | null;
   lastValidated: string | null;
 }
 
@@ -66,6 +67,7 @@ class StoreService implements IService {
           enabled: false,
           anthropicApiKey: null,
           openrouterApiKey: null,
+          okrapdfApiKey: null,
           lastValidated: null,
         },
         localWorkspaces: [],
@@ -202,6 +204,17 @@ class StoreService implements IService {
 
     const byok = this.getByokSettings();
     return byok.openrouterApiKey || null;
+  }
+
+  // Convenience: Get okrapdf.com API key (global)
+  getOkrapdfApiKey(): string | null {
+    const byok = this.getByokSettings();
+    return byok.okrapdfApiKey || null;
+  }
+
+  // Check if okrapdf API key is configured
+  hasOkrapdfApiKey(): boolean {
+    return !!this.getOkrapdfApiKey();
   }
 }
 

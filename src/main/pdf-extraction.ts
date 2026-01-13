@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import type { PDFDocumentProxy, PDFPageProxy, TextContent, TextItem } from 'pdfjs-dist/types/src/display/api';
+import { pdfWorkerService } from './services/pdf-worker.service';
 
 export interface ExtractionProgress {
   currentPage: number;
@@ -18,63 +18,20 @@ export interface ExtractionResult {
 
 type ProgressCallback = (progress: ExtractionProgress) => void;
 
-function ensureDomMatrix(): void {
-  if (typeof (global as typeof globalThis).DOMMatrix === 'undefined') {
-    const { DOMMatrix, DOMPoint, DOMRect } = require('@napi-rs/canvas');
-    (global as typeof globalThis).DOMMatrix = DOMMatrix;
-    (global as typeof globalThis).DOMPoint = DOMPoint;
-    (global as typeof globalThis).DOMRect = DOMRect;
-  }
-}
-
-async function extractPageText(page: PDFPageProxy): Promise<string> {
-  const textContent: TextContent = await page.getTextContent();
-  const lines: string[] = [];
-  let currentLine = '';
-  let lastY: number | null = null;
-
-  for (const item of textContent.items) {
-    if (!('str' in item)) continue;
-    const textItem = item as TextItem;
-    const y = textItem.transform[5];
-
-    if (lastY !== null && Math.abs(y - lastY) > 5) {
-      if (currentLine.trim()) {
-        lines.push(currentLine.trim());
-      }
-      currentLine = textItem.str;
-    } else {
-      currentLine += textItem.str;
-    }
-    lastY = y;
-  }
-
-  if (currentLine.trim()) {
-    lines.push(currentLine.trim());
-  }
-
-  return lines.join('\n');
-}
-
 export async function extractTextFromPDF(
   pdfPath: string,
   outputDir: string,
   onProgress?: ProgressCallback
 ): Promise<ExtractionResult> {
   try {
-    ensureDomMatrix();
-    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const data = new Uint8Array(fs.readFileSync(pdfPath));
-    const pdf: PDFDocumentProxy = await getDocument({ data }).promise;
-    const totalPages = pdf.numPages;
+    const totalPages = await pdfWorkerService.getPageCount(pdfPath);
 
     fs.mkdirSync(outputDir, { recursive: true });
 
     for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
       onProgress?.({ currentPage: pageNum, totalPages, phase: 'text' });
 
-      const page = await pdf.getPage(pageNum);
-      const text = await extractPageText(page);
+      const text = await pdfWorkerService.extractText(pdfPath, pageNum);
 
       const outputPath = path.join(outputDir, `page-${String(pageNum).padStart(3, '0')}.md`);
       fs.writeFileSync(outputPath, `# Page ${pageNum}\n\n${text}\n`);
@@ -88,11 +45,7 @@ export async function extractTextFromPDF(
 }
 
 export async function getPDFPageCount(pdfPath: string): Promise<number> {
-  ensureDomMatrix();
-  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const data = new Uint8Array(fs.readFileSync(pdfPath));
-  const pdf: PDFDocumentProxy = await getDocument({ data }).promise;
-  return pdf.numPages;
+  return pdfWorkerService.getPageCount(pdfPath);
 }
 
 export async function generatePDFThumbnail(
