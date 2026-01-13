@@ -22,14 +22,7 @@ function verticesToBbox(
 }
 
 function normalizeType(type: string): EntityType {
-  const lower = type.toLowerCase();
-  if (lower === 'table') return 'table';
-  if (lower === 'figure') return 'figure';
-  if (lower === 'footnote') return 'footnote';
-  if (lower === 'signature') return 'signature';
-  if (lower === 'callout') return 'callout';
-  if (lower === 'text') return 'text';
-  return 'unknown';
+  return type.toLowerCase();
 }
 
 export class OkraPageAdapter implements SchemaAdapter {

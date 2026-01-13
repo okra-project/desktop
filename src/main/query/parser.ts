@@ -7,25 +7,6 @@ import type {
   DisplayMode,
 } from '../../shared/types/query';
 
-const ENTITY_ALIASES: Record<string, EntitySelector> = {
-  table: 'table',
-  tables: 'table',
-  figure: 'figure',
-  figures: 'figure',
-  image: 'figure',
-  images: 'figure',
-  footnote: 'footnote',
-  footnotes: 'footnote',
-  signature: 'signature',
-  signatures: 'signature',
-  text: 'text',
-  paragraph: 'text',
-  paragraphs: 'text',
-  all: 'all',
-  '*': 'all',
-  everything: 'all',
-};
-
 const OPERATOR_MAP: Record<string, WhereOperator> = {
   '=': 'eq',
   '==': 'eq',
@@ -66,7 +47,8 @@ function parseSqlQuery(match: RegExpMatchArray): QueryAST {
 function parseSelect(selectPart: string): EntitySelector[] {
   return selectPart.split(',').map((s) => {
     const trimmed = s.trim().toLowerCase();
-    return ENTITY_ALIASES[trimmed] || 'all';
+    if (trimmed === '*' || trimmed === 'everything') return 'all';
+    return trimmed || 'all';
   });
 }
 
@@ -186,12 +168,6 @@ function parseNaturalLanguage(input: string): QueryAST {
   const lower = input.toLowerCase();
 
   let select: EntitySelector[] = ['all'];
-  for (const [alias, type] of Object.entries(ENTITY_ALIASES)) {
-    if (lower.includes(alias) && alias !== 'all' && alias !== '*') {
-      select = [type];
-      break;
-    }
-  }
 
   let from: QuerySource = { type: 'current' };
   if (

@@ -20,20 +20,20 @@ export interface BaseEvent {
 // ============================================
 
 export type ActionType =
-  | 'navigate'           // Go to page
-  | 'query_extractions'  // Read extraction data
-  | 'edit_extraction'    // Modify a field
-  | 'approve_page'       // Mark page verified
-  | 'reject_page'        // Mark page rejected
-  | 'add_annotation'     // Add visual annotation
-  | 'request_human'      // Escalate to human
-  | 'think';             // Internal reasoning (logged)
+  | 'navigate' // Go to page
+  | 'query_extractions' // Read extraction data
+  | 'edit_extraction' // Modify a field
+  | 'approve_page' // Mark page verified
+  | 'reject_page' // Mark page rejected
+  | 'add_annotation' // Add visual annotation
+  | 'request_human' // Escalate to human
+  | 'think'; // Internal reasoning (logged)
 
 export interface Action extends BaseEvent {
   kind: 'action';
   type: ActionType;
   payload: ActionPayload;
-  agentState?: string;  // Hash of agent's internal state for replay
+  agentState?: string; // Hash of agent's internal state for replay
 }
 
 export type ActionPayload =
@@ -97,18 +97,18 @@ export interface ThinkPayload {
 // ============================================
 
 export type ObservationType =
-  | 'page_content'       // Result of navigate
-  | 'extraction_data'    // Result of query
-  | 'edit_result'        // Confirm edit applied
-  | 'status_result'      // Confirm status change
-  | 'human_response'     // User input received
+  | 'page_content' // Result of navigate
+  | 'extraction_data' // Result of query
+  | 'edit_result' // Confirm edit applied
+  | 'status_result' // Confirm status change
+  | 'human_response' // User input received
   | 'permission_denied'; // Action blocked by permission
 
 export interface Observation extends BaseEvent {
   kind: 'observation';
   type: ObservationType;
   payload: ObservationPayload;
-  actionId: string;  // Link to triggering action
+  actionId: string; // Link to triggering action
   success: boolean;
   error?: string;
 }
@@ -124,7 +124,7 @@ export type ObservationPayload =
 export interface PageContentPayload {
   pageNumber: number;
   extractionCount: number;
-  thumbnail?: string;  // Base64 or path
+  thumbnail?: string; // Base64 or path
 }
 
 export interface ExtractionDataPayload {
@@ -169,7 +169,11 @@ export type PermissionLevel = 'yolo' | 'page' | 'edit';
 
 export type SessionStatus = 'active' | 'paused' | 'completed' | 'cancelled';
 
-export type AgentType = 'claude-code' | 'openai' | 'anthropic-direct' | 'custom';
+export type AgentType =
+  | 'claude-code'
+  | 'openai'
+  | 'anthropic-direct'
+  | 'custom';
 
 export interface VerificationSession {
   id: string;
@@ -235,7 +239,7 @@ export interface PageVerificationState {
 }
 
 export interface AgentAssessment {
-  confidence: number;  // 0-1
+  confidence: number; // 0-1
   reasoning: string;
   suggestedCorrections: Correction[];
   references: Reference[];
@@ -253,9 +257,13 @@ export interface ReviewAction {
 // Extraction Types
 // ============================================
 
-export type ExtractionType = 'table' | 'text' | 'entity' | 'metadata';
+export type ExtractionType = string;
 
-export type ExtractionStatus = 'unverified' | 'verified' | 'corrected' | 'rejected';
+export type ExtractionStatus =
+  | 'unverified'
+  | 'verified'
+  | 'corrected'
+  | 'rejected';
 
 export interface Extraction {
   id: string;
@@ -263,7 +271,7 @@ export interface Extraction {
   boundingBox: BoundingBox;
   originalValue: unknown;
   currentValue: unknown;
-  linkedEntities: string[];  // IDs of related extractions
+  linkedEntities: string[]; // IDs of related extractions
   status: ExtractionStatus;
   pageNumber: number;
   fieldName?: string;
@@ -292,7 +300,11 @@ export interface Correction {
 // Reference Types
 // ============================================
 
-export type ReferenceType = 'page_content' | 'cross_reference' | 'external' | 'calculation';
+export type ReferenceType =
+  | 'page_content'
+  | 'cross_reference'
+  | 'external'
+  | 'calculation';
 
 export interface Reference {
   type: ReferenceType;
@@ -315,7 +327,7 @@ export interface PermissionRequest {
   context: PermissionContext;
   status: PermissionStatus;
   respondedAt?: Date;
-  respondedBy?: 'user' | 'auto';  // 'auto' for YOLO mode
+  respondedBy?: 'user' | 'auto'; // 'auto' for YOLO mode
 }
 
 export interface PermissionContext {
@@ -334,7 +346,12 @@ export interface PermissionResponse {
 // Agent actions that may require permission
 export type AgentAction =
   // Level 3: Edit-level (most restrictive)
-  | { type: 'edit_extraction'; extractionId: string; field: string; newValue: unknown }
+  | {
+      type: 'edit_extraction';
+      extractionId: string;
+      field: string;
+      newValue: unknown;
+    }
   | { type: 'link_entities'; sourceId: string; targetId: string }
   | { type: 'add_annotation'; pageNumber: number; annotation: Annotation }
 
@@ -374,22 +391,22 @@ export interface Annotation {
 // ============================================
 
 export type GhostType =
-  | 'field_correction'   // Agent wants to change a value
-  | 'status_change'      // Agent wants to approve/reject page
-  | 'annotation'         // Agent wants to add a note
-  | 'navigation'         // Agent is moving to a page
-  | 'thinking';          // Agent is analyzing
+  | 'field_correction' // Agent wants to change a value
+  | 'status_change' // Agent wants to approve/reject page
+  | 'annotation' // Agent wants to add a note
+  | 'navigation' // Agent is moving to a page
+  | 'thinking'; // Agent is analyzing
 
 export interface GhostOverlay {
   id: string;
   type: GhostType;
   pageNumber: number;
   timestamp: Date;
-  autoCommitDelay?: number;  // ms, only in YOLO mode
+  autoCommitDelay?: number; // ms, only in YOLO mode
 
   // Visual positioning
   boundingBox?: BoundingBox;
-  anchorElement?: string;  // CSS selector
+  anchorElement?: string; // CSS selector
 
   // Content
   content: GhostContent;
@@ -416,7 +433,7 @@ export interface GhostContent {
 export interface ReplayState {
   currentIndex: number;
   isPlaying: boolean;
-  playbackSpeed: number;  // 0.5x, 1x, 2x
+  playbackSpeed: number; // 0.5x, 1x, 2x
 }
 
 export interface ReplayController {
@@ -456,7 +473,7 @@ export interface AgentProviderConfig {
   // For Claude Code CLI integration
   claudeCodeConfig?: {
     useCLI: boolean;
-    configPath?: string;  // ~/.claude.json
+    configPath?: string; // ~/.claude.json
   };
 
   // For direct API
@@ -616,7 +633,7 @@ export const VERIFICATION_TOOLS: Record<string, ToolDefinition> = {
     name: 'commit_page',
     description: 'Commit approved page changes to the database',
     parameters: { pageNumber: { type: 'number', required: true } },
-    permissionLevel: 'explicit',  // Always asks
+    permissionLevel: 'explicit', // Always asks
   },
 };
 
@@ -629,21 +646,13 @@ export const VERIFICATION_TOOLS: Record<string, ToolDefinition> = {
  */
 export function requiresPermission(
   actionType: AgentAction['type'],
-  level: PermissionLevel
+  level: PermissionLevel,
 ): boolean {
   if (level === 'yolo') return false;
 
-  const pageActions = [
-    'approve_page',
-    'reject_page',
-    'mark_needs_review',
-  ];
+  const pageActions = ['approve_page', 'reject_page', 'mark_needs_review'];
 
-  const editActions = [
-    'edit_extraction',
-    'link_entities',
-    'add_annotation',
-  ];
+  const editActions = ['edit_extraction', 'link_entities', 'add_annotation'];
 
   if (level === 'page') {
     return [...pageActions, ...editActions].includes(actionType);

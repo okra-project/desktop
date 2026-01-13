@@ -126,7 +126,7 @@ export interface LocalTableVersion {
  * Extraction progress event sent during local PDF processing
  */
 export interface ExtractionProgressEvent {
-  phase: 'text' | 'tables' | 'metadata';
+  phase: string;
   currentPage: number;
   totalPages: number;
   status: 'processing' | 'completed' | 'failed';

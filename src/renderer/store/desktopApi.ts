@@ -97,13 +97,7 @@ export interface Entity {
 export interface EntitiesResponse {
   jobId: string;
   entities: Entity[];
-  counts: {
-    tables: number;
-    figures: number;
-    footnotes: number;
-    summaries: number;
-    signatures?: number;
-  };
+  counts: Record<string, number>;
   extractionStatus?:
     | 'not_started'
     | 'pending'
@@ -314,7 +308,7 @@ export const desktopApi = createApi({
       EntitiesResponse,
       {
         jobId: string;
-        type?: 'tables' | 'figures' | 'footnotes' | 'summaries' | 'all';
+        type?: string;
       }
     >({
       query: ({ jobId, type = 'all' }) =>

@@ -13,7 +13,7 @@ import React, { useCallback, useEffect, useRef } from 'react';
 
 export interface EntityOverlayInfo {
   id: string;
-  type: 'table' | 'figure' | 'footnote' | 'summary' | 'paragraph' | 'signature';
+  type: string;
   title: string | null;
   page: number;
 }
@@ -43,7 +43,8 @@ const ENTITY_ACTIONS: Record<string, EntityAction[]> = {
       id: 'verify-schema',
       label: 'Verify table schema',
       icon: '☑',
-      prompt: 'Verify this table schema matches the source PDF. Check that all column headers are correct and data types are appropriate.',
+      prompt:
+        'Verify this table schema matches the source PDF. Check that all column headers are correct and data types are appropriate.',
       autoSend: true,
     },
   ],
@@ -109,7 +110,10 @@ export function EntityActionPopover({
   // Close on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(e.target as Node)
+      ) {
         onClose();
       }
     };
@@ -137,7 +141,7 @@ export function EntityActionPopover({
       onAction(action, entity);
       onClose();
     },
-    [entity, onAction, onClose]
+    [entity, onAction, onClose],
   );
 
   // Calculate position to keep popover in viewport
@@ -174,9 +178,7 @@ export function EntityActionPopover({
             <span style={styles.entityTitle}>{entity.title}</span>
           </div>
         )}
-        <div style={styles.entityMeta}>
-          Page {entity.page}
-        </div>
+        <div style={styles.entityMeta}>Page {entity.page}</div>
 
         {/* Divider */}
         <div style={styles.divider} />
@@ -190,7 +192,9 @@ export function EntityActionPopover({
                 onClick={() => handleActionClick(action)}
                 style={{
                   ...styles.actionButton,
-                  ...(action.id === 'verify-schema' ? styles.actionButtonPrimary : {}),
+                  ...(action.id === 'verify-schema'
+                    ? styles.actionButtonPrimary
+                    : {}),
                 }}
               >
                 <span style={styles.actionIcon}>{action.icon}</span>
@@ -204,9 +208,7 @@ export function EntityActionPopover({
         </div>
 
         {/* Footer note */}
-        <div style={styles.footer}>
-          Click action to send to Review Agent
-        </div>
+        <div style={styles.footer}>Click action to send to Review Agent</div>
       </div>
     </>
   );

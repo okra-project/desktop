@@ -644,7 +644,7 @@ export function ReviewTab({
                 <FilterChip
                   label=""
                   icon="▤"
-                  count={entitiesData.counts.tables}
+                  count={entitiesData.counts['tables'] ?? 0}
                   active={activeEntityFilter === 'table'}
                   onClick={() =>
                     setActiveEntityFilter(
@@ -655,7 +655,7 @@ export function ReviewTab({
                 <FilterChip
                   label=""
                   icon="▣"
-                  count={entitiesData.counts.figures}
+                  count={entitiesData.counts['figures'] ?? 0}
                   active={activeEntityFilter === 'figure'}
                   onClick={() =>
                     setActiveEntityFilter(
@@ -666,7 +666,7 @@ export function ReviewTab({
                 <FilterChip
                   label=""
                   icon="†"
-                  count={entitiesData.counts.footnotes}
+                  count={entitiesData.counts['footnotes'] ?? 0}
                   active={activeEntityFilter === 'footnote'}
                   onClick={() =>
                     setActiveEntityFilter(

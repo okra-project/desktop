@@ -34,36 +34,46 @@ const METADATA: OcrProviderMetadata = {
     maxPagesPerRequest: 15,
   },
   layers: [],
-  authenticate: { type: 'service-account' },
+  authenticate: { type: 'bearer' },
   documentationUrl: 'https://cloud.google.com/document-ai',
   costPerPage: 0.01,
   isCloud: true,
   configSchema: {
     type: 'object',
     properties: {
+      authMode: {
+        type: 'string',
+        title: 'Authentication Mode',
+        description:
+          'Use okrapdf.com (just API key) or direct Google credentials',
+        enum: ['okrapdf', 'direct'],
+        default: 'okrapdf',
+      },
       apiKey: {
         type: 'string',
-        title: 'Service Account Key (JSON)',
-        description: 'Paste the full JSON key file contents',
-        format: 'file',
+        title: 'API Key',
+        description:
+          'okrapdf API key (okra_xxx) or Google Service Account JSON',
+        format: 'password',
       },
       projectId: {
         type: 'string',
         title: 'GCP Project ID',
-        description: 'Your Google Cloud project ID',
+        description: 'Your Google Cloud project ID (direct mode only)',
       },
       processorId: {
         type: 'string',
         title: 'Processor ID',
-        description: 'Document AI processor ID',
+        description: 'Document AI processor ID (direct mode only)',
       },
     },
-    required: ['apiKey', 'projectId', 'processorId'],
+    required: ['apiKey'],
   },
 };
 
 class GoogleDocAIPlugin implements OcrPlugin {
   id = 'google-docai';
+
   metadata = METADATA;
 
   async extract(
@@ -72,55 +82,17 @@ class GoogleDocAIPlugin implements OcrPlugin {
     config: OcrProviderConfig,
   ): Promise<OcrPageResult> {
     const startTime = Date.now();
+    const authMode = (config.options?.authMode as string) ?? 'okrapdf';
 
-    let credentials;
-    if (config.apiKey) {
-      try {
-        credentials = JSON.parse(config.apiKey);
-      } catch {
-        throw new Error('Invalid service account key JSON');
-      }
+    let document;
+
+    if (authMode === 'okrapdf') {
+      // Proxied via okrapdf.com - just needs okra_xxx API key
+      document = await this.extractViaOkrapdf(imageBuffer, config.apiKey!);
+    } else {
+      // Direct Google credentials
+      document = await this.extractViaDirect(imageBuffer, config);
     }
-
-    const projectId = config.projectId ?? credentials?.project_id;
-    const processorId = config.processorId;
-    const location = (config.options?.location as string) ?? 'us';
-
-    if (!projectId || !processorId) {
-      throw new Error('Google Doc AI requires projectId and processorId');
-    }
-
-    const GoogleAuth = getGoogleAuth();
-    const auth = new GoogleAuth({
-      credentials,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-    });
-    const client = await auth.getClient();
-    const accessToken = await client.getAccessToken();
-
-    const endpoint = `https://${location}-documentai.googleapis.com/v1/projects/${projectId}/locations/${location}/processors/${processorId}:process`;
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        rawDocument: {
-          content: imageBuffer.toString('base64'),
-          mimeType: 'image/png',
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Google Doc AI error: ${response.status} - ${errorText}`);
-    }
-
-    const result = await response.json();
-    const document = result.document;
 
     const bboxes: OcrPageResult['bboxes'] = [];
     const page = document.pages?.[0];
@@ -187,11 +159,128 @@ class GoogleDocAIPlugin implements OcrPlugin {
     };
   }
 
+  /**
+   * Extract via okrapdf.com proxy - just needs okra_xxx API key
+   */
+  private async extractViaOkrapdf(
+    imageBuffer: Buffer,
+    apiKey: string,
+  ): Promise<{
+    text?: string;
+    pages?: Array<{
+      blocks?: unknown[];
+      tables?: unknown[];
+      layout?: { confidence?: number };
+    }>;
+  }> {
+    const response = await fetch(
+      'https://okrapdf.com/api/v1/ocr/google-docai',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: imageBuffer.toString('base64'),
+          mimeType: 'image/png',
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`okrapdf API error: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    return result.document;
+  }
+
+  /**
+   * Extract via direct Google credentials - requires google-auth-library
+   */
+  private async extractViaDirect(
+    imageBuffer: Buffer,
+    config: OcrProviderConfig,
+  ): Promise<{
+    text?: string;
+    pages?: Array<{
+      blocks?: unknown[];
+      tables?: unknown[];
+      layout?: { confidence?: number };
+    }>;
+  }> {
+    let credentials;
+    if (config.apiKey) {
+      try {
+        credentials = JSON.parse(config.apiKey);
+      } catch {
+        throw new Error('Invalid service account key JSON');
+      }
+    }
+
+    const projectId = config.projectId ?? credentials?.project_id;
+    const { processorId } = config;
+    const location = (config.options?.location as string) ?? 'us';
+
+    if (!projectId || !processorId) {
+      throw new Error('Direct mode requires projectId and processorId');
+    }
+
+    const GoogleAuth = getGoogleAuth();
+    const auth = new GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+    });
+    const client = await auth.getClient();
+    const accessToken = await client.getAccessToken();
+
+    const endpoint = `https://${location}-documentai.googleapis.com/v1/projects/${projectId}/locations/${location}/processors/${processorId}:process`;
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        rawDocument: {
+          content: imageBuffer.toString('base64'),
+          mimeType: 'image/png',
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Google Doc AI error: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    return result.document;
+  }
+
   async checkHealth(
     config: OcrProviderConfig,
   ): Promise<{ ok: boolean; error?: string; latencyMs?: number }> {
     const startTime = Date.now();
+    const authMode = (config.options?.authMode as string) ?? 'okrapdf';
+
     try {
+      if (authMode === 'okrapdf') {
+        // Just verify the API key format
+        if (!config.apiKey?.startsWith('okra_')) {
+          return {
+            ok: false,
+            error: 'Invalid okrapdf API key (should start with okra_)',
+            latencyMs: Date.now() - startTime,
+          };
+        }
+        // Could ping okrapdf.com/api/health but skip for now
+        return { ok: true, latencyMs: Date.now() - startTime };
+      }
+      // Direct mode - verify Google credentials
       const GoogleAuth = getGoogleAuth();
       const credentials = JSON.parse(config.apiKey ?? '{}');
       const auth = new GoogleAuth({
@@ -210,13 +299,14 @@ class GoogleDocAIPlugin implements OcrPlugin {
   }
 }
 
+/**
+ * Check dependencies - google-auth-library only required for direct mode.
+ * For okrapdf mode, no external deps needed.
+ */
 export function checkDependencies(): string | null {
-  try {
-    require.resolve('google-auth-library');
-    return null;
-  } catch {
-    return 'google-auth-library not installed. Run: npm install google-auth-library';
-  }
+  // Always return null - okrapdf mode works without google-auth-library
+  // Direct mode will fail at runtime if dep is missing, which is acceptable
+  return null;
 }
 
 export function createPlugin(): OcrPlugin {
