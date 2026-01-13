@@ -223,8 +223,9 @@ function parseNaturalLanguage(input: string): QueryAST {
   return { select, from, where };
 }
 
-export function parseDisplayMode(mode: string): DisplayMode {
+export function parseDisplayMode(mode: unknown): DisplayMode {
   const valid: DisplayMode[] = ['grid', 'list', 'carousel', 'split', 'overlay'];
+  if (typeof mode !== 'string') return 'grid';
   const lower = mode.toLowerCase() as DisplayMode;
   return valid.includes(lower) ? lower : 'grid';
 }

@@ -425,7 +425,7 @@ function registerToolsWithZod(
     {
       name: 'query',
       execute: async (args: unknown) => {
-        const { query, display } = args as { query: string; display?: string };
+        const { query, display } = args as { query: string; display?: unknown };
         const ast = parseQuery(query);
         if (display) {
           ast.display = { mode: parseDisplayMode(display) };

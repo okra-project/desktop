@@ -21,7 +21,8 @@ function verticesToBbox(
   };
 }
 
-function normalizeType(type: string): EntityType {
+function normalizeType(type: unknown): EntityType {
+  if (typeof type !== 'string') return 'unknown';
   return type.toLowerCase();
 }
 
