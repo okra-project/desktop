@@ -14,6 +14,7 @@ export enum PluginState {
 export interface PluginStatus {
   id: string;
   state: PluginState;
+  enabled: boolean;
   error?: string;
   progress?: { message: string; percent?: number };
 }
@@ -44,6 +45,7 @@ export interface OcrProviderMetadata {
   isCloud: boolean;
   installInstructions?: string;
   state?: PluginState;
+  enabled?: boolean;
   error?: string;
   progress?: { message: string; percent?: number };
   npmPackages?: string[];
@@ -111,6 +113,7 @@ export function useOcrProviders() {
           allProviders.push({
             ...p.metadata,
             state: p.state,
+            enabled: p.enabled ?? true,
             error: p.error,
             progress: p.progress,
             npmPackages: p.npmPackages,
@@ -142,6 +145,7 @@ export function useOcrProviders() {
               ? {
                   ...p,
                   state: pluginStatus.state,
+                  enabled: pluginStatus.enabled,
                   error: pluginStatus.error,
                   progress: pluginStatus.progress,
                 }
@@ -221,6 +225,22 @@ export function useOcrProviders() {
     [fetchProviders],
   );
 
+  const setPluginEnabled = useCallback(
+    async (
+      pluginId: string,
+      enabled: boolean,
+    ): Promise<{ success: boolean; error?: string }> => {
+      const result = await window.electron.ipcRenderer.invoke(
+        'plugin:set-enabled',
+        pluginId,
+        enabled,
+      );
+      // State will be updated via plugin:state-change event
+      return result;
+    },
+    [],
+  );
+
   return {
     providers,
     loading,
@@ -231,6 +251,7 @@ export function useOcrProviders() {
     checkHealth,
     installPlugin,
     uninstallPlugin,
+    setPluginEnabled,
     refetch: fetchProviders,
   };
 }

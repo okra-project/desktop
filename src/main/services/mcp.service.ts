@@ -50,13 +50,26 @@ class McpService implements IService {
         const activeDir = findPluginDir(workspace.workspacePath);
         if (!activeDir) return null;
 
+        const parsePageContent = (content: string) => {
+          try {
+            return JSON.parse(content);
+          } catch {
+            return { raw: content };
+          }
+        };
+
         if (pageNum !== undefined) {
           const pageFile = path.join(
             activeDir,
             `page-${String(pageNum).padStart(3, '0')}.md`,
           );
           if (fs.existsSync(pageFile)) {
-            return fs.readFileSync(pageFile, 'utf-8');
+            const content = fs.readFileSync(pageFile, 'utf-8');
+            return {
+              workspaceId: id,
+              workspaceName: workspace.name,
+              pages: [{ page: pageNum, ...parsePageContent(content) }],
+            };
           }
           return null;
         }
@@ -65,13 +78,18 @@ class McpService implements IService {
           .readdirSync(activeDir)
           .filter((f) => f.endsWith('.md'))
           .sort();
-        const contents = files.map((f) => {
+        const pages = files.map((f) => {
           const pageMatch = f.match(/page-(\d+)\.md/);
           const page = pageMatch ? parseInt(pageMatch[1], 10) : 0;
           const content = fs.readFileSync(path.join(activeDir, f), 'utf-8');
-          return `## Page ${page}\n\n${content}`;
+          return { page, ...parsePageContent(content) };
         });
-        return contents.join('\n\n---\n\n');
+        return {
+          workspaceId: id,
+          workspaceName: workspace.name,
+          totalPages: pages.length,
+          pages,
+        };
       },
 
       searchWorkspace: async (id: string, query: string) => {
@@ -177,7 +195,17 @@ class McpService implements IService {
           offset = parseInt(offsetMatch[1], 10);
         }
 
-        let searchResults = [] as ReturnType<typeof indexService.search>;
+        type SearchResultLike = {
+          entity: {
+            id: string;
+            pageNumber: number;
+            type: string;
+            text: string;
+            bbox: { xMin: number; yMin: number; xMax: number; yMax: number };
+          };
+        };
+
+        let searchResults: SearchResultLike[] = [];
 
         if (textContains) {
           searchResults = indexService.search({
@@ -192,6 +220,109 @@ class McpService implements IService {
             entityTypes: types,
             limit: 200,
           });
+        }
+
+        // Fallback: if searching for structural types (table, figure) and no index results,
+        // extract from structured workspace content
+        const structuralTypes = ['table', 'figure', 'footnote', 'signature'];
+        const requestedStructural = types.filter((t) =>
+          structuralTypes.includes(t),
+        );
+        if (
+          searchResults.length === 0 &&
+          requestedStructural.length > 0 &&
+          !textContains
+        ) {
+          const workspace = storeService.getWorkspaceById(id);
+          if (workspace) {
+            const activeDir = findPluginDir(workspace.workspacePath);
+            if (activeDir) {
+              const files = fs
+                .readdirSync(activeDir)
+                .filter((f) => f.endsWith('.md'))
+                .sort();
+
+              const structuralResults: SearchResultLike[] = [];
+
+              for (const f of files) {
+                const pageMatch = f.match(/page-(\d+)\.md/);
+                const pageNum = pageMatch ? parseInt(pageMatch[1], 10) : 0;
+                const content = fs.readFileSync(path.join(activeDir, f), 'utf-8');
+
+                try {
+                  const parsed = JSON.parse(content);
+
+                  if (requestedStructural.includes('table') && parsed.tables) {
+                    for (const t of parsed.tables) {
+                      const [xMin, yMin, xMax, yMax] = t.bbox_2d || [0, 0, 0, 0];
+                      structuralResults.push({
+                        entity: {
+                          id: `table-${pageNum}-${structuralResults.length}`,
+                          pageNumber: pageNum,
+                          type: 'table',
+                          text: t.title || '',
+                          bbox: { xMin, yMin, xMax, yMax },
+                        },
+                      });
+                    }
+                  }
+
+                  if (requestedStructural.includes('figure') && parsed.figures) {
+                    for (const fig of parsed.figures) {
+                      const [xMin, yMin, xMax, yMax] = fig.bbox_2d || [0, 0, 0, 0];
+                      structuralResults.push({
+                        entity: {
+                          id: `figure-${pageNum}-${structuralResults.length}`,
+                          pageNumber: pageNum,
+                          type: 'figure',
+                          text: fig.title || '',
+                          bbox: { xMin, yMin, xMax, yMax },
+                        },
+                      });
+                    }
+                  }
+
+                  if (
+                    requestedStructural.includes('footnote') &&
+                    parsed.footnotes
+                  ) {
+                    for (const fn of parsed.footnotes) {
+                      structuralResults.push({
+                        entity: {
+                          id: `footnote-${pageNum}-${structuralResults.length}`,
+                          pageNumber: pageNum,
+                          type: 'footnote',
+                          text: fn.text || '',
+                          bbox: { xMin: 0, yMin: 0, xMax: 0, yMax: 0 },
+                        },
+                      });
+                    }
+                  }
+
+                  if (
+                    requestedStructural.includes('signature') &&
+                    parsed.signatures
+                  ) {
+                    for (const sig of parsed.signatures) {
+                      structuralResults.push({
+                        entity: {
+                          id: `signature-${pageNum}-${structuralResults.length}`,
+                          pageNumber: pageNum,
+                          type: 'signature',
+                          text: sig.text || '',
+                          bbox: { xMin: 0, yMin: 0, xMax: 0, yMax: 0 },
+                        },
+                      });
+                    }
+                  }
+                } catch {
+                  // Not valid JSON, skip
+                }
+              }
+
+              searchResults = structuralResults;
+            }
+          }
         }
 
         let filtered = searchResults;

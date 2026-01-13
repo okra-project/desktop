@@ -13,6 +13,8 @@ import { buildOverlayColors } from '../lib/entity-colors';
 import { useAvailableLayers } from '../hooks/useAvailableLayers';
 import { DomSearchProvider, useSearch } from '../search';
 import { QueryResultsOverlay } from './QueryResultsOverlay';
+import { useAppDispatch } from '../store';
+import { setTotalPages } from '../store/viewerSlice';
 
 // Bundle worker locally - all pdfjs-dist unified to 5.4.530 via npm overrides
 if (process.env.NODE_ENV === 'development') {
@@ -75,6 +77,7 @@ export default function PDFViewer({
   onEntityClick,
   pageDimensions = {},
 }: PDFViewerProps) {
+  const dispatch = useAppDispatch();
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(initialPage);
   const [scale, setScale] = useState<number>(1.0);
@@ -187,7 +190,7 @@ export default function PDFViewer({
 
   const onDocumentLoadSuccess = ({ numPages: pages }: { numPages: number }) => {
     setNumPages(pages);
-    // Use initialPage but clamp to valid range
+    dispatch(setTotalPages(pages));
     const targetPage = Math.max(1, Math.min(initialPage, pages));
     setCurrentPage(targetPage);
     // Scroll to initial page if not page 1
@@ -600,6 +603,7 @@ export default function PDFViewer({
                     containerHeight={renderedDims.height}
                     pageWidth={renderedDims.width}
                     pageHeight={renderedDims.height}
+                    pageNum={pageNum}
                     offsetX={renderedDims.left}
                     offsetY={renderedDims.top}
                   />

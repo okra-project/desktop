@@ -87,7 +87,7 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
 
 export function PluginCard({
   provider,
-  config,
+  config: _config,
   onConfigure,
   onInstall,
   installing,
@@ -97,7 +97,6 @@ export function PluginCard({
     pluginState === PluginState.Installed ||
     pluginState === PluginState.UpdateAvailable;
   const isInstalling = pluginState === PluginState.Installing;
-  const isConfigured = !!config?.apiKey;
   const categoryColor =
     CATEGORY_COLORS[provider.category || 'ocr'] || CATEGORY_COLORS.ocr;
 
@@ -109,14 +108,9 @@ export function PluginCard({
 
   return (
     <div className="group relative bg-white rounded-xl border border-sidebar-border hover:border-okra-yellow/50 hover:shadow-lg transition-all duration-200 overflow-hidden">
-      {/* Status indicator bar */}
       <div
         className={`absolute top-0 left-0 right-0 h-1 ${
-          isConfigured
-            ? 'bg-green-500'
-            : isInstalled
-              ? 'bg-amber-400'
-              : 'bg-slate-200'
+          isInstalled ? 'bg-green-500' : 'bg-slate-200'
         }`}
       />
 
@@ -170,7 +164,7 @@ export function PluginCard({
                 Update
               </span>
             )}
-            {isInstalled && isConfigured && (
+            {isInstalled && !isInstalling && !installing && (
               <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-medium rounded-full flex items-center gap-1">
                 <svg
                   className="w-3 h-3"
@@ -184,11 +178,6 @@ export function PluginCard({
                   />
                 </svg>
                 Ready
-              </span>
-            )}
-            {isInstalled && !isConfigured && (
-              <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[10px] font-medium rounded-full">
-                Needs Config
               </span>
             )}
           </div>

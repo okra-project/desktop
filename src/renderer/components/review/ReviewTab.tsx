@@ -183,8 +183,17 @@ export function ReviewTab({
   // Convert entities to EntityOverlay format for PDFViewer (filtered by visible layers)
   const entityOverlays: EntityOverlay[] = useMemo(() => {
     if (!entitiesData?.entities) return [];
+
+    const isLayerVisible = (type: string) => {
+      if (visibleLayers.has(type)) return true;
+      for (const layerId of visibleLayers) {
+        if (layerId.endsWith(`:${type}`)) return true;
+      }
+      return false;
+    };
+
     return entitiesData.entities
-      .filter((e) => visibleLayers.has(e.type))
+      .filter((e) => isLayerVisible(e.type))
       .map((e) => ({
         id: e.id,
         type: e.type,

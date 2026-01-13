@@ -5,6 +5,7 @@ import { app, BrowserWindow } from 'electron';
 import { PluginState } from '../providers/ocr-types';
 import type { OcrProviderMetadata } from '../providers/ocr-types';
 import type { OcrPluginModule } from './plugin-types';
+import { storeService } from '../services/store.service';
 
 const execAsync = promisify(exec);
 
@@ -42,6 +43,7 @@ export interface PluginManifest extends PluginRegistryEntry {
 export interface PluginStatus {
   id: string;
   state: PluginState;
+  enabled: boolean;
   error?: string;
   progress?: { message: string; percent?: number };
 }
@@ -136,16 +138,61 @@ export function getPluginStatuses(): (PluginManifest & PluginStatus)[] {
     if (!metadata) return null;
 
     const existingState = pluginStates.get(entry.id);
+    const enabled = storeService.isPluginEnabled(entry.id);
+
     if (existingState) {
-      return { ...entry, metadata, ...existingState };
+      return { ...entry, metadata, ...existingState, enabled };
     }
     const isInstalled = checkPluginInstalled(entry);
     return {
       ...entry,
       metadata,
       state: isInstalled ? PluginState.Installed : PluginState.NotInstalled,
+      enabled,
     };
   }).filter((m): m is PluginManifest & PluginStatus => m !== null);
+}
+
+/**
+ * Get only enabled plugins (for use in provider listing)
+ */
+export function getEnabledPluginStatuses(): (PluginManifest & PluginStatus)[] {
+  return getPluginStatuses().filter((p) => p.enabled);
+}
+
+/**
+ * Enable or disable a plugin
+ */
+export function setPluginEnabled(
+  id: string,
+  enabled: boolean,
+): { success: boolean; error?: string } {
+  const entry = PLUGIN_REGISTRY.find((p) => p.id === id);
+  if (!entry) {
+    return { success: false, error: `Plugin ${id} not found in registry` };
+  }
+
+  storeService.setPluginEnabled(id, enabled);
+
+  // Emit state change to all windows
+  const metadata = loadPluginMetadata(entry);
+  if (metadata) {
+    const isInstalled = checkPluginInstalled(entry);
+    emitPluginStateChange({
+      id,
+      state: isInstalled ? PluginState.Installed : PluginState.NotInstalled,
+      enabled,
+    });
+  }
+
+  return { success: true };
+}
+
+/**
+ * Check if a specific plugin is enabled
+ */
+export function isPluginEnabled(id: string): boolean {
+  return storeService.isPluginEnabled(id);
 }
 
 export async function installPlugin(
@@ -156,14 +203,17 @@ export async function installPlugin(
     return { success: false, error: `Plugin ${id} not found in registry` };
   }
 
+  const enabled = storeService.isPluginEnabled(id);
+
   if (entry.npmPackages.length === 0) {
-    emitPluginStateChange({ id, state: PluginState.Installed });
+    emitPluginStateChange({ id, state: PluginState.Installed, enabled });
     return { success: true };
   }
 
   emitPluginStateChange({
     id,
     state: PluginState.Installing,
+    enabled,
     progress: { message: `Installing ${entry.npmPackages.join(', ')}...` },
   });
 
@@ -181,12 +231,12 @@ export async function installPlugin(
       env,
     });
     console.log(`[plugins] Installed ${id} successfully`);
-    emitPluginStateChange({ id, state: PluginState.Installed });
+    emitPluginStateChange({ id, state: PluginState.Installed, enabled });
     return { success: true };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     console.error(`[plugins] Failed to install ${id}: ${error}`);
-    emitPluginStateChange({ id, state: PluginState.Error, error });
+    emitPluginStateChange({ id, state: PluginState.Error, enabled, error });
     return { success: false, error };
   }
 }
@@ -199,14 +249,17 @@ export async function uninstallPlugin(
     return { success: false, error: `Plugin ${id} not found in registry` };
   }
 
+  const enabled = storeService.isPluginEnabled(id);
+
   if (entry.npmPackages.length === 0) {
-    emitPluginStateChange({ id, state: PluginState.NotInstalled });
+    emitPluginStateChange({ id, state: PluginState.NotInstalled, enabled });
     return { success: true };
   }
 
   emitPluginStateChange({
     id,
     state: PluginState.Uninstalling,
+    enabled,
     progress: { message: `Removing ${entry.npmPackages.join(', ')}...` },
   });
 
@@ -222,12 +275,12 @@ export async function uninstallPlugin(
       env,
     });
     console.log(`[plugins] Uninstalled ${id} successfully`);
-    emitPluginStateChange({ id, state: PluginState.NotInstalled });
+    emitPluginStateChange({ id, state: PluginState.NotInstalled, enabled });
     return { success: true };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     console.error(`[plugins] Failed to uninstall ${id}: ${error}`);
-    emitPluginStateChange({ id, state: PluginState.Error, error });
+    emitPluginStateChange({ id, state: PluginState.Error, enabled, error });
     return { success: false, error };
   }
 }

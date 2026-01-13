@@ -16,9 +16,16 @@ const BASE_DELAY_MS = 1000;
 const METADATA: OcrProviderMetadata = {
   id: 'openrouter',
   name: 'OpenRouter VLM',
+  version: '1.0.0',
   description: 'Vision LLMs via OpenRouter (Qwen, Claude, Gemini)',
+  author: 'OkraPDF',
+  license: 'FSL-1.1-ALv2',
+  keywords: ['vlm', 'openrouter', 'qwen', 'vision'],
+
   runtime: 'api',
   category: 'vlm',
+  isCloud: true,
+
   capabilities: {
     supportsText: false,
     supportsTables: true,
@@ -26,9 +33,17 @@ const METADATA: OcrProviderMetadata = {
     supportsFigures: true,
     supportsHandwriting: false,
     supportsMultiLanguage: true,
+    supportsDocumentExtraction: false,
     outputFormats: ['markdown'],
     maxPagesPerRequest: 1,
   },
+
+  inputConstraints: {
+    mimeTypes: ['image/png', 'image/jpeg'],
+    maxFileSizeMB: 10,
+    maxPagesPerRequest: 1,
+  },
+
   layers: [
     {
       id: 'table',
@@ -75,16 +90,7 @@ const METADATA: OcrProviderMetadata = {
       category: 'entity',
     },
   ],
-  // Workflow integration - enables this plugin in extraction workflows
-  workflowNode: {
-    inputs: ['page-images'],
-    outputs: ['entities', 'markdown'],
-    group: 'processor',
-  },
-  authenticate: { type: 'bearer' },
-  documentationUrl: 'https://openrouter.ai/docs',
-  costPerPage: 0.005,
-  isCloud: true,
+
   configSchema: {
     type: 'object',
     properties: {
@@ -95,19 +101,29 @@ const METADATA: OcrProviderMetadata = {
         format: 'password',
       },
       modelId: {
-        type: 'string',
+        type: 'options',
         title: 'Model',
         description: 'VLM model for extraction',
-        enum: [
-          'qwen/qwen3-vl-235b-a22b-instruct',
-          'qwen/qwen2.5-vl-72b-instruct',
-          'anthropic/claude-3.5-sonnet',
-          'google/gemini-pro-vision',
+        options: [
+          { value: 'qwen/qwen3-vl-235b-a22b-instruct', label: 'Qwen3 VL 235B' },
+          { value: 'qwen/qwen2.5-vl-72b-instruct', label: 'Qwen2.5 VL 72B' },
+          { value: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet' },
+          { value: 'google/gemini-pro-vision', label: 'Gemini Pro Vision' },
         ],
         default: 'qwen/qwen3-vl-235b-a22b-instruct',
       },
     },
     required: ['apiKey'],
+  },
+
+  authenticate: { type: 'bearer' },
+  documentationUrl: 'https://openrouter.ai/docs',
+  pricing: { model: 'per-page', costPerPage: 0.005 },
+
+  workflowNode: {
+    inputs: ['page-images'],
+    outputs: ['entities', 'markdown'],
+    group: 'processor',
   },
 };
 
@@ -349,7 +365,9 @@ class OpenRouterPlugin implements OcrPlugin {
     config: OcrProviderConfig,
   ): Promise<OcrPageResult> {
     const startTime = Date.now();
-    const layers = this.metadata.layers ?? [];
+    const layers = Array.isArray(this.metadata.layers)
+      ? this.metadata.layers
+      : [];
 
     try {
       const imageBase64 = imageBuffer.toString('base64');
@@ -381,7 +399,10 @@ class OpenRouterPlugin implements OcrPlugin {
         max_tokens: 10000,
       });
 
-      console.log('[openrouter] Request Body Preview:', requestBody.slice(0, 500) + '...');
+      console.log(
+        '[openrouter] Request Body Preview:',
+        requestBody.slice(0, 500) + '...',
+      );
 
       const response = await fetchWithRetry(
         'https://openrouter.ai/api/v1/chat/completions',

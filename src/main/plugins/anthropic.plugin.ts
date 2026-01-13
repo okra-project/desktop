@@ -8,9 +8,16 @@ import type { OcrPlugin, OcrPluginModule } from './plugin-types';
 const METADATA: OcrProviderMetadata = {
   id: 'anthropic',
   name: 'Anthropic Claude',
+  version: '1.0.0',
   description: 'Claude AI for document chat and vision analysis',
+  author: 'OkraPDF',
+  license: 'FSL-1.1-ALv2',
+  keywords: ['claude', 'anthropic', 'vision', 'chat'],
+
   runtime: 'api',
   category: 'agent',
+  isCloud: true,
+
   capabilities: {
     supportsText: true,
     supportsTables: true,
@@ -18,14 +25,19 @@ const METADATA: OcrProviderMetadata = {
     supportsFigures: false,
     supportsHandwriting: false,
     supportsMultiLanguage: true,
+    supportsDocumentExtraction: false,
     outputFormats: ['markdown'],
     maxPagesPerRequest: 100,
   },
+
+  inputConstraints: {
+    mimeTypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'],
+    maxFileSizeMB: 20,
+    maxPagesPerRequest: 100,
+  },
+
   layers: [],
-  authenticate: { type: 'header', headerName: 'x-api-key' },
-  documentationUrl: 'https://console.anthropic.com/settings/keys',
-  costPerPage: 0.003,
-  isCloud: true,
+
   configSchema: {
     type: 'object',
     properties: {
@@ -36,19 +48,23 @@ const METADATA: OcrProviderMetadata = {
         format: 'password',
       },
       modelId: {
-        type: 'string',
+        type: 'options',
         title: 'Model',
         description: 'Claude model for chat',
-        enum: [
-          'claude-sonnet-4-20250514',
-          'claude-3-5-sonnet-20241022',
-          'claude-3-5-haiku-20241022',
+        options: [
+          { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
+          { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
+          { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
         ],
         default: 'claude-sonnet-4-20250514',
       },
     },
     required: ['apiKey'],
   },
+
+  authenticate: { type: 'header', headerName: 'x-api-key' },
+  documentationUrl: 'https://console.anthropic.com/settings/keys',
+  pricing: { model: 'per-page', costPerPage: 0.003 },
 };
 
 class AnthropicPlugin implements OcrPlugin {

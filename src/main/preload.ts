@@ -75,6 +75,8 @@ export type Channels =
   | 'ocr:get-available-layers'
   | 'plugin:install'
   | 'plugin:uninstall'
+  | 'plugin:set-enabled'
+  | 'plugin:get-statuses'
   | 'plugin:state-change'
   | 'coding-agents:detect'
   | 'coding-agents:list-all'

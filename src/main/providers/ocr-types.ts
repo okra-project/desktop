@@ -10,7 +10,69 @@ export type OcrProviderId =
   | 'openrouter'
   | 'anthropic'
   | string;
-export type OcrProviderRuntime = 'api' | 'local' | 'python';
+export type OcrProviderRuntime = 'api' | 'local';
+
+export interface ApiProviderSpec {
+  baseUrl: string;
+  authType: 'bearer' | 'header' | 'query';
+  authHeader?: string;
+  endpoints: {
+    extract: { method: 'POST'; path: string; contentType: string };
+  };
+  responseSchema: ApiResponseSchema;
+}
+
+export interface ApiResponseSchema {
+  text: 'string';
+  pages: ApiPageSchema[];
+}
+
+export interface ApiPageSchema {
+  pageNumber: 'number';
+  text?: 'string';
+  dimension?: { width: 'number'; height: 'number'; unit: 'string' };
+  confidence?: 'number';
+  blocks?: ApiLayoutElementSchema[];
+  paragraphs?: ApiLayoutElementSchema[];
+  lines?: ApiLayoutElementSchema[];
+  tables?: ApiTableSchema[];
+}
+
+export interface ApiLayoutElementSchema {
+  layout: {
+    textAnchor: {
+      textSegments: Array<{ startIndex?: 'string'; endIndex: 'string' }>;
+    };
+    confidence: 'number';
+    boundingPoly: {
+      vertices: Array<{ x?: 'number'; y?: 'number' }>;
+      normalizedVertices: Array<{ x?: 'number'; y?: 'number' }>;
+    };
+  };
+}
+
+export interface ApiTableSchema {
+  headerRows?: Array<{ cells: ApiTableCellSchema[] }>;
+  bodyRows?: Array<{ cells: ApiTableCellSchema[] }>;
+  layout?: ApiLayoutElementSchema['layout'];
+}
+
+export interface ApiTableCellSchema {
+  layout?: {
+    textAnchor?: {
+      textSegments?: Array<{ startIndex?: 'string'; endIndex?: 'string' }>;
+    };
+  };
+  rowSpan?: 'number';
+  colSpan?: 'number';
+}
+
+export interface LocalProviderSpec {
+  command: string;
+  args?: string[];
+  pythonPackages?: string[];
+  npmPackages?: string[];
+}
 export type OcrProviderCategory = 'ocr' | 'agent' | 'vlm';
 
 export enum PluginState {
@@ -22,6 +84,23 @@ export enum PluginState {
   Error = 'error',
 }
 
+export type InputMimeType =
+  | 'application/pdf'
+  | 'image/png'
+  | 'image/jpeg'
+  | 'image/tiff'
+  | 'image/gif'
+  | 'image/bmp'
+  | 'image/webp';
+
+export interface InputConstraints {
+  mimeTypes: InputMimeType[];
+  maxFileSizeMB: number;
+  maxPagesPerRequest: number;
+  maxImageDimension?: number;
+  minImageDimension?: number;
+}
+
 export interface OcrProviderCapabilities {
   supportsText: boolean;
   supportsTables: boolean;
@@ -29,6 +108,7 @@ export interface OcrProviderCapabilities {
   supportsFigures: boolean;
   supportsHandwriting: boolean;
   supportsMultiLanguage: boolean;
+  supportsDocumentExtraction?: boolean;
   outputFormats: ('json' | 'markdown' | 'text')[];
   maxPagesPerRequest: number;
 }
@@ -105,57 +185,120 @@ export interface OcrProviderConfig {
   options?: Record<string, unknown>;
 }
 
-/**
- * How credentials are used in API requests (n8n-style)
- */
 export interface OcrCredentialAuthenticate {
   type: 'header' | 'query' | 'body' | 'bearer' | 'service-account';
-  /** Header name if type is 'header' */
   headerName?: string;
-  /** Query param name if type is 'query' */
   queryName?: string;
+}
+
+export type ConfigPropertyType =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'options'
+  | 'multiOptions'
+  | 'json'
+  | 'file';
+
+export interface ConfigPropertyDisplayOptions {
+  show?: Record<string, unknown[]>;
+  hide?: Record<string, unknown[]>;
+}
+
+export interface ConfigPropertyValidation {
+  min?: number;
+  max?: number;
+  step?: number;
+  pattern?: string;
+  patternMessage?: string;
+}
+
+export interface ConfigProperty {
+  type: ConfigPropertyType;
+  title: string;
+  description?: string;
+  default?: unknown;
+  required?: boolean;
+  format?: 'password' | 'uri' | 'email' | 'multiline' | 'code';
+  placeholder?: string;
+  options?: Array<{ value: string; label: string; description?: string }>;
+  displayOptions?: ConfigPropertyDisplayOptions;
+  validation?: ConfigPropertyValidation;
+}
+
+export type PluginPermission =
+  | 'network'
+  | 'filesystem'
+  | 'gpu'
+  | 'clipboard'
+  | 'notifications';
+
+export interface PluginRequirements {
+  minAppVersion?: string;
+  platform?: ('darwin' | 'win32' | 'linux')[];
+  gpu?: boolean;
+  minMemoryMB?: number;
+}
+
+export interface PluginPricing {
+  model: 'free' | 'per-page' | 'per-document' | 'subscription';
+  costPerPage?: number;
+  costPerDocument?: number;
+  currency?: string;
+  freeQuota?: { pages?: number; documents?: number };
+}
+
+export interface PluginIcons {
+  '16'?: string;
+  '32'?: string;
+  '48'?: string;
+  '128'?: string;
+  svg?: string;
 }
 
 export interface OcrProviderMetadata {
   id: OcrProviderId;
   name: string;
+  version: string;
   description: string;
+  longDescription?: string;
+  author?: string;
+  homepage?: string;
+  repository?: string;
+  license?: string;
+  keywords?: string[];
+  icons?: PluginIcons;
+
   runtime: OcrProviderRuntime;
-  /** Provider category: 'ocr' for extraction, 'agent' for chat, 'vlm' for vision-language */
   category: OcrProviderCategory;
-  capabilities: OcrProviderCapabilities;
-  /** Entity types this plugin extracts - required for bbox-producing plugins */
-  layers: LayerDefinition[];
-  /** JSON Schema for provider config fields (n8n-style properties) */
-  configSchema?: {
-    type: 'object';
-    properties: Record<
-      string,
-      {
-        type: string;
-        title: string;
-        description?: string;
-        format?: 'password' | 'file' | 'uri';
-        enum?: string[];
-        default?: unknown;
-      }
-    >;
-    required?: string[];
-  };
-  /** How the credential is used in requests */
-  authenticate?: OcrCredentialAuthenticate;
-  documentationUrl?: string;
-  costPerPage?: number;
   isCloud: boolean;
-  installInstructions?: string;
-  /** npm packages required by this plugin (installed on-demand) */
-  npmDependencies?: string[];
-  /**
-   * Workflow node definition - if present, plugin can be used in extraction workflows
-   *
-   * This enables the workflow system to dynamically dispatch to any provider
-   * that declares workflow support, rather than hardcoding provider logic.
-   */
+  experimental?: boolean;
+  deprecated?: boolean;
+
+  capabilities: OcrProviderCapabilities;
+  inputConstraints: InputConstraints;
+  layers: LayerDefinition[] | 'dynamic';
+
+  configSchema: {
+    type: 'object';
+    properties: Record<string, ConfigProperty>;
+    required?: string[];
+    groups?: Array<{
+      id: string;
+      title: string;
+      description?: string;
+      properties: string[];
+      collapsed?: boolean;
+    }>;
+  };
+
+  authenticate?: OcrCredentialAuthenticate;
+  permissions?: PluginPermission[];
+  requirements?: PluginRequirements;
+  pricing?: PluginPricing;
+  documentationUrl?: string;
+  apiSpec?: ApiProviderSpec;
+  localSpec?: LocalProviderSpec;
   workflowNode?: WorkflowNodeDefinition;
 }
 

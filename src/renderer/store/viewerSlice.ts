@@ -32,14 +32,7 @@ const initialState: ViewerState = {
   totalPages: 0,
   scale: 1.0,
   pdfLoaded: false,
-  overlayVisibility: {
-    ocr: false,
-    table: true,
-    figure: true,
-    footnote: true,
-    signature: false,
-    paragraph: false,
-  },
+  overlayVisibility: {},
   entities: [],
   entitiesLoading: false,
   entitiesError: null,
@@ -234,7 +227,13 @@ export const selectPageDimensions = (state: RootState) =>
 export const selectVisibleEntities = createSelector(
   [selectEntities, selectOverlayVisibility],
   (entities, overlayVisibility) =>
-    entities.filter((e) => overlayVisibility[e.type] ?? false),
+    entities.filter((e) => {
+      if (overlayVisibility[e.type]) return true;
+      for (const key of Object.keys(overlayVisibility)) {
+        if (overlayVisibility[key] && key.endsWith(`:${e.type}`)) return true;
+      }
+      return false;
+    }),
 );
 
 export const selectShowAnyOverlay = (state: RootState) => {

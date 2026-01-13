@@ -71,6 +71,22 @@ export interface OcrPlugin {
   executeWorkflow?(
     context: WorkflowExecutionContext,
   ): Promise<WorkflowNodeResult>;
+
+  /**
+   * Extract from entire PDF document in one API call.
+   *
+   * Optional - if implemented, the handler will use this instead of
+   * calling extract() page-by-page. More efficient for APIs like
+   * Google Document AI that support multi-page PDF input.
+   *
+   * @param pdfBuffer - The entire PDF file as a Buffer
+   * @param config - Provider configuration (API keys, etc.)
+   * @returns Array of page results, one per page in the PDF
+   */
+  extractDocument?(
+    pdfBuffer: Buffer,
+    config: OcrProviderConfig,
+  ): Promise<OcrPageResult[]>;
 }
 
 /**

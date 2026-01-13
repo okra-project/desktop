@@ -37,6 +37,11 @@ export interface ProviderConfig {
   apiKey?: string;
 }
 
+export interface PluginSettings {
+  /** Map of pluginId -> enabled state. Missing = enabled by default */
+  enabledPlugins: Record<string, boolean>;
+}
+
 interface SettingsSchema {
   lastWorkspacePath: string | null;
   telemetryConsent: boolean | null;
@@ -44,6 +49,7 @@ interface SettingsSchema {
   byokSettings: ByokSettings;
   localWorkspaces: LocalWorkspace[];
   mcpServer: McpServerSettings;
+  pluginSettings: PluginSettings;
 }
 
 interface ProviderSchema {
@@ -74,6 +80,9 @@ class StoreService implements IService {
         mcpServer: {
           enabled: false,
           port: 23456,
+        },
+        pluginSettings: {
+          enabledPlugins: {}, // All enabled by default when not explicitly set
         },
       },
     });
@@ -215,6 +224,31 @@ class StoreService implements IService {
   // Check if okrapdf API key is configured
   hasOkrapdfApiKey(): boolean {
     return !!this.getOkrapdfApiKey();
+  }
+
+  // Plugin settings
+  getPluginSettings(): PluginSettings {
+    return this.settingsStore.get('pluginSettings');
+  }
+
+  isPluginEnabled(pluginId: string): boolean {
+    const settings = this.getPluginSettings();
+    // Default to enabled if not explicitly set
+    return settings.enabledPlugins[pluginId] !== false;
+  }
+
+  setPluginEnabled(pluginId: string, enabled: boolean): void {
+    const settings = this.getPluginSettings();
+    settings.enabledPlugins[pluginId] = enabled;
+    this.settingsStore.set('pluginSettings', settings);
+  }
+
+  getEnabledPlugins(): Record<string, boolean> {
+    return this.getPluginSettings().enabledPlugins;
+  }
+
+  setEnabledPlugins(enabledPlugins: Record<string, boolean>): void {
+    this.settingsStore.set('pluginSettings', { enabledPlugins });
   }
 }
 

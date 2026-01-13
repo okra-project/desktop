@@ -1,15 +1,18 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import * as Sentry from '@sentry/electron/renderer';
 import PDFViewer from './PDFViewer';
 import ChatInterface from './ChatInterface';
 import { ExtractionOverlay } from './ExtractionOverlay';
 import { LayerMenu } from './review/LayerMenu';
+import { PluginMenu } from './PluginMenu';
 import { StatusBubble } from './StatusBubble';
 import { QueryResultsPanel } from './QueryResultsPanel';
 import { SENTRY_ENABLED } from '../../config/sentry';
 import { useAppDispatch, useAppSelector } from '../store';
 import { useExtractionProgress } from '../hooks/useExtractionProgress';
 import { useAvailableLayers } from '../hooks/useAvailableLayers';
+import { useWorkflow } from '../hooks/useWorkflow';
+import type { OcrProviderConfig } from '../hooks/useOcrProviders';
 import {
   setWorkspacePath,
   setCurrentPage as setReduxPage,
@@ -20,6 +23,7 @@ import {
   selectCurrentPage,
   selectOverlayVisibility,
   selectPageDimensions,
+  selectTotalPages,
 } from '../store/viewerSlice';
 import { selectHasActiveQuery, clearQuery } from '../store/querySlice';
 
@@ -72,9 +76,14 @@ export default function DocumentViewer({
   const [leftPanelWidth, setLeftPanelWidth] = useState(67);
   const [showResultsPanel, setShowResultsPanel] = useState(false);
   const [layerMenuOpen, setLayerMenuOpen] = useState(false);
+  const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
+  const [runningPluginId, setRunningPluginId] = useState<string | null>(null);
   const [agentPanelMinimized, setAgentPanelMinimized] = useState(() => {
     return localStorage.getItem('agentPanelMinimized') === 'true';
   });
+
+  const { startRun } = useWorkflow();
+  const totalPages = useAppSelector(selectTotalPages);
 
   useEffect(() => {
     localStorage.setItem('agentPanelMinimized', String(agentPanelMinimized));
@@ -131,6 +140,36 @@ export default function DocumentViewer({
   const handleToggleLayer = (layer: string) => {
     dispatch(toggleOverlay(layer));
   };
+
+  const handleRunPlugin = useCallback(
+    async (providerId: string, config: OcrProviderConfig) => {
+      if (totalPages === 0) {
+        console.log('[DocumentViewer] No pages to extract');
+        return;
+      }
+
+      setRunningPluginId(providerId);
+      try {
+        await startRun({
+          workspaceId: documentUuid,
+          workspacePath,
+          totalPages,
+          nodes: [
+            {
+              nodeId: `${providerId}-extractor`,
+              nodeType: providerId,
+              config: (config || {}) as Record<string, unknown>,
+            },
+          ],
+        });
+      } catch (error) {
+        console.error('[DocumentViewer] Failed to start extraction:', error);
+      } finally {
+        setRunningPluginId(null);
+      }
+    },
+    [documentUuid, workspacePath, totalPages, startRun],
+  );
 
   useEffect(() => {
     const findPdf = async () => {
@@ -263,6 +302,12 @@ export default function DocumentViewer({
                 </svg>
               </button>
             )}
+            <PluginMenu
+              open={pluginMenuOpen}
+              onOpenChange={setPluginMenuOpen}
+              onRunPlugin={handleRunPlugin}
+              runningPluginId={runningPluginId}
+            />
             <LayerMenu
               open={layerMenuOpen}
               onOpenChange={setLayerMenuOpen}

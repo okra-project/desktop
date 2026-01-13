@@ -1,7 +1,8 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { useWorkflow, useWorkspaceWorkflow } from './useWorkflow';
 import { useAppSelector } from '../store';
-import { selectTotalPages, selectExtractionStatus } from '@okrapdf/redux';
+import { selectExtractionStatus } from '@okrapdf/redux';
+import { selectTotalPages } from '../store/viewerSlice';
 
 /**
  * Hook for managing workflow extraction with dynamic provider support
@@ -40,7 +41,10 @@ export function useWorkflowExtraction(
           workspacePath,
           providerId,
         );
-        console.log(`[workflow] Manifest check result for ${providerId}:`, status);
+        console.log(
+          `[workflow] Manifest check result for ${providerId}:`,
+          status,
+        );
         if (status.completed) {
           console.log(
             `[workflow] Extraction already completed for ${providerId} (from manifest)`,

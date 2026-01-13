@@ -84,16 +84,17 @@ export const BboxOverlay = React.memo(
 
     // Filter bboxes by type and confidence
     const filteredBboxes = useMemo(() => {
-      return bboxes.filter((bbox) => {
-        // Filter by type
-        if (
-          showTypes &&
-          showTypes.length > 0 &&
-          !showTypes.includes(bbox.type)
-        ) {
-          return false;
+      const isTypeVisible = (type: string) => {
+        if (!showTypes || showTypes.length === 0) return true;
+        if (showTypes.includes(type)) return true;
+        for (const t of showTypes) {
+          if (t.endsWith(`:${type}`)) return true;
         }
-        // Filter by confidence
+        return false;
+      };
+
+      return bboxes.filter((bbox) => {
+        if (!isTypeVisible(bbox.type)) return false;
         if (
           minConfidence > 0 &&
           bbox.confidence !== undefined &&

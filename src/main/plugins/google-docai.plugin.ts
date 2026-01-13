@@ -7,24 +7,122 @@ import type {
 } from '../providers/ocr-types';
 import type { OcrPlugin, OcrPluginModule } from './plugin-types';
 
-declare const __non_webpack_require__: typeof require;
-const dynamicRequire =
-  typeof __non_webpack_require__ !== 'undefined'
-    ? __non_webpack_require__
-    : require;
-
-function getGoogleAuth() {
-  const pkg = 'google-auth-library';
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return dynamicRequire(pkg).GoogleAuth;
+interface DocAIVertex {
+  x?: number;
+  y?: number;
 }
+
+interface DocAILayout {
+  textAnchor?: { textSegments?: { startIndex?: string; endIndex?: string }[] };
+  confidence?: number;
+  boundingPoly?: {
+    vertices?: DocAIVertex[];
+    normalizedVertices?: DocAIVertex[];
+  };
+}
+
+interface DocAIElement {
+  layout?: DocAILayout;
+}
+
+interface DocAITable {
+  headerRows?: {
+    cells?: { layout?: DocAILayout; rowSpan?: number; colSpan?: number }[];
+  }[];
+  bodyRows?: {
+    cells?: { layout?: DocAILayout; rowSpan?: number; colSpan?: number }[];
+  }[];
+}
+
+interface DocAIPage {
+  pageNumber?: number;
+  dimension?: { width?: number; height?: number; unit?: string };
+  layout?: DocAILayout;
+  text?: string;
+  blocks?: DocAIElement[];
+  paragraphs?: DocAIElement[];
+  lines?: DocAIElement[];
+  tables?: DocAITable[];
+  bboxes?: TransformedBbox[];
+}
+
+interface DocAIResponse {
+  text?: string;
+  pages?: DocAIPage[];
+}
+
+interface TransformedBbox {
+  type: string;
+  vertices: { x: number; y: number }[];
+  text?: string;
+  confidence?: number;
+}
+
+function extractTextFromAnchor(
+  fullText: string,
+  anchor?: DocAILayout['textAnchor'],
+): string | undefined {
+  if (!anchor?.textSegments?.length) return undefined;
+  const seg = anchor.textSegments[0];
+  const start = parseInt(seg.startIndex || '0', 10);
+  const end = parseInt(seg.endIndex || '0', 10);
+  return fullText.slice(start, end).trim();
+}
+
+function transformElementsToBboxes(
+  elements: DocAIElement[] | undefined,
+  type: string,
+  fullText: string,
+): TransformedBbox[] {
+  if (!elements?.length) {
+    console.log(`[google-docai] No ${type} elements to transform`);
+    return [];
+  }
+  console.log(
+    `[google-docai] Transforming ${elements.length} ${type} elements`,
+  );
+
+  const withVertices = elements.filter(
+    (el) => el.layout?.boundingPoly?.normalizedVertices?.length,
+  );
+  console.log(
+    `[google-docai] ${withVertices.length} ${type} have normalizedVertices`,
+  );
+
+  if (elements.length > 0 && withVertices.length === 0) {
+    console.log(
+      `[google-docai] First ${type} element structure:`,
+      JSON.stringify(elements[0], null, 2).slice(0, 500),
+    );
+  }
+
+  return withVertices.map((el) => ({
+    type,
+    vertices: (el.layout!.boundingPoly!.normalizedVertices || []).map((v) => ({
+      x: v.x ?? 0,
+      y: v.y ?? 0,
+    })),
+    text: extractTextFromAnchor(fullText, el.layout?.textAnchor),
+    confidence: el.layout?.confidence,
+  }));
+}
+
+const API_BASE = 'https://okrapdf.com/api/v1';
 
 const METADATA: OcrProviderMetadata = {
   id: 'google-docai',
   name: 'Google Document AI',
-  description: 'OCR with bounding boxes via Google Cloud Document AI',
+  version: '1.0.0',
+  description:
+    'Enterprise OCR via Google Cloud - tables, handwriting, 200+ languages',
+  author: 'OkraPDF',
+  license: 'FSL-1.1-ALv2',
+  keywords: ['ocr', 'google', 'tables', 'handwriting'],
+
   runtime: 'api',
   category: 'ocr',
+  isCloud: true,
+
   capabilities: {
     supportsText: true,
     supportsTables: true,
@@ -32,283 +130,358 @@ const METADATA: OcrProviderMetadata = {
     supportsFigures: false,
     supportsHandwriting: true,
     supportsMultiLanguage: true,
+    supportsDocumentExtraction: true,
     outputFormats: ['json', 'markdown'],
     maxPagesPerRequest: 15,
   },
-  layers: [], // OCR provider - outputs text, not semantic entities
-  // Workflow integration - text extraction node
-  workflowNode: {
-    inputs: ['page-images'],
-    outputs: ['text'],
-    group: 'processor',
+
+  inputConstraints: {
+    mimeTypes: [
+      'application/pdf',
+      'image/png',
+      'image/jpeg',
+      'image/tiff',
+      'image/gif',
+      'image/bmp',
+    ],
+    maxFileSizeMB: 20,
+    maxPagesPerRequest: 15,
   },
-  authenticate: { type: 'bearer' },
-  documentationUrl: 'https://cloud.google.com/document-ai',
-  costPerPage: 0.01,
-  isCloud: true,
+
+  layers: [
+    {
+      id: 'block',
+      displayName: 'Blocks',
+      icon: 'Square',
+      color: {
+        hex: '#f59e0b',
+        border: 'rgba(245,158,11,0.9)',
+        fill: 'rgba(245,158,11,0.15)',
+      },
+      category: 'ocr',
+    },
+    {
+      id: 'paragraph',
+      displayName: 'Paragraphs',
+      icon: 'AlignLeft',
+      color: {
+        hex: '#eab308',
+        border: 'rgba(234,179,8,0.9)',
+        fill: 'rgba(234,179,8,0.15)',
+      },
+      category: 'ocr',
+    },
+    {
+      id: 'line',
+      displayName: 'Lines',
+      icon: 'Minus',
+      color: {
+        hex: '#84cc16',
+        border: 'rgba(132,204,22,0.9)',
+        fill: 'rgba(132,204,22,0.15)',
+      },
+      category: 'ocr',
+    },
+    {
+      id: 'token',
+      displayName: 'Words',
+      icon: 'Type',
+      color: {
+        hex: '#22c55e',
+        border: 'rgba(34,197,94,0.9)',
+        fill: 'rgba(34,197,94,0.15)',
+      },
+      category: 'ocr',
+    },
+    {
+      id: 'table',
+      displayName: 'Tables',
+      icon: 'Table2',
+      color: {
+        hex: '#06b6d4',
+        border: 'rgba(6,182,212,0.9)',
+        fill: 'rgba(6,182,212,0.15)',
+      },
+      category: 'entity',
+    },
+    {
+      id: 'form_field_name',
+      displayName: 'Form Labels',
+      icon: 'Tag',
+      color: {
+        hex: '#0ea5e9',
+        border: 'rgba(14,165,233,0.9)',
+        fill: 'rgba(14,165,233,0.15)',
+      },
+      category: 'entity',
+    },
+    {
+      id: 'form_field_value',
+      displayName: 'Form Values',
+      icon: 'FileText',
+      color: {
+        hex: '#3b82f6',
+        border: 'rgba(59,130,246,0.9)',
+        fill: 'rgba(59,130,246,0.15)',
+      },
+      category: 'entity',
+    },
+  ],
+
   configSchema: {
     type: 'object',
     properties: {
-      authMode: {
-        type: 'string',
-        title: 'Authentication Mode',
-        description:
-          'Use okrapdf.com (just API key) or direct Google credentials',
-        enum: ['okrapdf', 'direct'],
-        default: 'okrapdf',
-      },
       apiKey: {
         type: 'string',
-        title: 'API Key',
-        description:
-          'okrapdf API key (okra_xxx) or Google Service Account JSON',
+        title: 'OkraPDF API Key',
+        description: 'Get your key at okrapdf.com/settings',
         format: 'password',
-      },
-      projectId: {
-        type: 'string',
-        title: 'GCP Project ID',
-        description: 'Your Google Cloud project ID (direct mode only)',
-      },
-      processorId: {
-        type: 'string',
-        title: 'Processor ID',
-        description: 'Document AI processor ID (direct mode only)',
+        placeholder: 'okra_xxxxxxxxxxxxxxxx',
+        required: true,
+        validation: {
+          pattern: '^okra_[a-zA-Z0-9]+$',
+          patternMessage: 'Must start with okra_',
+        },
       },
     },
     required: ['apiKey'],
+  },
+
+  authenticate: { type: 'bearer' },
+  permissions: ['network'],
+
+  pricing: {
+    model: 'per-page',
+    costPerPage: 0.01,
+    currency: 'USD',
+    freeQuota: { pages: 1000 },
+  },
+
+  documentationUrl: 'https://cloud.google.com/document-ai/docs',
+
+  apiSpec: {
+    baseUrl: API_BASE,
+    authType: 'bearer',
+    endpoints: {
+      extract: {
+        method: 'POST',
+        path: '/ocr/google-docai',
+        contentType: 'application/json',
+      },
+    },
+    responseSchema: {
+      text: 'string',
+      pages: [
+        {
+          pageNumber: 'number',
+          text: 'string',
+          confidence: 'number',
+          dimension: { width: 'number', height: 'number', unit: 'string' },
+          blocks: [
+            {
+              layout: {
+                textAnchor: { textSegments: [{ endIndex: 'string' }] },
+                confidence: 'number',
+                boundingPoly: {
+                  vertices: [{ x: 'number', y: 'number' }],
+                  normalizedVertices: [{ x: 'number', y: 'number' }],
+                },
+              },
+            },
+          ],
+          paragraphs: [
+            {
+              layout: {
+                textAnchor: { textSegments: [{ endIndex: 'string' }] },
+                confidence: 'number',
+                boundingPoly: {
+                  vertices: [{ x: 'number', y: 'number' }],
+                  normalizedVertices: [{ x: 'number', y: 'number' }],
+                },
+              },
+            },
+          ],
+          lines: [
+            {
+              layout: {
+                textAnchor: { textSegments: [{ endIndex: 'string' }] },
+                confidence: 'number',
+                boundingPoly: {
+                  vertices: [{ x: 'number', y: 'number' }],
+                  normalizedVertices: [{ x: 'number', y: 'number' }],
+                },
+              },
+            },
+          ],
+          tables: [
+            { headerRows: [{ cells: [{}] }], bodyRows: [{ cells: [{}] }] },
+          ],
+        },
+      ],
+    },
+  },
+
+  workflowNode: {
+    inputs: ['pdf', 'page-images'],
+    outputs: ['text', 'entities'],
+    group: 'processor',
   },
 };
 
 class GoogleDocAIPlugin implements OcrPlugin {
   id = 'google-docai';
-
   metadata = METADATA;
 
   async extract(
     imageBuffer: Buffer,
     pageNumber: number,
     config: OcrProviderConfig,
-  ): Promise<OcrPageResult> {
+  ): Promise<OcrPageResult & { rawVendorResponse?: DocAIResponse }> {
     const startTime = Date.now();
-    const authMode = (config.options?.authMode as string) ?? 'okrapdf';
+    const response = await this.callApi(
+      imageBuffer.toString('base64'),
+      'image/png',
+      config.apiKey!,
+    );
+    const page = response.pages?.[0];
+    const fullText = response.text || '';
 
-    let document;
+    const bboxes = page?.bboxes?.length
+      ? page.bboxes
+      : [
+          ...transformElementsToBboxes(page?.blocks, 'block', fullText),
+          ...transformElementsToBboxes(page?.paragraphs, 'paragraph', fullText),
+          ...transformElementsToBboxes(page?.lines, 'line', fullText),
+        ];
 
-    if (authMode === 'okrapdf') {
-      // Proxied via okrapdf.com - just needs okra_xxx API key
-      document = await this.extractViaOkrapdf(imageBuffer, config.apiKey!);
-    } else {
-      // Direct Google credentials
-      document = await this.extractViaDirect(imageBuffer, config);
-    }
+    console.log(
+      '[google-docai] Bboxes count:',
+      bboxes.length,
+      'source:',
+      page?.bboxes?.length ? 'api' : 'transformed',
+    );
 
-    const bboxes: OcrPageResult['bboxes'] = [];
-    const page = document.pages?.[0];
-
-    if (page?.blocks) {
-      for (const block of (page.blocks as any[])) {
-        if (block.layout?.boundingPoly?.normalizedVertices) {
-          bboxes.push({
-            type: 'paragraph',
-            vertices: block.layout.boundingPoly.normalizedVertices,
-            text: block.layout.textAnchor?.content,
-            confidence: block.layout.confidence,
-          });
-        }
-      }
-    }
-
-    const tables: OcrPageResult['tables'] = [];
-    if (page?.tables) {
-      for (let i = 0; i < page.tables.length; i++) {
-        const table = page.tables[i] as any;
-        const rows: string[][] = [];
-
-        for (const row of table.bodyRows || []) {
-          const cells: string[] = [];
-          for (const cell of row.cells || []) {
-            const text = cell.layout?.textAnchor?.content || '';
-            cells.push(text.trim());
-          }
-          rows.push(cells);
-        }
-
-        if (rows.length > 0) {
-          const headers = rows[0];
-          const separator = headers.map(() => '---');
-          const bodyRows = rows.slice(1);
-
-          const markdown = [
-            `| ${headers.join(' | ')} |`,
-            `| ${separator.join(' | ')} |`,
-            ...bodyRows.map((row) => `| ${row.join(' | ')} |`),
-          ].join('\n');
-
-          tables.push({
-            id: `table-p${pageNumber}-${i + 1}`,
-            markdown,
-            headers,
-            rowCount: rows.length,
-            colCount: headers.length,
-          });
-        }
-      }
-    }
-
-    const markdown = document.text || '';
+    const rawVendorResponse = { ...response };
+    delete (rawVendorResponse as Record<string, unknown>).rawDocument;
 
     return {
       pageNumber,
-      markdown,
+      markdown: fullText,
       bboxes,
-      tables,
+      tables: this.transformTables(page?.tables),
       confidence: page?.layout?.confidence,
       durationMs: Date.now() - startTime,
+      imageSize: page?.dimension
+        ? {
+            width: page.dimension.width || 0,
+            height: page.dimension.height || 0,
+          }
+        : undefined,
+      rawVendorResponse,
     };
   }
 
-  /**
-   * Extract via okrapdf.com proxy - just needs okra_xxx API key
-   */
-  private async extractViaOkrapdf(
-    imageBuffer: Buffer,
-    apiKey: string,
-  ): Promise<{
-    text?: string;
-    pages?: Array<{
-      blocks?: unknown[];
-      tables?: unknown[];
-      layout?: { confidence?: number };
-    }>;
-  }> {
-    const response = await fetch(
-      'https://okrapdf.com/api/v1/ocr/google-docai',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          image: imageBuffer.toString('base64'),
-          mimeType: 'image/png',
-        }),
-      },
+  async extractDocument(
+    pdfBuffer: Buffer,
+    config: OcrProviderConfig,
+  ): Promise<(OcrPageResult & { rawVendorResponse?: DocAIPage })[]> {
+    const startTime = Date.now();
+    const response = await this.callApi(
+      pdfBuffer.toString('base64'),
+      'application/pdf',
+      config.apiKey!,
     );
+    const totalDuration = Date.now() - startTime;
+    const fullText = response.text || '';
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`okrapdf API error: ${response.status} - ${errorText}`);
-    }
+    return (response.pages || []).map((page, index) => {
+      const bboxes = page?.bboxes?.length
+        ? page.bboxes
+        : [
+            ...transformElementsToBboxes(page?.blocks, 'block', fullText),
+            ...transformElementsToBboxes(
+              page?.paragraphs,
+              'paragraph',
+              fullText,
+            ),
+            ...transformElementsToBboxes(page?.lines, 'line', fullText),
+          ];
 
-    const result = await response.json();
-    return result.document;
+      return {
+        pageNumber: page.pageNumber ?? index + 1,
+        markdown:
+          page.text ||
+          extractTextFromAnchor(fullText, page.layout?.textAnchor) ||
+          '',
+        bboxes,
+        tables: this.transformTables(page?.tables),
+        confidence: page.layout?.confidence,
+        durationMs: Math.round(totalDuration / (response.pages?.length || 1)),
+        imageSize: page.dimension
+          ? {
+              width: page.dimension.width || 0,
+              height: page.dimension.height || 0,
+            }
+          : undefined,
+        rawVendorResponse: page,
+      };
+    });
   }
 
-  /**
-   * Extract via direct Google credentials - requires google-auth-library
-   */
-  private async extractViaDirect(
-    imageBuffer: Buffer,
-    config: OcrProviderConfig,
-  ): Promise<{
-    text?: string;
-    pages?: Array<{
-      blocks?: unknown[];
-      tables?: unknown[];
-      layout?: { confidence?: number };
-    }>;
-  }> {
-    let credentials;
-    if (config.apiKey) {
-      try {
-        credentials = JSON.parse(config.apiKey);
-      } catch {
-        throw new Error('Invalid service account key JSON');
-      }
-    }
-
-    const projectId = config.projectId ?? credentials?.project_id;
-    const { processorId } = config;
-    const location = (config.options?.location as string) ?? 'us';
-
-    if (!projectId || !processorId) {
-      throw new Error('Direct mode requires projectId and processorId');
-    }
-
-    const GoogleAuth = getGoogleAuth();
-    const auth = new GoogleAuth({
-      credentials,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+  private transformTables(tables?: DocAITable[]): OcrPageResult['tables'] {
+    if (!tables?.length) return [];
+    return tables.map((table, idx) => {
+      const headers = table.headerRows?.[0]?.cells?.map(() => '') || [];
+      const rowCount =
+        (table.headerRows?.length || 0) + (table.bodyRows?.length || 0);
+      return {
+        id: `table-${idx}`,
+        markdown: '',
+        headers,
+        rowCount,
+        colCount: headers.length || table.bodyRows?.[0]?.cells?.length || 0,
+      };
     });
-    const client = await auth.getClient();
-    const accessToken = await client.getAccessToken();
+  }
 
-    const endpoint = `https://${location}-documentai.googleapis.com/v1/projects/${projectId}/locations/${location}/processors/${processorId}:process`;
-
-    const response = await fetch(endpoint, {
+  private async callApi(
+    content: string,
+    mimeType: string,
+    apiKey: string,
+  ): Promise<DocAIResponse> {
+    const response = await fetch(`${API_BASE}/ocr/google-docai`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken.token}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        rawDocument: {
-          content: imageBuffer.toString('base64'),
-          mimeType: 'image/png',
-        },
-      }),
+      body: JSON.stringify({ rawDocument: { content, mimeType } }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Google Doc AI error: ${response.status} - ${errorText}`);
+      throw new Error(`API error: ${response.status} - ${errorText}`);
     }
 
-    const result = await response.json();
-    return result.document;
+    return response.json();
   }
 
   async checkHealth(
     config: OcrProviderConfig,
   ): Promise<{ ok: boolean; error?: string; latencyMs?: number }> {
     const startTime = Date.now();
-    const authMode = (config.options?.authMode as string) ?? 'okrapdf';
 
-    try {
-      if (authMode === 'okrapdf') {
-        // Just verify the API key format
-        if (!config.apiKey?.startsWith('okra_')) {
-          return {
-            ok: false,
-            error: 'Invalid okrapdf API key (should start with okra_)',
-            latencyMs: Date.now() - startTime,
-          };
-        }
-        // Could ping okrapdf.com/api/health but skip for now
-        return { ok: true, latencyMs: Date.now() - startTime };
-      }
-      // Direct mode - verify Google credentials
-      const GoogleAuth = getGoogleAuth();
-      const credentials = JSON.parse(config.apiKey ?? '{}');
-      const auth = new GoogleAuth({
-        credentials,
-        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-      });
-      await auth.getClient();
-      return { ok: true, latencyMs: Date.now() - startTime };
-    } catch (error) {
+    if (!config.apiKey?.startsWith('okra_')) {
       return {
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: 'API key must start with okra_',
         latencyMs: Date.now() - startTime,
       };
     }
+
+    return { ok: true, latencyMs: Date.now() - startTime };
   }
 
-  /**
-   * Execute as workflow node - called by workflow handler per-page
-   */
   async executeWorkflow(
     ctx: WorkflowExecutionContext,
   ): Promise<WorkflowNodeResult> {
@@ -317,16 +490,11 @@ class GoogleDocAIPlugin implements OcrPlugin {
       `Processing page ${ctx.pageNumber} with Google Document AI`,
     );
 
-    try {
-      // Check for abort signal
-      if (ctx.signal.aborted) {
-        return {
-          durationMs: Date.now() - startTime,
-          error: 'Aborted',
-        };
-      }
+    if (ctx.signal.aborted) {
+      return { durationMs: Date.now() - startTime, error: 'Aborted' };
+    }
 
-      // Use existing extract method
+    try {
       const result = await this.extract(
         ctx.input.pageImage!,
         ctx.pageNumber,
@@ -341,7 +509,8 @@ class GoogleDocAIPlugin implements OcrPlugin {
       }
 
       return {
-        text: result.markdown,
+        entities: result,
+        markdown: result.markdown,
         durationMs: result.durationMs ?? Date.now() - startTime,
       };
     } catch (error) {
@@ -353,13 +522,7 @@ class GoogleDocAIPlugin implements OcrPlugin {
   }
 }
 
-/**
- * Check dependencies - google-auth-library only required for direct mode.
- * For okrapdf mode, no external deps needed.
- */
 export function checkDependencies(): string | null {
-  // Always return null - okrapdf mode works without google-auth-library
-  // Direct mode will fail at runtime if dep is missing, which is acceptable
   return null;
 }
 
@@ -367,9 +530,5 @@ export function createPlugin(): OcrPlugin {
   return new GoogleDocAIPlugin();
 }
 
-const pluginModule: OcrPluginModule = {
-  checkDependencies,
-  createPlugin,
-};
-
+const pluginModule: OcrPluginModule = { checkDependencies, createPlugin };
 export default pluginModule;

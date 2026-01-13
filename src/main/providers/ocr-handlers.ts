@@ -26,7 +26,11 @@ import {
   installPlugin,
   uninstallPlugin,
 } from '../plugins/plugin-loader';
-import { getRegistry } from '../plugins/registry';
+import {
+  getRegistry,
+  setPluginEnabled,
+  getPluginStatuses,
+} from '../plugins/registry';
 import { storeService } from '../services/store.service';
 import { pdfWorkerService } from '../services/pdf-worker.service';
 
@@ -82,6 +86,76 @@ export async function renderPageFromFile(
   }
 }
 
+async function getPageDimensions(
+  pdfPath: string,
+  pageNum: number,
+): Promise<{ width: number; height: number }> {
+  const { width, height } = await pdfWorkerService.renderPage(
+    pdfPath,
+    pageNum,
+    1.0,
+  );
+  return { width, height };
+}
+
+function scaleNormalizedBboxes(
+  pageResult: OcrPageResult,
+  width: number,
+  height: number,
+): void {
+  if (!pageResult.imageSize) {
+    pageResult.imageSize = { width, height };
+
+    if (pageResult.bboxes && pageResult.bboxes.length > 0) {
+      const allCoords = pageResult.bboxes.flatMap((b) =>
+        b.vertices.flatMap((v) => [v.x, v.y]),
+      );
+      const maxCoord = Math.max(...allCoords);
+
+      if (maxCoord <= 1.5) {
+        console.log(
+          `[ocr-handler] Scaling normalized bboxes for page ${pageResult.pageNumber}`,
+        );
+        pageResult.bboxes = pageResult.bboxes.map((bbox) => ({
+          ...bbox,
+          vertices: bbox.vertices.map((v) => ({
+            x: v.x * width,
+            y: v.y * height,
+          })),
+        }));
+      }
+    }
+  }
+}
+
+function savePageResult(
+  pageResult: OcrPageResult,
+  outputDir: string,
+  providerId: string,
+): void {
+  const namespacedResult = {
+    ...pageResult,
+    bboxes: pageResult.bboxes.map((bbox) => ({
+      ...bbox,
+      type: `${providerId}:${bbox.type}`,
+    })),
+  };
+
+  const outputPath = path.join(
+    outputDir,
+    `page-${String(pageResult.pageNumber).padStart(3, '0')}.json`,
+  );
+  fs.writeFileSync(outputPath, JSON.stringify(namespacedResult, null, 2));
+
+  if (pageResult.markdown) {
+    const mdPath = path.join(
+      outputDir,
+      `page-${String(pageResult.pageNumber).padStart(3, '0')}.md`,
+    );
+    fs.writeFileSync(mdPath, pageResult.markdown);
+  }
+}
+
 export async function extractWithProvider(
   providerId: OcrProviderId,
   imageBuffer: Buffer,
@@ -117,10 +191,11 @@ export async function setupOcrIpcHandlers(
     const plugins = getAvailablePlugins();
     const layerMap = new Map<string, LayerDefinition>();
     for (const plugin of plugins) {
-      for (const layer of plugin.metadata.layers ?? []) {
-        if (!layerMap.has(layer.id)) {
-          layerMap.set(layer.id, layer);
-        }
+      const layers = plugin.metadata.layers;
+      if (layers === 'dynamic' || !layers) continue;
+      for (const layer of layers) {
+        const namespacedId = `${plugin.id}:${layer.id}`;
+        layerMap.set(namespacedId, { ...layer, id: namespacedId });
       }
     }
     return Array.from(layerMap.values());
@@ -144,6 +219,17 @@ export async function setupOcrIpcHandlers(
 
   ipcMain.handle('plugin:uninstall', async (_event, pluginId: string) => {
     return uninstallPlugin(pluginId);
+  });
+
+  ipcMain.handle(
+    'plugin:set-enabled',
+    async (_event, pluginId: string, enabled: boolean) => {
+      return setPluginEnabled(pluginId, enabled);
+    },
+  );
+
+  ipcMain.handle('plugin:get-statuses', async () => {
+    return getPluginStatuses();
   });
 
   // Save provider config
@@ -203,7 +289,12 @@ export async function setupOcrIpcHandlers(
     ): Promise<OcrPageResult> => {
       const imageBuffer = Buffer.from(imageBase64, 'base64');
       const resolvedConfig = resolveConfig(config);
-      return extractWithProvider(providerId, imageBuffer, pageNumber, resolvedConfig);
+      return extractWithProvider(
+        providerId,
+        imageBuffer,
+        pageNumber,
+        resolvedConfig,
+      );
     },
   );
 
@@ -214,7 +305,6 @@ export async function setupOcrIpcHandlers(
       const { providerId, workspacePath, config: rawConfig, options } = request;
       const config = resolveConfig(rawConfig);
 
-      // Find PDF in workspace
       const files = fs.readdirSync(workspacePath);
       const pdfFile = files.find((f) => f.toLowerCase().endsWith('.pdf'));
       if (!pdfFile) {
@@ -229,84 +319,69 @@ export async function setupOcrIpcHandlers(
         const totalPages = await pdfWorkerService.getPageCount(pdfPath);
         const startPage = options?.startPage ?? 1;
         const endPage = Math.min(options?.endPage ?? totalPages, totalPages);
+        const plugin = getPlugin(providerId);
 
-        const results: OcrPageResult[] = [];
+        let results: OcrPageResult[] = [];
 
-        for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
-          // Emit progress
-          const progress: OcrProgress = {
+        if (plugin?.extractDocument) {
+          mainWindow?.webContents.send('ocr:progress', {
             providerId,
             phase: 'processing',
-            currentPage: pageNum,
+            currentPage: 1,
             totalPages: endPage - startPage + 1,
-            message: `Processing page ${pageNum}/${endPage}`,
-          };
-          mainWindow?.webContents.send('ocr:progress', progress);
+            message: `Processing ${endPage - startPage + 1} pages with ${providerId}...`,
+          } as OcrProgress);
 
-          // Render page to image
-          const {
-            buffer: imageBuffer,
-            width,
-            height,
-          } = await renderPageFromFile(pdfPath, pageNum);
-
-          // Extract with provider
-          const pageResult = await extractWithProvider(
-            providerId,
-            imageBuffer,
-            pageNum,
+          const pdfBuffer = await fs.promises.readFile(pdfPath);
+          const allPageResults = await plugin.extractDocument(
+            pdfBuffer,
             config,
           );
 
-          // Post-process result to ensure consistent coordinate system (Absolute Pixels)
-          if (!pageResult.imageSize) {
-            // Provider didn't return dimensions (e.g. DocAI, OpenRouter)
-            // We interpret this as potential normalized coordinates
-            pageResult.imageSize = { width, height };
-
-            // Check if bboxes are normalized (0-1) and scale them if so
-            if (pageResult.bboxes && pageResult.bboxes.length > 0) {
-              const allCoords = pageResult.bboxes.flatMap((b) =>
-                b.vertices.flatMap((v) => [v.x, v.y]),
-              );
-              const maxCoord = Math.max(...allCoords);
-
-              // Heuristic: If max coordinate is small (<= 1.5), assume normalized
-              // Use 1.5 to account for potential slight float overshoots or 1-based indexing in some weird cases
-              if (maxCoord <= 1.5) {
-                console.log(
-                  `[ocr-handler] Scaling normalized bboxes for page ${pageNum}`,
-                );
-                pageResult.bboxes = pageResult.bboxes.map((bbox) => ({
-                  ...bbox,
-                  vertices: bbox.vertices.map((v) => ({
-                    x: v.x * width,
-                    y: v.y * height,
-                  })),
-                }));
-              }
-            }
-          }
-          results.push(pageResult);
-
-          // Save result to disk
-          const outputPath = path.join(
-            outputDir,
-            `page-${String(pageNum).padStart(3, '0')}.json`,
+          results = allPageResults.filter(
+            (r) => r.pageNumber >= startPage && r.pageNumber <= endPage,
           );
-          fs.writeFileSync(outputPath, JSON.stringify(pageResult, null, 2));
 
-          // Also save markdown if present
-          if (pageResult.markdown) {
-            const mdPath = path.join(
-              outputDir,
-              `page-${String(pageNum).padStart(3, '0')}.md`,
+          await Promise.all(
+            results.map(async (pageResult) => {
+              const { width, height } = await getPageDimensions(
+                pdfPath,
+                pageResult.pageNumber,
+              );
+              scaleNormalizedBboxes(pageResult, width, height);
+              savePageResult(pageResult, outputDir, providerId);
+            }),
+          );
+        } else {
+          for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
+            const progress: OcrProgress = {
+              providerId,
+              phase: 'processing',
+              currentPage: pageNum,
+              totalPages: endPage - startPage + 1,
+              message: `Processing page ${pageNum}/${endPage}`,
+            };
+            mainWindow?.webContents.send('ocr:progress', progress);
+
+            const {
+              buffer: imageBuffer,
+              width,
+              height,
+            } = await renderPageFromFile(pdfPath, pageNum);
+
+            const pageResult = await extractWithProvider(
+              providerId,
+              imageBuffer,
+              pageNum,
+              config,
             );
-            fs.writeFileSync(mdPath, pageResult.markdown);
+
+            scaleNormalizedBboxes(pageResult, width, height);
+            savePageResult(pageResult, outputDir, providerId);
+            results.push(pageResult);
           }
         }
 
-        // Save manifest
         const manifest = {
           providerId,
           extractedAt: new Date().toISOString(),
@@ -322,7 +397,6 @@ export async function setupOcrIpcHandlers(
           JSON.stringify(manifest, null, 2),
         );
 
-        // Emit completion
         mainWindow?.webContents.send('ocr:progress', {
           providerId,
           phase: 'completed',
@@ -499,5 +573,7 @@ export function cleanupOcrIpcHandlers(): void {
   ipcMain.removeHandler('ocr:get-page-bboxes');
   ipcMain.removeHandler('plugin:install');
   ipcMain.removeHandler('plugin:uninstall');
+  ipcMain.removeHandler('plugin:set-enabled');
+  ipcMain.removeHandler('plugin:get-statuses');
   mainWindow = null;
 }

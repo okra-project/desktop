@@ -13,6 +13,7 @@ interface QueryResultsOverlayProps {
   containerHeight: number;
   pageWidth: number;
   pageHeight: number;
+  pageNum: number;
   offsetX?: number;
   offsetY?: number;
   workspaceId?: string;
@@ -30,11 +31,15 @@ function extractWorkspaceIdFromPath(path: string | null): string | null {
   return idx >= 0 && parts[idx + 1] ? parts[idx + 1] : null;
 }
 
+// Render overlays for current page ± PAGE_BUFFER to prevent flashing on scroll
+const PAGE_BUFFER = 3;
+
 export function QueryResultsOverlay({
   containerWidth,
   containerHeight,
   pageWidth,
   pageHeight,
+  pageNum,
   offsetX = 0,
   offsetY = 0,
   workspaceId,
@@ -48,15 +53,18 @@ export function QueryResultsOverlay({
   const effectiveWorkspaceId =
     workspaceId ?? extractWorkspaceIdFromPath(currentWorkspacePath);
 
+  // Check if this page is within buffer range of current page
+  const isWithinBuffer = Math.abs(pageNum - currentPage) <= PAGE_BUFFER;
+
   const pageResults = useMemo(() => {
-    if (!results?.results) return [];
+    if (!results?.results || !isWithinBuffer) return [];
     return results.results.filter((r) => {
-      if (r.page !== currentPage) return false;
+      if (r.page !== pageNum) return false;
       if (effectiveWorkspaceId && r.workspaceId !== effectiveWorkspaceId)
         return false;
       return true;
     });
-  }, [results, currentPage, effectiveWorkspaceId]);
+  }, [results, pageNum, effectiveWorkspaceId, isWithinBuffer]);
 
   const focusedResult = useMemo(() => {
     if (focusedIndex === null || !results?.results) return null;

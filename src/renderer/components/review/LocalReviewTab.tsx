@@ -63,8 +63,18 @@ export function LocalReviewTab({
 
   const entityOverlays: EntityOverlay[] = useMemo(() => {
     if (!entitiesData?.entities) return [];
+
+    const isLayerVisible = (type: string) => {
+      if (visibleLayers.has(type)) return true;
+      for (const layerId of visibleLayers) {
+        const suffix = layerId.split(':')[1];
+        if (suffix && suffix === type) return true;
+      }
+      return false;
+    };
+
     return entitiesData.entities
-      .filter((e) => visibleLayers.has(e.type))
+      .filter((e) => isLayerVisible(e.type))
       .map((e) => ({
         id: e.id,
         type: e.type,

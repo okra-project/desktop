@@ -10,7 +10,11 @@ export function getLayerColor(
   layerId: string,
   layers?: LayerDefinition[],
 ): { hex: string; border: string; fill: string } {
-  return layers?.find((l) => l.id === layerId)?.color ?? DEFAULT_COLOR;
+  if (!layers) return DEFAULT_COLOR;
+  const exact = layers.find((l) => l.id === layerId);
+  if (exact) return exact.color;
+  const suffixMatch = layers.find((l) => l.id.endsWith(`:${layerId}`));
+  return suffixMatch?.color ?? DEFAULT_COLOR;
 }
 
 export function buildOverlayColors(
@@ -22,11 +26,17 @@ export function buildOverlayColors(
   > = {};
 
   for (const layer of layers ?? []) {
-    colors[layer.id] = {
+    const colorEntry = {
       border: layer.color.border,
       fill: layer.color.fill,
       label: layer.color.hex,
     };
+    colors[layer.id] = colorEntry;
+    const colonIdx = layer.id.indexOf(':');
+    if (colonIdx > 0) {
+      const suffix = layer.id.slice(colonIdx + 1);
+      if (!colors[suffix]) colors[suffix] = colorEntry;
+    }
   }
 
   colors._default = {

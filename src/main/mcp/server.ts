@@ -47,10 +47,34 @@ export interface SelectorResult {
   bbox: { xMin: number; yMin: number; xMax: number; yMax: number };
 }
 
+export interface PageContent {
+  page: number;
+  tables?: Array<{
+    title: string;
+    schema: string[];
+    is_complete: boolean;
+    bbox_2d: number[];
+  }>;
+  figures?: Array<{ title: string; bbox_2d: number[] }>;
+  footnotes?: Array<{ text: string }>;
+  signatures?: Array<{ text: string }>;
+  raw?: string;
+}
+
+export interface WorkspaceContent {
+  workspaceId: string;
+  workspaceName: string;
+  totalPages?: number;
+  pages: PageContent[];
+}
+
 export interface WorkspaceProvider {
   listWorkspaces: () => Workspace[];
   getWorkspace: (id: string) => Workspace | null;
-  getWorkspaceContent: (id: string, pageNum?: number) => Promise<string | null>;
+  getWorkspaceContent: (
+    id: string,
+    pageNum?: number,
+  ) => Promise<WorkspaceContent | null>;
   searchWorkspace: (
     id: string,
     query: string,
@@ -435,6 +459,120 @@ function registerToolsWithZod(
         return results;
       },
     },
+    {
+      name: 'get_tables',
+      execute: async (args: unknown) => {
+        const { workspaceId } = args as { workspaceId?: string };
+        const workspaces = workspaceId
+          ? [provider.getWorkspace(workspaceId)].filter(Boolean)
+          : provider.listWorkspaces();
+
+        const allTables: Array<{
+          workspaceId: string;
+          workspaceName: string;
+          page: number;
+          title: string;
+          schema: string[];
+          bbox: number[];
+        }> = [];
+
+        for (const ws of workspaces) {
+          if (!ws) continue;
+          const content = await provider.getWorkspaceContent(ws.id);
+          if (!content) continue;
+
+          for (const p of content.pages) {
+            if (p.tables) {
+              for (const t of p.tables) {
+                allTables.push({
+                  workspaceId: ws.id,
+                  workspaceName: ws.name,
+                  page: p.page,
+                  title: t.title,
+                  schema: t.schema,
+                  bbox: t.bbox_2d,
+                });
+              }
+            }
+          }
+        }
+
+        return { tables: allTables, count: allTables.length };
+      },
+    },
+    {
+      name: 'help',
+      execute: async (args: unknown) => {
+        const { topic } = args as { topic?: string };
+
+        const docs: Record<string, string> = {
+          get_workspace: `get_workspace({ workspaceId, page? })
+Returns structured content for a workspace.
+
+Response: {
+  content: {
+    workspaceId: string,
+    workspaceName: string,
+    totalPages: number,
+    pages: Array<{
+      page: number,
+      tables?: Array<{ title, schema, is_complete, bbox_2d }>,
+      figures?: Array<{ title, bbox_2d }>,
+      footnotes?: Array<{ text }>,
+      signatures?: Array<{ text }>
+    }>
+  }
+}`,
+          get_tables: `get_tables({ workspaceId? })
+Extract all tables from a workspace (or all workspaces if no ID provided).
+
+Response: {
+  tables: Array<{ workspaceId, workspaceName, page, title, schema, bbox }>,
+  count: number
+}`,
+          query_selector: `query_selector({ workspaceId, selector })
+Query entities using CSS-like selectors.
+
+Selectors:
+  .table, .figure          - by type
+  [type='table,figure']    - multiple types
+  [text*='search term']    - text contains
+  :page(1) or :page(1-5)   - page filter
+  :limit(10) :offset(5)    - pagination
+
+Example: ".table:page(1-10):limit(5)"`,
+          query: `query({ query, display? })
+SQL-like query syntax.
+
+Examples:
+  "SELECT tables FROM workspace-id"
+  "SELECT * FROM workspace-id WHERE type = 'table'"
+  "SELECT tables, figures FROM all"`,
+        };
+
+        if (topic && docs[topic]) {
+          return { topic, help: docs[topic] };
+        }
+
+        return {
+          availableTools: [
+            'list_workspaces',
+            'get_workspace',
+            'get_tables',
+            'search_workspace',
+            'global_search',
+            'query_selector',
+            'find_workspaces',
+            'search_all',
+            'show_result',
+            'query',
+            'help',
+          ],
+          usage: 'mcp.help({ topic: "get_tables" }) for detailed docs',
+          quickRef: Object.keys(docs),
+        };
+      },
+    },
   ]);
 
   server.tool(
@@ -443,7 +581,8 @@ function registerToolsWithZod(
 
 Available tools via 'mcp' object:
 - mcp.list_workspaces() → { workspaces: [...] }
-- mcp.get_workspace({ workspaceId, page? }) → { content: string }
+- mcp.get_workspace({ workspaceId, page? }) → { content: { workspaceId, workspaceName, totalPages, pages: [...] } }
+- mcp.get_tables({ workspaceId? }) → { tables: [{ workspaceId, workspaceName, page, title, schema, bbox }], count }
 - mcp.search_workspace({ workspaceId, query }) → { results: [...] }
 - mcp.global_search({ query }) → { results: [...] }
 - mcp.query_selector({ workspaceId, selector }) → { results: [...] }
@@ -451,14 +590,11 @@ Available tools via 'mcp' object:
 - mcp.search_all({ query?, selector? }) → { results: [{ workspaceId, workspaceName, workspacePath, results: [...] }] }
 - mcp.show_result({ workspaceId?, selector?, results?, label? }) → { results: [...] }
 - mcp.query({ query, display? }) → { results: [...], totalCount, executionMs }
+- mcp.help({ topic? }) → docs for tools (topics: get_workspace, get_tables, query_selector, query)
 
 Example:
-  const ws = await mcp.list_workspaces();
-  for (const w of ws.workspaces) {
-    const r = await mcp.query({ query: "SELECT tables FROM " + w.id });
-    if (r.totalCount > 0) return { found: w.name, tables: r.totalCount };
-  }
-  return { found: null };
+  const { tables, count } = await mcp.get_tables({ workspaceId: "local-xxx" });
+  return { count, tables: tables.map(t => t.title) };
 `,
     {
       code: z.string().describe('JavaScript async function body'),
