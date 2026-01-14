@@ -7,6 +7,7 @@ import { LayerMenu } from './review/LayerMenu';
 import { PluginMenu } from './PluginMenu';
 import { StatusBubble } from './StatusBubble';
 import { QueryResultsPanel } from './QueryResultsPanel';
+import { VerifyPanel, type VerifyRequest } from './VerifyPanel';
 import { SENTRY_ENABLED } from '../../config/sentry';
 import { useAppDispatch, useAppSelector } from '../store';
 import { useExtractionProgress } from '../hooks/useExtractionProgress';
@@ -26,6 +27,11 @@ import {
   selectTotalPages,
 } from '../store/viewerSlice';
 import { selectHasActiveQuery, clearQuery } from '../store/querySlice';
+import {
+  startSession as startVerifySession,
+  selectIsVerifyActive,
+  selectVerifyState,
+} from '../store/verifyModeSlice';
 
 interface SelectorResult {
   id: string;
@@ -72,6 +78,8 @@ export default function DocumentViewer({
   const overlayVisibility = useAppSelector(selectOverlayVisibility);
   const pageDimensions = useAppSelector(selectPageDimensions);
   const hasQueryResults = useAppSelector(selectHasActiveQuery);
+  const isVerifyActive = useAppSelector(selectIsVerifyActive);
+  const verifyState = useAppSelector(selectVerifyState);
 
   const [leftPanelWidth, setLeftPanelWidth] = useState(67);
   const [showResultsPanel, setShowResultsPanel] = useState(false);
@@ -82,8 +90,58 @@ export default function DocumentViewer({
     return localStorage.getItem('agentPanelMinimized') === 'true';
   });
 
+  // Verification mode state
+  const [pendingVerifyRequest, setPendingVerifyRequest] = useState<VerifyRequest | null>(null);
+  const [verifyQueueInfo, setVerifyQueueInfo] = useState<{
+    current: number;
+    total: number;
+    verified: number;
+    flagged: number;
+  } | null>(null);
+  const [isVerifyLoading, setIsVerifyLoading] = useState(false);
+
   const { startRun } = useWorkflow();
   const totalPages = useAppSelector(selectTotalPages);
+
+  const handleStartVerifyMode = useCallback(async () => {
+    if (totalPages === 0) {
+      console.log('[DocumentViewer] No pages to verify');
+      return;
+    }
+
+    try {
+      const result = await window.electron.ipcRenderer.invoke(
+        'verify-mode:start',
+        {
+          workspaceId: documentUuid,
+          workspaceName: documentName,
+          totalPages,
+          workspacePath,
+          objective: 'Review all extractions and export verified data to Excel',
+          permissionLevel: 'page',
+        },
+      );
+
+      if (result.success) {
+        dispatch(
+          startVerifySession({
+            sessionId: result.sessionId,
+            workspaceId: documentUuid,
+            totalPages,
+            objective:
+              'Review all extractions and export verified data to Excel',
+          }),
+        );
+      } else {
+        console.error(
+          '[DocumentViewer] Failed to start verify mode:',
+          result.error,
+        );
+      }
+    } catch (error) {
+      console.error('[DocumentViewer] Verify mode error:', error);
+    }
+  }, [documentUuid, documentName, totalPages, workspacePath, dispatch]);
 
   useEffect(() => {
     localStorage.setItem('agentPanelMinimized', String(agentPanelMinimized));
@@ -132,6 +190,86 @@ export default function DocumentViewer({
       dispatch(fetchPageEntities({ workspacePath, page: currentPage }));
     }
   }, [currentPage, workspacePath, dispatch]);
+
+  // Listen for verify-approval requests from agent
+  useEffect(() => {
+    const unsubVerifyApproval = window.electron.ipcRenderer.on(
+      'human-input:verify-approval',
+      (data: unknown) => {
+        const event = data as VerifyRequest & { queueInfo?: typeof verifyQueueInfo };
+        console.log('[DocumentViewer] Verify approval request:', event.pageNumber);
+
+        // Navigate to the page
+        dispatch(setReduxPage(event.pageNumber));
+
+        // Show the verify panel (un-minimize agent panel if needed)
+        setAgentPanelMinimized(false);
+
+        // Clear loading, set the pending request
+        setIsVerifyLoading(false);
+        setPendingVerifyRequest(event);
+        if (event.queueInfo) {
+          setVerifyQueueInfo(event.queueInfo);
+        }
+      },
+    );
+
+    // Listen for verify agent completion
+    const unsubVerifyEvent = window.electron.ipcRenderer.on(
+      'verify-agent:event',
+      (data: unknown) => {
+        const message = data as { type: string; subtype?: string };
+        if (message.type === 'result') {
+          // Verification complete, clear loading state
+          setIsVerifyLoading(false);
+          setVerifyQueueInfo(null);
+        }
+      },
+    );
+
+    return () => {
+      unsubVerifyApproval();
+      unsubVerifyEvent();
+    };
+  }, [dispatch]);
+
+  // Handle verify panel response
+  const handleVerifyResponse = useCallback(
+    async (action: 'verify' | 'flag' | 'skip' | 'reextract', notes?: string) => {
+      if (!pendingVerifyRequest) return;
+
+      try {
+        // Show loading state while waiting for next page
+        setIsVerifyLoading(true);
+
+        await window.electron.ipcRenderer.invoke('human-input:response', {
+          requestId: pendingVerifyRequest.requestId,
+          response: { action, notes },
+        });
+
+        // Update queue info optimistically
+        if (verifyQueueInfo) {
+          setVerifyQueueInfo((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  current: prev.current + 1,
+                  verified: action === 'verify' ? prev.verified + 1 : prev.verified,
+                  flagged: action === 'flag' ? prev.flagged + 1 : prev.flagged,
+                }
+              : null,
+          );
+        }
+
+        // Clear the pending request - agent will send next one
+        setPendingVerifyRequest(null);
+      } catch (err) {
+        console.error('[DocumentViewer] Failed to send verify response:', err);
+        setIsVerifyLoading(false);
+      }
+    },
+    [pendingVerifyRequest, verifyQueueInfo],
+  );
 
   const handlePageChange = (page: number) => {
     dispatch(setReduxPage(page));
@@ -387,31 +525,62 @@ export default function DocumentViewer({
               className="flex-1 h-full overflow-hidden flex flex-col bg-white"
               style={{ minWidth: '350px' }}
             >
-              <div className="px-4 py-2 border-b border-slate-200 bg-slate-50 shrink-0 flex items-center justify-between">
-                <h2 className="text-sm font-medium text-slate-700">
-                  Okra Agent
-                </h2>
-                <button
-                  onClick={() => setAgentPanelMinimized(true)}
-                  className="p-1 hover:bg-slate-200 rounded transition-colors"
-                  title="Minimize panel"
-                >
-                  <svg
-                    className="w-4 h-4 text-slate-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </button>
-              </div>
-              <ChatInterface onOpenSettings={onOpenSettings} />
+              {/* Show VerifyPanel when agent requests approval, loading between pages, otherwise ChatInterface */}
+              {pendingVerifyRequest ? (
+                <VerifyPanel
+                  request={pendingVerifyRequest}
+                  onRespond={handleVerifyResponse}
+                  queueInfo={verifyQueueInfo || undefined}
+                />
+              ) : isVerifyLoading ? (
+                <div className="flex flex-col h-full bg-white">
+                  <div className="px-4 py-2 border-b border-slate-200 bg-okra-yellow/20 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                      <span className="text-xs font-medium text-ink">Verification Mode</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-okra-yellow mx-auto mb-3" />
+                      <p className="text-sm text-slate-600">Loading next page...</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="px-4 py-2 border-b border-slate-200 bg-slate-50 shrink-0 flex items-center justify-between">
+                    <h2 className="text-sm font-medium text-slate-700">
+                      Okra Agent
+                    </h2>
+                    <button
+                      onClick={() => setAgentPanelMinimized(true)}
+                      className="p-1 hover:bg-slate-200 rounded transition-colors"
+                      title="Minimize panel"
+                    >
+                      <svg
+                        className="w-4 h-4 text-slate-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5l7 7-7 7"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                  <ChatInterface
+                    onOpenSettings={onOpenSettings}
+                    workspaceId={documentUuid}
+                    workspacePath={workspacePath}
+                    totalPages={totalPages}
+                  />
+                </>
+              )}
             </div>
           </>
         )}

@@ -77,6 +77,11 @@ const PLUGIN_REGISTRY: PluginRegistryEntry[] = [
     pluginFile: 'anthropic.plugin',
     npmPackages: [],
   },
+  {
+    id: 'qwen-markdown',
+    pluginFile: 'qwen-markdown.plugin',
+    npmPackages: [],
+  },
 ];
 
 const metadataCache = new Map<string, OcrProviderMetadata>();

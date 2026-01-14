@@ -13,11 +13,13 @@ import {
 import * as openrouterPlugin from './openrouter.plugin';
 import * as googleDocaiPlugin from './google-docai.plugin';
 import * as anthropicPlugin from './anthropic.plugin';
+import * as qwenMarkdownPlugin from './qwen-markdown.plugin';
 
 const PLUGIN_MODULES: Record<string, OcrPluginModule> = {
   'openrouter.plugin': openrouterPlugin,
   'google-docai.plugin': googleDocaiPlugin,
   'anthropic.plugin': anthropicPlugin,
+  'qwen-markdown.plugin': qwenMarkdownPlugin,
 };
 
 const loadedPlugins = new Map<string, OcrPlugin>();

@@ -53,9 +53,6 @@ function getBundledUvPath(): string | undefined {
   return undefined;
 }
 
-/**
- * Find claude CLI - the SDK bundles its own cli.js
- */
 function getBundledClaudePath(): string | undefined {
   if (app.isPackaged) {
     const resourcePath = path.join(
@@ -64,13 +61,19 @@ function getBundledClaudePath(): string | undefined {
     );
     if (fs.existsSync(resourcePath)) return resourcePath;
   }
-  // Development
   const devPath = path.join(
     __dirname,
     '../../node_modules/@anthropic-ai/claude-agent-sdk/cli.js',
   );
   if (fs.existsSync(devPath)) return devPath;
   return undefined;
+}
+
+function getPluginPath(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'claude-plugin');
+  }
+  return path.join(__dirname, '../../../claude-plugin');
 }
 
 export function registerAgentHandlers(): void {

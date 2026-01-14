@@ -105,17 +105,30 @@ export function registerExtractionHandlers(): void {
 
   ipcMain.handle(
     'extraction:get-page-content',
-    async (_event, workspacePath: string, pageNum: number) => {
-      const filePath = path.join(
-        workspacePath,
-        'ocr',
-        `page-${String(pageNum).padStart(3, '0')}.md`,
-      );
-      if (!fs.existsSync(filePath)) {
-        return null;
+    async (_event, workspacePath: string, pageNum: number, providerId?: string) => {
+      const pageFileName = `page-${String(pageNum).padStart(3, '0')}.md`;
+
+      // Priority order for finding page content:
+      // 1. If providerId specified, check that plugin's output folder
+      // 2. Check qwen-markdown plugin output (preferred markdown extraction)
+      // 3. Check legacy ocr folder (text-extractor fallback)
+      const searchPaths = providerId
+        ? [path.join(workspacePath, 'plugins', providerId, pageFileName)]
+        : [
+            path.join(workspacePath, 'plugins', 'qwen-markdown', pageFileName),
+            path.join(workspacePath, 'plugins', 'openrouter', pageFileName),
+            path.join(workspacePath, 'ocr', pageFileName),
+          ];
+
+      for (const filePath of searchPaths) {
+        if (fs.existsSync(filePath)) {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const source = path.basename(path.dirname(filePath));
+          return { page: pageNum, content, source };
+        }
       }
-      const content = fs.readFileSync(filePath, 'utf-8');
-      return { page: pageNum, content };
+
+      return null;
     },
   );
 

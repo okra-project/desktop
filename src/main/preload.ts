@@ -90,6 +90,12 @@ export type Channels =
   | 'mcp:server-started'
   | 'mcp:server-stopped'
   | 'mcp:show-result'
+  // Human input channels (blocking tools)
+  | 'human-input:ask-user'
+  | 'human-input:request-review'
+  | 'human-input:verify-approval'
+  | 'verify-agent:event'
+  | 'verify-agent:error'
   | 'index:search'
   | 'index:get-page-bboxes'
   | 'index:find-bbox-at-point'

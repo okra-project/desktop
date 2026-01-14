@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { selectIsAnthropicConfigured, selectIsHydrated } from '@okrapdf/redux';
 import { useAppSelector } from '../store';
@@ -9,13 +9,22 @@ import { detectTodoListInMessage, TodoItem } from './utils/todoDetection';
 
 interface ChatInterfaceProps {
   onOpenSettings: () => void;
+  workspaceId?: string;
+  workspacePath?: string;
+  totalPages?: number;
 }
 
-function ChatInterface({ onOpenSettings }: ChatInterfaceProps) {
+function ChatInterface({
+  onOpenSettings,
+  workspaceId,
+  workspacePath,
+  totalPages,
+}: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentTodos, setCurrentTodos] = useState<TodoItem[]>([]);
+  const verifySessionId = useRef<string | null>(null);
 
   const isHydrated = useAppSelector(selectIsHydrated);
   const hasApiKey = useAppSelector(selectIsAnthropicConfigured);
@@ -120,10 +129,69 @@ function ChatInterface({ onOpenSettings }: ChatInterfaceProps) {
       },
     );
 
+    // Verify agent events - converge into same message stream
+    const removeVerifyEventListener = window.electron.ipcRenderer.on(
+      'verify-agent:event',
+      (data: unknown) => {
+        const message = data as {
+          type: string;
+          session_id?: string;
+          subtype?: string;
+          uuid?: string;
+          message?: { content: Array<{ type: string; text?: string }> };
+        };
+
+        if (message.type === 'system' && message.subtype === 'init') {
+          verifySessionId.current = message.session_id || null;
+          return;
+        }
+
+        if (message.type === 'assistant' && message.message) {
+          const textContent = message.message.content
+            .filter((c) => c.type === 'text')
+            .map((c) => c.text || '')
+            .join('');
+
+          const chatMessage: ChatMessage = {
+            id: message.uuid || Date.now().toString(),
+            type: 'assistant',
+            content: textContent,
+            contentBlocks: message.message.content as ChatMessage['contentBlocks'],
+            timestamp: new Date(),
+            raw: message as unknown as ChatMessage['raw'],
+          };
+
+          const todos = detectTodoListInMessage(JSON.stringify(message));
+
+          setMessages((prev) => [...prev, chatMessage]);
+          if (todos && todos.length > 0) {
+            setCurrentTodos(todos);
+          }
+        }
+
+        if (message.type === 'result') {
+          setIsLoading(false);
+          verifySessionId.current = null;
+        }
+      },
+    );
+
+    const removeVerifyErrorListener = window.electron.ipcRenderer.on(
+      'verify-agent:error',
+      (data: unknown) => {
+        const event = data as { error: string };
+        setError(event.error);
+        setIsLoading(false);
+        verifySessionId.current = null;
+      },
+    );
+
     return () => {
       removeResponseListener();
       removeErrorListener();
       removeOutputFilesListener();
+      removeVerifyEventListener();
+      removeVerifyErrorListener();
     };
   }, []);
 
@@ -222,14 +290,102 @@ function ChatInterface({ onOpenSettings }: ChatInterfaceProps) {
     );
   }
 
+  const handleStartVerify = useCallback(async () => {
+    if (!workspaceId || !workspacePath || !totalPages) {
+      setError('Workspace info not available');
+      return;
+    }
+
+    // Add system message to chat
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        type: 'user',
+        content: 'Verify all page extractions',
+        timestamp: new Date(),
+      },
+      {
+        id: (Date.now() + 1).toString(),
+        type: 'assistant',
+        content: '',
+        timestamp: new Date(),
+        isThinking: true,
+      },
+    ]);
+
+    setIsLoading(true);
+    setError(null);
+
+    const result = await window.electron.ipcRenderer.invoke('verify-agent:start', {
+      workspaceId,
+      workspacePath,
+      totalPages,
+    });
+
+    if (!result.success) {
+      setError(result.error);
+      setIsLoading(false);
+    }
+  }, [workspaceId, workspacePath, totalPages]);
+
+  const quickActions = [
+    {
+      label: 'Verify Extractions',
+      icon: '✓',
+      action: handleStartVerify,
+    },
+    {
+      label: 'Export Tables',
+      prompt:
+        'Find and extract all tables from this document into a single Excel file. Include page numbers as a column.',
+      icon: '📊',
+    },
+    {
+      label: 'Summarize Document',
+      prompt:
+        'Give me a brief summary of this document. What are the key sections and main takeaways?',
+      icon: '📝',
+    },
+  ];
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <div className="flex-1 overflow-hidden">
-        <MessageList
-          messages={messages}
-          isLoading={isLoading}
-          currentTodos={currentTodos}
-        />
+        {messages.length === 0 && !isLoading ? (
+          <div className="flex flex-col items-center justify-center h-full p-8">
+            <div className="text-4xl mb-4">📄</div>
+            <h2 className="text-lg font-medium text-ink mb-2">
+              What would you like to do?
+            </h2>
+            <p className="text-sidebar-text text-sm mb-6 text-center max-w-md">
+              Ask questions about your document, extract data, or verify
+              extractions.
+            </p>
+            <div className="flex flex-wrap gap-2 justify-center max-w-md">
+              {quickActions.map((action) => (
+                <button
+                  key={action.label}
+                  onClick={() =>
+                    action.action
+                      ? action.action()
+                      : action.prompt && sendMessage(action.prompt)
+                  }
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-sidebar-border rounded-lg hover:border-okra-yellow hover:bg-okra-yellow/5 transition-colors text-sm text-ink"
+                >
+                  <span>{action.icon}</span>
+                  <span>{action.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <MessageList
+            messages={messages}
+            isLoading={isLoading}
+            currentTodos={currentTodos}
+          />
+        )}
       </div>
 
       <div className="border-t border-sidebar-border bg-white">

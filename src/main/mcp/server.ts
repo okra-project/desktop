@@ -8,6 +8,14 @@ import {
   generateToolTypes,
   MCP_TOOL_SCHEMAS,
 } from '../codemode';
+import {
+  askUser,
+  requestPageReview,
+  requestVerifyApproval,
+  type AskUserParams,
+  type RequestReviewParams,
+  type VerifyApprovalParams,
+} from '../services/human-input.service';
 
 export interface McpServerConfig {
   port: number;
@@ -501,6 +509,30 @@ function registerToolsWithZod(
       },
     },
     {
+      name: 'ask_user',
+      execute: async (args: unknown) => {
+        const params = args as AskUserParams;
+        const response = await askUser(params);
+        return { response };
+      },
+    },
+    {
+      name: 'request_page_review',
+      execute: async (args: unknown) => {
+        const params = args as RequestReviewParams;
+        const response = await requestPageReview(params);
+        return { response };
+      },
+    },
+    {
+      name: 'request_verify_approval',
+      execute: async (args: unknown) => {
+        const params = args as VerifyApprovalParams;
+        const response = await requestVerifyApproval(params);
+        return { response };
+      },
+    },
+    {
       name: 'help',
       execute: async (args: unknown) => {
         const { topic } = args as { topic?: string };
@@ -548,6 +580,47 @@ Examples:
   "SELECT tables FROM workspace-id"
   "SELECT * FROM workspace-id WHERE type = 'table'"
   "SELECT tables, figures FROM all"`,
+          ask_user: `ask_user({ question, options?, context?, pageRef? })
+Ask the user a question and wait for response. BLOCKS until user responds.
+
+Parameters:
+  question: string - The question to ask
+  options?: string[] - Optional predefined choices
+  context?: string - Additional context for the question
+  pageRef?: number - If question relates to a specific page
+
+Returns: { response: string | { selectedOption: number, text?: string } }`,
+          request_page_review: `request_page_review({ pageNumber, items, urgency?, reasoning? })
+Request human review of a page. BLOCKS until user reviews and responds.
+
+Parameters:
+  pageNumber: number - Page to review
+  items: Array<{ id, type, confidence, issue? }> - Items needing review
+  urgency?: 'low' | 'medium' | 'high' - Review priority
+  reasoning?: string - Why review is needed
+
+Returns: { response: { approved: boolean, corrections?: [...], notes?: string } }`,
+          request_verify_approval: `request_verify_approval({ workspaceId, pageNumber, analysis, extractions })
+Request verification approval for a page. Shows side-by-side PDF vs extraction comparison.
+BLOCKS until user selects: Verify, Flag, Skip, or Re-extract.
+
+Parameters:
+  workspaceId: string - Workspace ID
+  pageNumber: number - Page to verify
+  analysis: {
+    contentType: string - e.g., "Balance Sheet", "Table"
+    confidence: number - 0-1 confidence score
+    findings: string[] - Key findings from analysis
+    issues?: string[] - Detected issues (OCR artifacts, etc.)
+  }
+  extractions: {
+    docai?: string - DocAI markdown extraction
+    openrouter?: string - OpenRouter entity extraction
+    'qwen-markdown'?: string - Qwen VLM markdown extraction (preferred)
+    parse?: string - Parse CLI markdown
+  }
+
+Returns: { response: { action: 'verify' | 'flag' | 'skip' | 'reextract', notes?: string } }`,
         };
 
         if (topic && docs[topic]) {
@@ -591,6 +664,7 @@ Available tools via 'mcp' object:
 - mcp.show_result({ workspaceId?, selector?, results?, label? }) → { results: [...] }
 - mcp.query({ query, display? }) → { results: [...], totalCount, executionMs }
 - mcp.help({ topic? }) → docs for tools (topics: get_workspace, get_tables, query_selector, query)
+- mcp.request_verify_approval({ workspaceId, pageNumber, analysis, extractions }) → { response: { action, notes? } } - BLOCKS until user approves
 
 Example:
   const { tables, count } = await mcp.get_tables({ workspaceId: "local-xxx" });

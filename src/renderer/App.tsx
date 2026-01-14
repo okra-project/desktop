@@ -13,12 +13,22 @@ import { useExtractionInit } from './hooks/useExtractionRedux';
 import { useWorkflowExtraction } from './hooks/useWorkflowExtraction';
 import { useMcpEvents } from './hooks/useMcpEvents';
 import { ToastProvider } from './components/Toast';
+import HumanInputDialog from './components/HumanInputDialog';
 import './App.css';
 
-// Wrapper to initialize MCP events listener (must be inside ToastProvider)
 function McpEventsInitializer({ children }: { children: React.ReactNode }) {
-  useMcpEvents();
-  return <>{children}</>;
+  const { pendingRequest, respondToRequest, dismissRequest } = useMcpEvents();
+
+  return (
+    <>
+      {children}
+      <HumanInputDialog
+        pendingRequest={pendingRequest}
+        onRespond={respondToRequest}
+        onDismiss={dismissRequest}
+      />
+    </>
+  );
 }
 
 function ExtractionInitializer({

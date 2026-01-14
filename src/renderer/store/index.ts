@@ -32,6 +32,7 @@ import reviewAgentReducer from './reviewAgentSlice';
 import viewerReducer from './viewerSlice';
 import processingEventsReducer from './processingEventsSlice';
 import queryReducer from './querySlice';
+import verifyModeReducer from './verifyModeSlice';
 import { desktopApi } from './desktopApi';
 import { electronWorkflowAdapter } from './workflowAdapter';
 
@@ -45,6 +46,7 @@ const rootReducer = combineReducers({
   viewer: viewerReducer,
   processingEvents: processingEventsReducer,
   query: queryReducer,
+  verifyMode: verifyModeReducer,
   [desktopApi.reducerPath]: desktopApi.reducer,
 });
 
