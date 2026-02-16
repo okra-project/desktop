@@ -18,6 +18,7 @@ import { registerIndexHandlers } from './index.handlers';
 import { registerQueryHandlers } from './query.handlers';
 import { registerVerifyModeHandlers } from './verify-mode.handlers';
 import { registerVerifyAgentHandlers } from '../services/verify-agent.service';
+import { registerSchemaHandlers } from './schema.handlers';
 
 export interface HandlerContext {
   mainWindow: BrowserWindow | null;
@@ -58,6 +59,7 @@ export function registerAllHandlers(): void {
   registerQueryHandlers();
   registerVerifyModeHandlers();
   registerVerifyAgentHandlers();
+  registerSchemaHandlers();
 
   console.error('[handlers] All IPC handlers registered');
 }

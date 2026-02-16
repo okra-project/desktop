@@ -5,6 +5,7 @@ import ChatInterface from './ChatInterface';
 import { ExtractionOverlay } from './ExtractionOverlay';
 import { LayerMenu } from './review/LayerMenu';
 import { PluginMenu } from './PluginMenu';
+import { SchemaExtractionPanel } from './SchemaExtractionPanel';
 import { StatusBubble } from './StatusBubble';
 import { QueryResultsPanel } from './QueryResultsPanel';
 import { VerifyPanel, type VerifyRequest } from './VerifyPanel';
@@ -89,6 +90,7 @@ export default function DocumentViewer({
   const [agentPanelMinimized, setAgentPanelMinimized] = useState(() => {
     return localStorage.getItem('agentPanelMinimized') === 'true';
   });
+  const [showSchemaPanel, setShowSchemaPanel] = useState(false);
 
   // Verification mode state
   const [pendingVerifyRequest, setPendingVerifyRequest] = useState<VerifyRequest | null>(null);
@@ -440,6 +442,22 @@ export default function DocumentViewer({
                 </svg>
               </button>
             )}
+            <button
+              onClick={() => {
+                setShowSchemaPanel((v) => !v);
+                if (!showSchemaPanel) setAgentPanelMinimized(false);
+              }}
+              className={`p-2 rounded-lg transition-colors ${
+                showSchemaPanel
+                  ? 'bg-okra-yellow text-ink'
+                  : 'hover:bg-sidebar-bg-hover text-sidebar-text'
+              }`}
+              title="Schema Extraction"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+            </button>
             <PluginMenu
               open={pluginMenuOpen}
               onOpenChange={setPluginMenuOpen}
@@ -525,8 +543,14 @@ export default function DocumentViewer({
               className="flex-1 h-full overflow-hidden flex flex-col bg-white"
               style={{ minWidth: '350px' }}
             >
-              {/* Show VerifyPanel when agent requests approval, loading between pages, otherwise ChatInterface */}
-              {pendingVerifyRequest ? (
+              {/* Show SchemaExtractionPanel, VerifyPanel, or ChatInterface */}
+              {showSchemaPanel ? (
+                <SchemaExtractionPanel
+                  workspacePath={workspacePath}
+                  onNavigateToPage={(page) => dispatch(setReduxPage(page))}
+                  onClose={() => setShowSchemaPanel(false)}
+                />
+              ) : pendingVerifyRequest ? (
                 <VerifyPanel
                   request={pendingVerifyRequest}
                   onRespond={handleVerifyResponse}
