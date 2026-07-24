@@ -1,98 +1,71 @@
-# OkraPDF Desktop
+# okraPDF for macOS
 
-Local-first PDF processing with AI. Bring your own API keys - no cloud required.
+okraPDF is a private menu-bar PDF parser for macOS 13 and later. It has no Dock
+icon, account, document library, or main window: click the menu-bar icon, drop a
+PDF, and copy or save the extracted Markdown.
 
-## Features
+## Download
 
-- **100% Local** - PDFs never leave your computer
-- **BYOK (Bring Your Own Key)** - Use your Anthropic and OpenRouter API keys
-- **PDF Text Extraction** - Automatic OCR using pdfjs-dist
-- **Table Extraction** - Vision AI extracts tables to Markdown (via OpenRouter/Qwen)
-- **Chat with PDFs** - Ask questions about your documents using Claude
-- **Review Mode** - View and edit extracted text page-by-page
-- **No Account Required** - No signup, no cloud sync, no tracking
+Download the Apple-silicon beta from the
+[`desktop-v0.5.0-beta.4` GitHub Release](https://github.com/steventsao/okrapdf-desktop/releases/tag/desktop-v0.5.0-beta.4).
+The app and DMG are Developer ID signed, hardened, notarized by Apple, and
+stapled for normal Gatekeeper opening on other Macs.
 
-## Quick Start
+## Flow
 
-1. Download from [Releases](https://github.com/nicepkg/okrapdf-desktop/releases)
-2. Open the app and go to Settings
-3. Add your API keys:
-   - **Anthropic API Key** (required) - For Claude chat
-   - **OpenRouter API Key** (optional) - For table extraction
-4. Open a PDF and start chatting
+1. Open the `text.viewfinder` menu-bar item.
+2. Drop a PDF onto the 420-point panel, or choose **Open PDF…**.
+3. The selected local provider starts immediately. The source PDF stays where it is.
+4. Each run writes a small local manifest and its extracted Markdown.
+5. Copy, save, or reveal the resulting Markdown from the panel.
 
-## API Keys
+Nothing is uploaded. Run artifacts stay on the Mac under:
 
-| Provider   | Purpose                        | Get Key                                                 |
-| ---------- | ------------------------------ | ------------------------------------------------------- |
-| Anthropic  | Chat with Claude               | [console.anthropic.com](https://console.anthropic.com/) |
-| OpenRouter | Table extraction (Qwen Vision) | [openrouter.ai](https://openrouter.ai/)                 |
+```text
+~/Library/Application Support/okraPDF/Runs/{runId}/run.json
+~/Library/Application Support/okraPDF/Runs/{runId}/result.md
+```
 
-## Development
+## Local providers
+
+- **Apple Vision** — built into macOS and selected by default.
+- **Docling** — optional one-time Python/model setup; extraction is forced offline.
+- **Unlimited-OCR** — optional MLX setup for Apple silicon; extraction is forced offline.
+
+Provider setup may download dependencies and model artifacts once. Extraction
+does not make cloud or network calls.
+
+## Build
 
 ```bash
-# Clone
-git clone https://github.com/nicepkg/okrapdf-desktop.git
-cd okrapdf-desktop
-
-# Install
-pnpm install
-
-# Run
-pnpm start
-
-# Build
-pnpm run package
+cd apps/desktop
+swift build
 ```
 
-## Release (repeatable)
+The executable product is `Okra`. Package resources include the local
+`ProviderScripts/` installers and worker.
+
+## Tests
 
 ```bash
-# Clean local build outputs
-rm -rf release/build
-
-# Install deps and build installers
-./build-installer.sh
+swift test
 ```
 
-Artifacts are written to `release/build/` (DMG, EXE, AppImage). For a manual build sequence, see `QUICKSTART.md`.
+The retained test surface covers run manifests, provider registration, and
+Apple Vision Markdown output.
 
-## Architecture
+## Package a local beta
 
-```
-~/.okrapdf/workspaces/{id}/
-├── source.pdf          # Original PDF
-├── metadata.json       # Document info
-├── thumbnail.png       # Preview image
-├── ocr/               # Extracted text per page
-│   └── page-001.md
-└── tables/            # Extracted tables
-    └── table-p1-1.md
+```bash
+./scripts/build-dmg.sh 0.5.0-beta.4
 ```
 
-## Privacy
+The generated app sets `LSUIElement` and also uses activation policy
+`.accessory`, so it remains a menu-bar-only utility. Published GitHub builds
+are Developer ID signed, hardened, notarized by Apple, and stapled.
 
-- No telemetry by default
-- No cloud backend
-- All processing happens locally
-- API calls go directly to Anthropic/OpenRouter
+## Remaining release checks
 
-## Network Dependencies
-
-The application connects to the following services:
-
-- **okrapdf.com**: Checks for application updates and provides download links.
-- **api.anthropic.com**: Chat functionality (direct connection using your API key).
-- **openrouter.ai**: Table extraction (direct connection using your API key).
-- **sentry.io**: Error reporting (if enabled).
-- **app.posthog.com**: Telemetry (if enabled).
-
-## License
-
-**Source Available** under the [Functional Source License (FSL-1.1-ALv2)](LICENSE).
-
-- You can use, modify, and self-host freely
-- You cannot offer OkraPDF as a competing hosted service
-- Converts to Apache 2.0 on January 2028
-
-See [fsl.software](https://fsl.software/) for details.
+- Dogfood Docling setup and extraction on a clean profile.
+- Dogfood Unlimited-OCR with the network disconnected after setup.
+- Dogfood the signed build on a second Mac.

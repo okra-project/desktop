@@ -1,9 +1,0 @@
-{
-  "name": "okrapdf",
-  "description": "PDF verification and extraction workflows for OkraPDF Desktop",
-  "version": "1.0.0",
-  "author": {
-    "name": "OkraPDF"
-  },
-  "repository": "https://github.com/okrapdf/okrapdf-desktop"
-}

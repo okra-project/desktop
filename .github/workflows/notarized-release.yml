@@ -1,0 +1,178 @@
+name: Notarized Desktop Release
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing desktop release tag
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: notarized-desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-sign-notarize-release:
+    runs-on: [self-hosted, macOS, ARM64, okrapdf-desktop-release]
+    timeout-minutes: 45
+    env:
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          [[ "${TAG}" == desktop-v* ]]
+          VERSION="${TAG#desktop-v}"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+
+      - name: Import Developer ID certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          CERTIFICATE_PATH="${RUNNER_TEMP}/developer-id.p12"
+          KEYCHAIN_PATH="${RUNNER_TEMP}/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+
+          if [[ "${CSC_LINK}" == https://* ]]; then
+            curl --fail --silent --show-error --location "${CSC_LINK}" --output "${CERTIFICATE_PATH}"
+          else
+            CERTIFICATE_DATA="${CSC_LINK#*,}"
+            printf '%s' "${CERTIFICATE_DATA}" | base64 -D > "${CERTIFICATE_PATH}"
+          fi
+
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          security set-keychain-settings -lut 21600 "${KEYCHAIN_PATH}"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          security import "${CERTIFICATE_PATH}" \
+            -k "${KEYCHAIN_PATH}" \
+            -P "${CSC_KEY_PASSWORD}" \
+            -A
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "${KEYCHAIN_PASSWORD}" \
+            "${KEYCHAIN_PATH}"
+          security list-keychains -d user -s "${KEYCHAIN_PATH}"
+
+          SIGNING_IDENTITY="$(security find-identity -v -p codesigning "${KEYCHAIN_PATH}" | awk -F'"' '/Developer ID Application/{print $2; exit}')"
+          if [[ -z "${SIGNING_IDENTITY}" ]]; then
+            echo "Developer ID Application identity is missing from CSC_LINK" >&2
+            exit 1
+          fi
+
+          echo "APPLE_SIGNING_IDENTITY=${SIGNING_IDENTITY}" >> "${GITHUB_ENV}"
+          echo "RELEASE_KEYCHAIN_PATH=${KEYCHAIN_PATH}" >> "${GITHUB_ENV}"
+
+      - name: Test and build signed app
+        shell: bash
+        run: |
+          set -euo pipefail
+          swift test
+          ./scripts/build-dmg.sh "${{ steps.release.outputs.version }}"
+          codesign --verify --strict --deep "build/Okra.app"
+          codesign --display --verbose=4 "build/Okra.app" 2>&1 | grep -E 'Authority=Developer ID Application|TeamIdentifier=|Runtime Version='
+          [[ "$(lipo -archs build/Okra.app/Contents/MacOS/Okra)" == "arm64" ]]
+
+      - name: Notarize and staple app
+        shell: bash
+        run: |
+          set -euo pipefail
+          ditto -c -k --keepParent "build/Okra.app" "${RUNNER_TEMP}/Okra.zip"
+          xcrun notarytool submit "${RUNNER_TEMP}/Okra.zip" \
+            --apple-id "${APPLE_ID}" \
+            --password "${APPLE_APP_SPECIFIC_PASSWORD}" \
+            --team-id "${APPLE_TEAM_ID}" \
+            --wait
+          xcrun stapler staple "build/Okra.app"
+          xcrun stapler validate "build/Okra.app"
+
+      - name: Package, notarize, and verify DMG
+        id: artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.release.outputs.version }}"
+          DMG="build/Okra-${VERSION}.dmg"
+          rm -f "${DMG}"
+          hdiutil create \
+            -volname "Okra" \
+            -srcfolder "build/Okra.app" \
+            -ov \
+            -format UDZO \
+            "${DMG}"
+          codesign --force --timestamp --sign "${APPLE_SIGNING_IDENTITY}" "${DMG}"
+          xcrun notarytool submit "${DMG}" \
+            --apple-id "${APPLE_ID}" \
+            --password "${APPLE_APP_SPECIFIC_PASSWORD}" \
+            --team-id "${APPLE_TEAM_ID}" \
+            --wait
+          xcrun stapler staple "${DMG}"
+          xcrun stapler validate "${DMG}"
+          hdiutil verify "${DMG}"
+          spctl --assess --type execute --verbose=4 "build/Okra.app"
+          spctl --assess --type open --context context:primary-signature --verbose=4 "${DMG}"
+          shasum -a 256 "${DMG}" | sed 's#  build/#  #' > "${DMG}.sha256"
+          echo "dmg=${DMG}" >> "${GITHUB_OUTPUT}"
+          echo "checksum=${DMG}.sha256" >> "${GITHUB_OUTPUT}"
+
+      - name: Publish GitHub prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.release.outputs.tag }}"
+          VERSION="${{ steps.release.outputs.version }}"
+          NOTES="RELEASE_NOTES-v${VERSION}.md"
+          DMG="${{ steps.artifact.outputs.dmg }}"
+          CHECKSUM="${{ steps.artifact.outputs.checksum }}"
+
+          if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" "${DMG}" "${CHECKSUM}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --clobber
+            gh release edit "${TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "okraPDF Desktop v${VERSION}" \
+              --notes-file "${NOTES}" \
+              --prerelease \
+              --latest=false
+          else
+            gh release create "${TAG}" "${DMG}" "${CHECKSUM}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "okraPDF Desktop v${VERSION}" \
+              --notes-file "${NOTES}" \
+              --prerelease \
+              --latest=false \
+              --verify-tag
+          fi
+
+      - name: Remove temporary signing keychain
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${RELEASE_KEYCHAIN_PATH:-}" ]]; then
+            security delete-keychain "${RELEASE_KEYCHAIN_PATH}" || true
+          fi
