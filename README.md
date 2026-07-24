@@ -1,23 +1,24 @@
 # okraPDF for macOS
 
-okraPDF is a private menu-bar PDF parser for macOS 13 and later. It has no Dock
-icon, account, document library, or main window: click the menu-bar icon, drop a
-PDF, and copy or save the extracted Markdown.
+okraPDF is a private, lightweight PDF reader and local parser for macOS 13 and
+later. Open or drop a PDF, read it in the native window, choose a local parser,
+then click **Parse** when you want Markdown. There is no account or document
+library.
 
 ## Download
 
 Download the Apple-silicon beta from the
-[`desktop-v0.5.0-beta.4` GitHub Release](https://github.com/steventsao/okrapdf-desktop/releases/tag/desktop-v0.5.0-beta.4).
+[`desktop-v0.5.0-beta.5` GitHub Release](https://github.com/steventsao/okrapdf-desktop/releases/tag/desktop-v0.5.0-beta.5).
 The app and DMG are Developer ID signed, hardened, notarized by Apple, and
 stapled for normal Gatekeeper opening on other Macs.
 
 ## Flow
 
-1. Open the `text.viewfinder` menu-bar item.
-2. Drop a PDF onto the 420-point panel, or choose **Open PDF…**.
-3. The selected local provider starts immediately. The source PDF stays where it is.
+1. Drop a PDF onto the reader, choose **Open PDF…**, or open a PDF with okraPDF from Finder.
+2. Read the PDF and choose a local parser in the inspector.
+3. Click **Parse**. Selecting a file never starts parsing on its own.
 4. Each run writes a small local manifest and its extracted Markdown.
-5. Copy, save, or reveal the resulting Markdown from the panel.
+5. Copy, save, or reveal the resulting Markdown from the inspector.
 
 Nothing is uploaded. Run artifacts stay on the Mac under:
 
@@ -57,12 +58,12 @@ Apple Vision Markdown output.
 ## Package a local beta
 
 ```bash
-./scripts/build-dmg.sh 0.5.0-beta.4
+./scripts/build-dmg.sh 0.5.0-beta.5
 ```
 
-The generated app sets `LSUIElement` and also uses activation policy
-`.accessory`, so it remains a menu-bar-only utility. Published GitHub builds
-are Developer ID signed, hardened, notarized by Apple, and stapled.
+The generated app is a regular windowed macOS application and registers as a
+PDF viewer. Published GitHub builds are Developer ID signed, hardened,
+notarized by Apple, and stapled.
 
 ## Remaining release checks
 

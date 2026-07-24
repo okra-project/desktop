@@ -1,20 +1,20 @@
-import AppKit
 import SwiftUI
 
 @main
 struct okraPDFApp: App {
     @StateObject private var appState = AppState()
 
-    init() {
-        NSApplication.shared.setActivationPolicy(.accessory)
-    }
-
     var body: some Scene {
-        MenuBarExtra("okraPDF", systemImage: "text.viewfinder") {
+        WindowGroup("okraPDF") {
             ContentView()
                 .environmentObject(appState)
-                .frame(width: 420, height: 640)
         }
-        .menuBarExtraStyle(.window)
+        .defaultSize(width: 1_040, height: 720)
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("Open PDF…", action: appState.openPDFPicker)
+                    .keyboardShortcut("o", modifiers: .command)
+            }
+        }
     }
 }

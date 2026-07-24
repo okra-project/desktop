@@ -19,7 +19,7 @@ final class LocalProcessingCoordinator: ObservableObject {
     @Published private(set) var latestRun: LocalProcessingRun?
     @Published private(set) var outputText = ""
     @Published private(set) var progress = 0.0
-    @Published private(set) var statusMessage = "Choose a local parser and extract."
+    @Published private(set) var statusMessage = "Open a PDF, choose a local parser, then click Parse."
     @Published private(set) var isRunning = false
     @Published private(set) var isInstalling = false
 
