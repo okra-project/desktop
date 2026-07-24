@@ -18,6 +18,57 @@ final class LocalProcessingProviderTests: XCTestCase {
     }
 
     @MainActor
+    func testOpeningPDFLoadsReaderWithoutStartingParser() throws {
+        let root = TestPaths.temporaryDirectory
+            .appendingPathComponent("okra-open-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        let sourceURL = root.appendingPathComponent("reader.pdf")
+        try makePDFData(text: "Open without parsing").write(to: sourceURL)
+
+        let coordinator = LocalProcessingCoordinator(
+            providers: [FixtureProcessingProvider()],
+            runsRoot: root.appendingPathComponent("runs", isDirectory: true)
+        )
+        let state = AppState(localProcessing: coordinator)
+
+        XCTAssertTrue(state.openPDF(sourceURL))
+        XCTAssertEqual(state.selectedDocument?.fileName, "reader.pdf")
+        XCTAssertEqual(state.selectedDocument?.totalPages, 1)
+        XCTAssertNotNil(state.pdfDocument)
+        XCTAssertNil(coordinator.latestRun)
+        XCTAssertFalse(coordinator.isRunning)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("runs").path))
+    }
+
+    @MainActor
+    func testExplicitParseActionStartsSelectedDocument() async throws {
+        let root = TestPaths.temporaryDirectory
+            .appendingPathComponent("okra-explicit-parse-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        let sourceURL = root.appendingPathComponent("explicit.pdf")
+        try makePDFData(text: "Parse after click").write(to: sourceURL)
+
+        let coordinator = LocalProcessingCoordinator(
+            providers: [FixtureProcessingProvider()],
+            runsRoot: root.appendingPathComponent("runs", isDirectory: true)
+        )
+        let state = AppState(localProcessing: coordinator)
+        XCTAssertTrue(state.openPDF(sourceURL))
+
+        state.parseSelectedDocument()
+        while coordinator.isRunning {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertEqual(coordinator.latestRun?.status, "succeeded")
+        XCTAssertEqual(coordinator.outputText, "# Parsed\n")
+    }
+
+    @MainActor
     func testCoordinatorWritesMarkdownAndRunManifest() async throws {
         let root = TestPaths.temporaryDirectory
             .appendingPathComponent("okra-run-\(UUID().uuidString)", isDirectory: true)
@@ -73,12 +124,7 @@ final class LocalProcessingProviderTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
 
-        let page = NSView(frame: NSRect(x: 0, y: 0, width: 612, height: 792))
-        let label = NSTextField(labelWithString: "okraPDF local extraction")
-        label.font = .systemFont(ofSize: 32)
-        label.frame = NSRect(x: 72, y: 640, width: 468, height: 60)
-        page.addSubview(label)
-        let pdfData = page.dataWithPDF(inside: page.bounds)
+        let pdfData = makePDFData(text: "okraPDF local extraction")
         let pdfURL = root.appendingPathComponent("sample.pdf")
         try pdfData.write(to: pdfURL)
 
@@ -97,6 +143,15 @@ final class LocalProcessingProviderTests: XCTestCase {
         XCTAssertTrue(markdown.contains("# sample.pdf"))
         XCTAssertTrue(markdown.contains("## Page 1"))
         XCTAssertTrue(markdown.contains("okraPDF local extraction"))
+    }
+
+    private func makePDFData(text: String) -> Data {
+        let page = NSView(frame: NSRect(x: 0, y: 0, width: 612, height: 792))
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: 32)
+        label.frame = NSRect(x: 72, y: 640, width: 468, height: 60)
+        page.addSubview(label)
+        return page.dataWithPDF(inside: page.bounds)
     }
 }
 

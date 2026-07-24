@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 @MainActor
 final class AppState: ObservableObject {
     @Published private(set) var selectedDocument: LocalPDFDocument?
+    @Published private(set) var pdfDocument: PDFDocument?
     @Published var importError: String?
 
     let localProcessing: LocalProcessingCoordinator
@@ -21,7 +22,7 @@ final class AppState: ObservableObject {
     func openPDFPicker() {
         let panel = NSOpenPanel()
         panel.title = "Open PDF"
-        panel.prompt = "Extract"
+        panel.prompt = "Open"
         panel.allowedContentTypes = [.pdf]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
@@ -29,15 +30,16 @@ final class AppState: ObservableObject {
 
         NSApplication.shared.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        openAndExtract(url)
+        openPDF(url)
     }
 
-    func openAndExtract(_ url: URL) {
+    @discardableResult
+    func openPDF(_ url: URL) -> Bool {
         importError = nil
 
         guard url.isFileURL, url.pathExtension.lowercased() == UTType.pdf.preferredFilenameExtension else {
             importError = "Choose a PDF file."
-            return
+            return false
         }
 
         let normalizedURL = url.standardizedFileURL
@@ -45,7 +47,7 @@ final class AppState: ObservableObject {
               let pdf = PDFDocument(url: normalizedURL),
               pdf.pageCount > 0 else {
             importError = "okraPDF could not open \(url.lastPathComponent)."
-            return
+            return false
         }
 
         let document = LocalPDFDocument(
@@ -55,8 +57,14 @@ final class AppState: ObservableObject {
             totalPages: pdf.pageCount
         )
         selectedDocument = document
+        pdfDocument = pdf
         localProcessing.load(document: document)
-        localProcessing.run(document: document)
+        return true
+    }
+
+    func parseSelectedDocument() {
+        guard let selectedDocument else { return }
+        localProcessing.run(document: selectedDocument)
     }
 
     func revealSelectedPDF() {
@@ -66,7 +74,4 @@ final class AppState: ObservableObject {
         ])
     }
 
-    func quit() {
-        NSApplication.shared.terminate(nil)
-    }
 }

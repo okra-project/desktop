@@ -1,7 +1,8 @@
 # okraPDF Desktop — Launch Checklist
 
-The supported desktop product is the `D.6.1` parser-only macOS menu-bar
-utility. It opens a PDF in place, runs a local parser, and returns Markdown.
+The supported desktop product is the `D.6.2` windowed macOS PDF reader and
+local parser. It opens a PDF in place, waits for an explicit Parse action, and
+returns Markdown.
 
 ## Versioning
 
@@ -13,8 +14,9 @@ utility. It opens a PDF in place, runs a local parser, and returns Markdown.
 
 ## Product gate
 
-- [x] Menu-bar-only SwiftUI app with no Dock icon
+- [x] Lightweight windowed SwiftUI PDF reader
 - [x] Open and Finder drag-and-drop
+- [x] PDF selection and parsing are separate actions
 - [x] Original PDF remains in place
 - [x] Apple Vision zero-setup parser
 - [x] Optional offline Docling parser
@@ -29,7 +31,8 @@ utility. It opens a PDF in place, runs a local parser, and returns Markdown.
 ## Distribution gate
 
 - [x] App icon and `com.okrapdf.desktop` bundle identifier
-- [x] macOS 13 minimum and packaged `LSUIElement=true`
+- [x] macOS 13 minimum and regular Dock/window lifecycle
+- [x] Packaged PDF viewer document type
 - [x] Repeatable `./scripts/build-dmg.sh <version>` build
 - [x] Developer ID Application certificate available locally
 - [x] Hardened-runtime signing
@@ -48,7 +51,7 @@ is required by one of the supported local parsers.
 ```bash
 cd apps/desktop
 swift test
-./scripts/build-dmg.sh 0.5.0-beta.4
+./scripts/build-dmg.sh 0.5.0-beta.5
 ```
 
 Do not promote the parser to a stable release until the manual provider checks

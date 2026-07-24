@@ -2,16 +2,17 @@
 
 Current train: `desktop-v0.5.0-beta.N`
 
-Roadmap item: `D.6.1`
+Roadmap item: `D.6.2`
 
 ## Product contract
 
-- [x] Menu-bar-only app (`MenuBarExtra`, `.window` style)
-- [x] Accessory activation policy and packaged `LSUIElement`
-- [x] Compact 420-point panel
+- [x] Regular windowed app with Dock presence
+- [x] Native PDFKit reader
+- [x] Narrow parser inspector
 - [x] PDF drag-and-drop
 - [x] **Open PDF…** picker
-- [x] Immediate extraction after file selection
+- [x] File selection never starts extraction
+- [x] Explicit **Parse** action
 - [x] Apple Vision default provider
 - [x] Docling setup/readiness state
 - [x] Unlimited-OCR setup/readiness state
@@ -35,13 +36,14 @@ Roadmap item: `D.6.1`
 - [x] Local-processing tests retained
 - [x] Remote-control, dispatch, registry, and model-catalog tests removed
 - [x] `swift build` on an unrestricted macOS shell (2026-07-24)
-- [x] `swift test` on an unrestricted macOS shell (4/4 passed, 2026-07-24)
+- [x] `swift test` on an unrestricted macOS shell (6/6 passed, 2026-07-24)
+- [x] Launch Services opened a real PDF in the packaged app without creating a run artifact
 
 ## Manual smoke test
 
-- [ ] Launch and confirm no Dock icon appears
-- [ ] Click the menu-bar icon and confirm the compact panel opens
-- [ ] Drop a one-page text PDF and confirm Apple Vision starts immediately
+- [ ] Launch and confirm a normal reader window and Dock icon appear
+- [ ] Open and drop PDFs and confirm each displays without starting a run
+- [ ] Click **Parse** and confirm Apple Vision starts only then
 - [ ] Drop a multi-page scanned PDF and confirm progress updates by page
 - [ ] Copy the output and paste it into a plain-text editor
 - [ ] Save the output to a chosen `.md` path
@@ -52,7 +54,7 @@ Roadmap item: `D.6.1`
 
 ## Distribution
 
-- [ ] Developer ID signing — **blocked:** no `Developer ID Application` certificate with a private key exists in any local keychain (only App Store `Apple Distribution` / `Apple Development` identities for team 449BD89VDV; audited 2026-07-23, see `internal/releases/desktop/v0.5.0-beta.1-verification.md`). Do not repurpose other credentials; create/download the Developer ID Application cert to unblock.
-- [ ] Hardened runtime — blocked on the same Developer ID certificate
-- [ ] Notarization — blocked on the same Developer ID certificate (an App Store Connect API key exists locally at `~/private_keys/AuthKey_KQ4H3Z3X7Y.p8`, but no saved notarytool profile/issuer is configured)
+- [x] Developer ID Application signing identity and private key available to the protected release workflow
+- [x] Hardened runtime, app notarization, DMG notarization, and stapling proven by `desktop-v0.5.0-beta.4`
+- [ ] Repeat signed/notarized validation for the windowed `desktop-v0.5.0-beta.5` build
 - [ ] Clean-install DMG pass
