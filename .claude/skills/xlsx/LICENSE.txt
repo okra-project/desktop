@@ -1,6 +1,0 @@
-OkraPDF Desktop Skills License
-
-Copyright (c) 2025 OkraPDF
-
-These skills are provided for use with OkraPDF Desktop only.
-Redistribution or commercial use without permission is prohibited.
