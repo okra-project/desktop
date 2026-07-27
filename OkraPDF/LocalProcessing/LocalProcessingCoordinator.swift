@@ -6,9 +6,11 @@ import UniformTypeIdentifiers
 final class LocalProcessingCoordinator: ObservableObject {
     @Published var selectedProviderID: LocalProviderID {
         didSet {
-            UserDefaults.standard.set(selectedProviderID.rawValue, forKey: Self.providerDefaultsKey)
+            userDefaults.set(selectedProviderID.rawValue, forKey: Self.providerDefaultsKey)
             refreshAvailability()
             guard !isRunning, !isInstalling else { return }
+            setupProgress = nil
+            setupErrorMessage = nil
             statusMessage = selectedAvailability.isReady
                 ? "\(selectedDescriptor.name) is ready offline."
                 : selectedAvailability.message
@@ -17,17 +19,22 @@ final class LocalProcessingCoordinator: ObservableObject {
     }
     @Published private(set) var availabilityByProvider: [LocalProviderID: LocalProviderAvailability] = [:]
     @Published private(set) var latestRun: LocalProcessingRun?
+    @Published private(set) var recentRuns: [LocalProcessingRun] = []
     @Published private(set) var outputText = ""
     @Published private(set) var progress = 0.0
     @Published private(set) var statusMessage = "Choose a local parser and extract."
     @Published private(set) var isRunning = false
     @Published private(set) var isInstalling = false
+    @Published private(set) var setupProgress: LocalProviderSetupProgress?
+    @Published private(set) var setupErrorMessage: String?
 
     private static let providerDefaultsKey = "localProcessing.selectedProvider"
     private let providers: [any LocalProcessingProvider]
     private let runsRoot: URL
+    private let userDefaults: UserDefaults
     private var currentSourcePath: String?
     private var currentFileName = "extraction.pdf"
+    private var installationTask: Task<Void, Never>?
 
     init(
         providers: [any LocalProcessingProvider] = [
@@ -35,24 +42,31 @@ final class LocalProcessingCoordinator: ObservableObject {
             DoclingProcessingProvider(),
             UnlimitedOCRProcessingProvider(),
         ],
-        runsRoot: URL = LocalProviderPaths.runsRoot
+        runsRoot: URL = LocalProviderPaths.runsRoot,
+        userDefaults: UserDefaults = .standard
     ) {
         self.providers = providers
         self.runsRoot = runsRoot
+        self.userDefaults = userDefaults
 
         if providers.first(where: { $0.descriptor.id == .unlimitedOCR })?.availability().isSimulated == true {
             selectedProviderID = .unlimitedOCR
-        } else if let stored = UserDefaults.standard.string(forKey: Self.providerDefaultsKey),
+        } else if let stored = userDefaults.string(forKey: Self.providerDefaultsKey),
            let providerID = LocalProviderID(rawValue: stored),
            providers.contains(where: { $0.descriptor.id == providerID }) {
             selectedProviderID = providerID
         } else if providers.first(where: { $0.descriptor.id == .unlimitedOCR })?.availability().isReady == true {
             selectedProviderID = .unlimitedOCR
-        } else {
+        } else if providers.contains(where: { $0.descriptor.id == .appleVision }) {
             selectedProviderID = .appleVision
+        } else if let firstProvider = providers.first {
+            selectedProviderID = firstProvider.descriptor.id
+        } else {
+            preconditionFailure("LocalProcessingCoordinator requires at least one provider.")
         }
 
         refreshAvailability()
+        refreshRecentRuns()
     }
 
     var descriptors: [LocalProviderDescriptor] {
@@ -78,7 +92,9 @@ final class LocalProcessingCoordinator: ObservableObject {
         latestRun = nil
         outputText = ""
         progress = 0
+        setupErrorMessage = nil
         refreshAvailability()
+        refreshRecentRuns()
         statusMessage = selectedAvailability.isReady
             ? "Ready to parse with \(selectedDescriptor.name)."
             : selectedAvailability.message
@@ -94,18 +110,48 @@ final class LocalProcessingCoordinator: ObservableObject {
         guard !isInstalling, let provider = provider(for: selectedProviderID) else { return }
         isInstalling = true
         progress = 0
+        setupErrorMessage = nil
+        setupProgress = LocalProviderSetupProgress(
+            phase: .preparing,
+            fraction: nil,
+            message: "Preparing \(provider.descriptor.name)…"
+        )
         statusMessage = "Setting up \(provider.descriptor.name)…"
 
-        Task {
+        installationTask = Task { [weak self] in
+            guard let self else { return }
             do {
-                try await provider.install()
-                refreshAvailability()
-                statusMessage = "\(provider.descriptor.name) is ready offline."
+                try await provider.install { [weak self] update in
+                    Task { @MainActor in
+                        guard let self, self.isInstalling else { return }
+                        self.setupProgress = update
+                        self.statusMessage = update.message
+                    }
+                }
+                self.refreshAvailability()
+                self.setupProgress = LocalProviderSetupProgress(
+                    phase: .ready,
+                    fraction: 1,
+                    message: "\(provider.descriptor.name) is ready offline."
+                )
+                self.statusMessage = "\(provider.descriptor.name) is ready offline."
+            } catch is CancellationError {
+                self.setupProgress = nil
+                self.statusMessage = "Setup canceled. You can resume when you are ready."
             } catch {
-                statusMessage = error.localizedDescription
+                self.setupErrorMessage = error.localizedDescription
+                self.setupProgress = nil
+                self.statusMessage = error.localizedDescription
             }
-            isInstalling = false
+            self.isInstalling = false
+            self.installationTask = nil
         }
+    }
+
+    func cancelInstallation() {
+        guard isInstalling else { return }
+        statusMessage = "Canceling setup after the current operation…"
+        installationTask?.cancel()
     }
 
     func run(document: LocalPDFDocument) {
@@ -142,6 +188,7 @@ final class LocalProcessingCoordinator: ObservableObject {
         do {
             try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
             try persist(run, in: runDirectory)
+            refreshRecentRuns()
         } catch {
             statusMessage = "Could not start extraction: \(error.localizedDescription)"
             return
@@ -176,6 +223,7 @@ final class LocalProcessingCoordinator: ObservableObject {
                 run.pageCount = result.pageCount
                 run.completedAt = Date()
                 try persist(run, in: runDirectory)
+                refreshRecentRuns()
 
                 if currentSourcePath == document.filePath {
                     latestRun = run
@@ -190,6 +238,7 @@ final class LocalProcessingCoordinator: ObservableObject {
                 run.errorMessage = error.localizedDescription
                 run.completedAt = Date()
                 try? persist(run, in: runDirectory)
+                refreshRecentRuns()
 
                 if currentSourcePath == document.filePath {
                     latestRun = run
@@ -203,6 +252,39 @@ final class LocalProcessingCoordinator: ObservableObject {
     func revealRunsFolder() {
         try? FileManager.default.createDirectory(at: runsRoot, withIntermediateDirectories: true)
         NSWorkspace.shared.open(runsRoot)
+    }
+
+    func selectRun(_ run: LocalProcessingRun) {
+        latestRun = run
+        currentSourcePath = run.sourcePath
+        currentFileName = run.fileName
+        progress = run.status == "succeeded" ? 1 : 0
+        statusMessage = run.status == "succeeded"
+            ? "Parsed locally with \(run.providerName)."
+            : run.errorMessage ?? "This run did not finish."
+        loadOutputText()
+    }
+
+    func refreshRecentRuns() {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let runDirectories = try? FileManager.default.contentsOfDirectory(
+            at: runsRoot,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            recentRuns = []
+            return
+        }
+
+        recentRuns = runDirectories.compactMap { runDirectory in
+            let manifestURL = runDirectory.appendingPathComponent("run.json")
+            guard let data = try? Data(contentsOf: manifestURL) else { return nil }
+            return try? decoder.decode(LocalProcessingRun.self, from: data)
+        }
+        .sorted { $0.startedAt > $1.startedAt }
+        .prefix(12)
+        .map { $0 }
     }
 
     func revealOutput() {

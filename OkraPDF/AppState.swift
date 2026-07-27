@@ -64,6 +64,16 @@ final class AppState: ObservableObject {
         localProcessing.run(document: selectedDocument)
     }
 
+    func openRun(_ run: LocalProcessingRun) {
+        let sourceURL = URL(fileURLWithPath: run.sourcePath).standardizedFileURL
+        if FileManager.default.fileExists(atPath: sourceURL.path) {
+            openPDF(sourceURL)
+        } else {
+            importError = "The original PDF for \(run.fileName) is no longer at \(run.sourcePath)."
+        }
+        localProcessing.selectRun(run)
+    }
+
     func revealSelectedPDF() {
         guard let selectedDocument else { return }
         NSWorkspace.shared.activateFileViewerSelecting([

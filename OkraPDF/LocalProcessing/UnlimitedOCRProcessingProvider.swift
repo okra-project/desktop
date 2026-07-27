@@ -1,50 +1,5 @@
 import Foundation
 
-struct UnlimitedOCRRuntime {
-    let rootURL: URL
-    let pythonURL: URL
-    let modelURL: URL
-    let readyMarkerURL: URL
-    let cacheURL: URL
-    let workerURL: URL?
-    let isSimulation: Bool
-
-    static func installed(workerURL: URL?) -> UnlimitedOCRRuntime {
-        UnlimitedOCRRuntime(
-            rootURL: LocalProviderPaths.unlimitedOCRRoot,
-            pythonURL: LocalProviderPaths.unlimitedOCRPython,
-            modelURL: LocalProviderPaths.unlimitedOCRModel,
-            readyMarkerURL: LocalProviderPaths.unlimitedOCRReadyMarker,
-            cacheURL: LocalProviderPaths.unlimitedOCRRoot
-                .appendingPathComponent("huggingface", isDirectory: true),
-            workerURL: workerURL,
-            isSimulation: false
-        )
-    }
-
-    static func simulated(workerURL: URL?) -> UnlimitedOCRRuntime {
-        let pythonCandidates = [
-            URL(fileURLWithPath: "/opt/homebrew/bin/python3"),
-            URL(fileURLWithPath: "/usr/local/bin/python3"),
-            URL(fileURLWithPath: "/usr/bin/python3"),
-        ]
-        let pythonURL = pythonCandidates.first {
-            FileManager.default.isExecutableFile(atPath: $0.path)
-        } ?? URL(fileURLWithPath: "/usr/bin/python3")
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("okra-unlimited-ocr-simulation", isDirectory: true)
-        return UnlimitedOCRRuntime(
-            rootURL: root,
-            pythonURL: pythonURL,
-            modelURL: root.appendingPathComponent("model", isDirectory: true),
-            readyMarkerURL: root.appendingPathComponent(".ready"),
-            cacheURL: root.appendingPathComponent("huggingface", isDirectory: true),
-            workerURL: workerURL,
-            isSimulation: true
-        )
-    }
-}
-
 final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked Sendable {
     let descriptor = LocalProviderDescriptor(
         id: .unlimitedOCR,
@@ -54,11 +9,14 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
     )
 
     private let runtime: UnlimitedOCRRuntime
+    private let installer: any UnlimitedOCRModelInstalling
 
     init(
         runtime: UnlimitedOCRRuntime? = nil,
+        installer: any UnlimitedOCRModelInstalling = UnlimitedOCRModelInstaller(),
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) {
+        self.installer = installer
         let workerURL = Bundle.module.url(
             forResource: "unlimited-ocr-worker",
             withExtension: "py",
@@ -92,7 +50,7 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
         return isReady ? .ready : .setupRequired("Setup required · ~2.4 GB")
     }
 
-    func install() async throws {
+    func install(progress: @escaping @Sendable (LocalProviderSetupProgress) -> Void) async throws {
         guard !runtime.isSimulation else { return }
         guard let scriptURL = Bundle.module.url(
             forResource: "install-unlimited-ocr",
@@ -101,12 +59,7 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
         ) else {
             throw LocalProcessingError.missingResource("Baidu Unlimited-OCR installer")
         }
-        try await Task.detached(priority: .userInitiated) { [runtime] in
-            _ = try LocalCommandRunner.run(
-                executableURL: URL(fileURLWithPath: "/bin/zsh"),
-                arguments: [scriptURL.path, runtime.rootURL.path]
-            )
-        }.value
+        try await installer.install(runtime: runtime, scriptURL: scriptURL, progress: progress)
     }
 
     func process(
