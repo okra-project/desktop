@@ -15,11 +15,21 @@ struct LocalProviderDescriptor: Identifiable, Equatable {
 
 enum LocalProviderAvailability: Equatable {
     case ready
+    case simulated(String)
     case setupRequired(String)
     case unavailable(String)
 
     var isReady: Bool {
-        if case .ready = self { return true }
+        switch self {
+        case .ready, .simulated:
+            return true
+        case .setupRequired, .unavailable:
+            return false
+        }
+    }
+
+    var isSimulated: Bool {
+        if case .simulated = self { return true }
         return false
     }
 
@@ -27,7 +37,7 @@ enum LocalProviderAvailability: Equatable {
         switch self {
         case .ready:
             return "Ready offline"
-        case .setupRequired(let message), .unavailable(let message):
+        case .simulated(let message), .setupRequired(let message), .unavailable(let message):
             return message
         }
     }
@@ -51,6 +61,7 @@ struct LocalProcessingRun: Identifiable, Codable, Equatable {
     let fileName: String
     let providerId: String
     let providerName: String
+    let executionMode: String?
     var status: String
     var outputPath: String?
     var errorMessage: String?

@@ -8,109 +8,136 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            toolbar
+            appHeader
             Divider()
 
             HSplitView {
                 documentPane
-                    .frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(minWidth: 620)
 
-                parserInspector
-                    .frame(minWidth: 280, idealWidth: 320, maxWidth: 360, maxHeight: .infinity)
+                inspectorPane
+                    .frame(minWidth: 320, idealWidth: 360, maxWidth: 420)
             }
+
+            Divider()
+            appFooter
         }
-        .frame(minWidth: 780, minHeight: 520)
+        .background(.background)
         .onDrop(
             of: [UTType.fileURL.identifier],
             isTargeted: $isDropTargeted,
             perform: handleDrop
         )
-        .onOpenURL { url in
-            state.openPDF(url)
-        }
     }
 
-    private var toolbar: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(state.selectedDocument?.fileName ?? "okraPDF")
+    private var appHeader: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("okraPDF")
                     .font(.headline)
-                    .lineLimit(1)
-
-                if let document = state.selectedDocument {
-                    Text(pageCountLabel(for: document.totalPages))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Local PDF reader and parser")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text("Private PDF reading and extraction")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
 
+            if let document = state.selectedDocument {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(document.fileName)
+                        .font(.callout)
+                        .lineLimit(1)
+                    Text(pageCountLabel(document.totalPages))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Button("Open PDF…", action: state.openPDFPicker)
+                .buttonStyle(.bordered)
                 .keyboardShortcut("o", modifiers: .command)
+                .disabled(state.localProcessing.isRunning || state.localProcessing.isInstalling)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
     }
 
     @ViewBuilder
     private var documentPane: some View {
-        ZStack {
-            if let pdfDocument = state.pdfDocument {
-                PDFReaderView(document: pdfDocument)
-            } else {
-                VStack(spacing: 10) {
-                    Text("Open a PDF")
-                        .font(.title2.weight(.semibold))
-                    Text("Read it first. Parse it only when you choose.")
-                        .foregroundStyle(.secondary)
-                    Button("Choose PDF…", action: state.openPDFPicker)
-                        .buttonStyle(.borderedProminent)
+        if let document = state.selectedDocument {
+            ZStack {
+                PDFDocumentView(url: document.fileURL)
+                if isDropTargeted {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(.tint.opacity(0.12))
+                        .overlay {
+                            Text("Drop to open this PDF")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.tint)
+                        }
+                        .padding(24)
                 }
-                .padding(32)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(nsColor: .underPageBackgroundColor))
             }
-
-            if isDropTargeted {
-                ZStack {
-                    Color.accentColor.opacity(0.12)
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(Color.accentColor, lineWidth: 2)
-                        .padding(12)
-                    Text("Drop PDF to open")
-                        .font(.headline)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                }
-                .allowsHitTesting(false)
-            }
+            .accessibilityLabel("PDF preview for \(document.fileName)")
+        } else {
+            emptyDocumentPane
         }
     }
 
-    private var parserInspector: some View {
+    private var emptyDocumentPane: some View {
+        Button(action: state.openPDFPicker) {
+            VStack(spacing: 12) {
+                Text("PDF")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundStyle(.tint)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(.tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 9))
+
+                Text("Open a PDF to read and parse")
+                    .font(.title3.weight(.semibold))
+                Text("Drop a file anywhere in this window, or click to choose one.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Text("The original stays exactly where it is.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .background(.quaternary.opacity(0.12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(
+                    isDropTargeted ? Color.accentColor : Color.secondary.opacity(0.35),
+                    style: StrokeStyle(lineWidth: isDropTargeted ? 2 : 1, dash: [7])
+                )
+                .padding(28)
+        }
+        .accessibilityHint("Opens a PDF chooser. You can also drop a PDF anywhere in the window.")
+    }
+
+    private var inspectorPane: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Parse")
-                        .font(.title3.weight(.semibold))
-                    Text("Choose a local parser, then start it when you are ready.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text("Extract")
+                    .font(.title3.weight(.semibold))
+
+                Text("Choose a local parser, then start when you are ready. Opening a PDF never starts extraction.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if let importError = state.importError {
                     Text(importError)
                         .font(.callout)
                         .foregroundStyle(.red)
                         .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityLabel("Error: \(importError)")
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
                 }
 
                 LocalExtractionView(
@@ -120,19 +147,40 @@ struct ContentView: View {
                     revealPDF: state.revealSelectedPDF
                 )
             }
-            .padding(16)
+            .padding(18)
         }
-        .background(.regularMaterial)
+        .background(.background)
     }
 
-    private func pageCountLabel(for count: Int) -> String {
+    private var appFooter: some View {
+        HStack(spacing: 12) {
+            Button("Show Runs", action: state.localProcessing.revealRunsFolder)
+                .buttonStyle(.plain)
+
+            Spacer()
+
+            Text("On-device by default · Nothing is uploaded")
+                .foregroundStyle(.secondary)
+
+            Button("Quit", action: state.quit)
+                .buttonStyle(.plain)
+                .keyboardShortcut("q", modifiers: .command)
+        }
+        .font(.caption)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 9)
+    }
+
+    private func pageCountLabel(_ count: Int) -> String {
         count == 1 ? "1 page" : "\(count) pages"
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
-        guard let provider = providers.first(where: {
-            $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
-        }) else {
+        guard !state.localProcessing.isRunning,
+              !state.localProcessing.isInstalling,
+              let provider = providers.first(where: {
+                  $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
+              }) else {
             return false
         }
 

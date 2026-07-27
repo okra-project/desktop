@@ -20,12 +20,13 @@ returns Markdown.
 - [x] Original PDF remains in place
 - [x] Apple Vision zero-setup parser
 - [x] Optional offline Docling parser
-- [x] Optional offline Unlimited-OCR/MLX parser
+- [x] Optional offline Baidu Unlimited-OCR/MLX parser
+- [x] Truthfully labeled Baidu Unlimited-OCR end-to-end simulation mode
 - [x] Markdown copy, save, and reveal
 - [x] File-backed `run.json` and `result.md` artifacts
 - [x] No account, network workflow, SQLite, policy, agents, or sidecars
 - [ ] Clean-profile Docling dogfood with the network disconnected
-- [ ] Clean-profile Unlimited-OCR dogfood on Apple silicon
+- [ ] Clean-profile Baidu Unlimited-OCR dogfood on Apple silicon
 - [ ] Manual large/scanned/malformed PDF regression pass
 
 ## Distribution gate
@@ -51,7 +52,7 @@ is required by one of the supported local parsers.
 ```bash
 cd apps/desktop
 swift test
-./scripts/build-dmg.sh 0.5.0-beta.5
+./scripts/build-dmg.sh 0.5.0-beta.6
 ```
 
 Do not promote the parser to a stable release until the manual provider checks

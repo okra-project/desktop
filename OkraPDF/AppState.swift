@@ -6,13 +6,13 @@ import UniformTypeIdentifiers
 @MainActor
 final class AppState: ObservableObject {
     @Published private(set) var selectedDocument: LocalPDFDocument?
-    @Published private(set) var pdfDocument: PDFDocument?
     @Published var importError: String?
 
     let localProcessing: LocalProcessingCoordinator
 
     init() {
         localProcessing = LocalProcessingCoordinator()
+        openCommandLinePDFIfPresent()
     }
 
     init(localProcessing: LocalProcessingCoordinator) {
@@ -33,13 +33,12 @@ final class AppState: ObservableObject {
         openPDF(url)
     }
 
-    @discardableResult
-    func openPDF(_ url: URL) -> Bool {
+    func openPDF(_ url: URL) {
         importError = nil
 
         guard url.isFileURL, url.pathExtension.lowercased() == UTType.pdf.preferredFilenameExtension else {
             importError = "Choose a PDF file."
-            return false
+            return
         }
 
         let normalizedURL = url.standardizedFileURL
@@ -47,7 +46,7 @@ final class AppState: ObservableObject {
               let pdf = PDFDocument(url: normalizedURL),
               pdf.pageCount > 0 else {
             importError = "okraPDF could not open \(url.lastPathComponent)."
-            return false
+            return
         }
 
         let document = LocalPDFDocument(
@@ -57,9 +56,7 @@ final class AppState: ObservableObject {
             totalPages: pdf.pageCount
         )
         selectedDocument = document
-        pdfDocument = pdf
         localProcessing.load(document: document)
-        return true
     }
 
     func parseSelectedDocument() {
@@ -74,4 +71,16 @@ final class AppState: ObservableObject {
         ])
     }
 
+    func quit() {
+        NSApplication.shared.terminate(nil)
+    }
+
+    private func openCommandLinePDFIfPresent() {
+        guard let path = ProcessInfo.processInfo.arguments
+            .dropFirst()
+            .first(where: { $0.lowercased().hasSuffix(".pdf") }) else {
+            return
+        }
+        openPDF(URL(fileURLWithPath: path))
+    }
 }

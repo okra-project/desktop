@@ -19,7 +19,7 @@ final class LocalProcessingCoordinator: ObservableObject {
     @Published private(set) var latestRun: LocalProcessingRun?
     @Published private(set) var outputText = ""
     @Published private(set) var progress = 0.0
-    @Published private(set) var statusMessage = "Open a PDF, choose a local parser, then click Parse."
+    @Published private(set) var statusMessage = "Choose a local parser and extract."
     @Published private(set) var isRunning = false
     @Published private(set) var isInstalling = false
 
@@ -40,7 +40,9 @@ final class LocalProcessingCoordinator: ObservableObject {
         self.providers = providers
         self.runsRoot = runsRoot
 
-        if let stored = UserDefaults.standard.string(forKey: Self.providerDefaultsKey),
+        if providers.first(where: { $0.descriptor.id == .unlimitedOCR })?.availability().isSimulated == true {
+            selectedProviderID = .unlimitedOCR
+        } else if let stored = UserDefaults.standard.string(forKey: Self.providerDefaultsKey),
            let providerID = LocalProviderID(rawValue: stored),
            providers.contains(where: { $0.descriptor.id == providerID }) {
             selectedProviderID = providerID
@@ -128,6 +130,7 @@ final class LocalProcessingCoordinator: ObservableObject {
             fileName: document.fileName,
             providerId: provider.descriptor.id.rawValue,
             providerName: provider.descriptor.name,
+            executionMode: provider.availability().isSimulated ? "simulation" : "local",
             status: "running",
             outputPath: nil,
             errorMessage: nil,
@@ -177,7 +180,9 @@ final class LocalProcessingCoordinator: ObservableObject {
                 if currentSourcePath == document.filePath {
                     latestRun = run
                     progress = 1
-                    statusMessage = "Parsed locally with \(provider.descriptor.name)."
+                    statusMessage = provider.availability().isSimulated
+                        ? "Simulation complete · model weights were not loaded."
+                        : "Parsed locally with \(provider.descriptor.name)."
                     loadOutputText()
                 }
             } catch {

@@ -12,7 +12,7 @@ for candidate in /opt/homebrew/bin/python3.13 /opt/homebrew/bin/python3.12 /opt/
 done
 
 if [[ -z "$python_bin" ]]; then
-  print -u2 "Python 3 is required to set up Unlimited-OCR."
+  print -u2 "Python 3 is required to set up Baidu Unlimited-OCR."
   exit 1
 fi
 
