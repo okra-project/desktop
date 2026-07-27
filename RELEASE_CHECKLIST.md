@@ -60,7 +60,7 @@ Roadmap item: `D.6.3`
 
 - [x] GitHub prerelease `desktop-v0.5.0-beta.5` with DMG and SHA-256 asset (2026-07-24)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.6` with DMG and SHA-256 asset (2026-07-27)
-- [ ] GitHub prerelease `desktop-v0.5.0-beta.7` with DMG and SHA-256 asset
+- [x] GitHub prerelease `desktop-v0.5.0-beta.7` with DMG and SHA-256 asset (2026-07-27)
 - [x] Developer ID Application signature for team `449BD89VDV`
 - [x] Hardened runtime
 - [x] App and DMG accepted by Apple notarization and stapled
