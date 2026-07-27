@@ -14,10 +14,10 @@ struct okraPDFApp: App {
         WindowGroup("okraPDF") {
             ContentView()
                 .environmentObject(appState)
-                .frame(minWidth: 980, minHeight: 680)
+                .frame(minWidth: 1_080, minHeight: 680)
                 .onOpenURL(perform: appState.openPDF)
         }
-        .defaultSize(width: 1_180, height: 780)
+        .defaultSize(width: 1_320, height: 820)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Open PDF…", action: appState.openPDFPicker)

@@ -14,7 +14,7 @@ final class DoclingProcessingProvider: LocalProcessingProvider, @unchecked Senda
             : .ready
     }
 
-    func install() async throws {
+    func install(progress: @escaping @Sendable (LocalProviderSetupProgress) -> Void) async throws {
         guard let scriptURL = Bundle.module.url(
             forResource: "install-docling",
             withExtension: "sh",
@@ -23,12 +23,24 @@ final class DoclingProcessingProvider: LocalProcessingProvider, @unchecked Senda
             throw LocalProcessingError.missingResource("Docling installer")
         }
         let root = LocalProviderPaths.doclingRoot
-        try await Task.detached(priority: .userInitiated) {
-            _ = try LocalCommandRunner.run(
-                executableURL: URL(fileURLWithPath: "/bin/zsh"),
-                arguments: [scriptURL.path, root.path]
+        progress(
+            LocalProviderSetupProgress(
+                phase: .installingRuntime,
+                fraction: nil,
+                message: "Installing Docling and its local model…"
             )
-        }.value
+        )
+        _ = try await LocalCommandRunner.runAsync(
+            executableURL: URL(fileURLWithPath: "/bin/zsh"),
+            arguments: [scriptURL.path, root.path]
+        )
+        progress(
+            LocalProviderSetupProgress(
+                phase: .ready,
+                fraction: 1,
+                message: "Docling is ready offline."
+            )
+        )
     }
 
     func process(

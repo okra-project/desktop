@@ -75,7 +75,7 @@ typealias LocalProcessingProgress = @Sendable (_ fraction: Double, _ message: St
 protocol LocalProcessingProvider: AnyObject {
     var descriptor: LocalProviderDescriptor { get }
     func availability() -> LocalProviderAvailability
-    func install() async throws
+    func install(progress: @escaping @Sendable (LocalProviderSetupProgress) -> Void) async throws
     func process(
         request: LocalProcessingRequest,
         progress: @escaping LocalProcessingProgress
@@ -83,7 +83,7 @@ protocol LocalProcessingProvider: AnyObject {
 }
 
 extension LocalProcessingProvider {
-    func install() async throws {
+    func install(progress: @escaping @Sendable (LocalProviderSetupProgress) -> Void) async throws {
         throw LocalProcessingError.installNotSupported(descriptor.name)
     }
 }
@@ -96,6 +96,8 @@ enum LocalProcessingError: LocalizedError {
     case providerUnavailable(String)
     case commandFailed(command: String, status: Int32, output: String)
     case missingOutput(String)
+    case invalidModelDownloadURL(String)
+    case modelIntegrityFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -117,6 +119,10 @@ enum LocalProcessingError: LocalizedError {
                 : "\(command) failed: \(clippedDetail)"
         case .missingOutput(let provider):
             return "\(provider) finished without producing Markdown."
+        case .invalidModelDownloadURL(let artifact):
+            return "The download URL for \(artifact) is invalid."
+        case .modelIntegrityFailed(let artifact):
+            return "\(artifact) did not match the pinned Baidu Unlimited-OCR model. Retry setup to download it again."
         }
     }
 }
