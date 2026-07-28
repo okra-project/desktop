@@ -1,6 +1,6 @@
 # okraPDF Desktop — Launch Checklist
 
-The supported desktop product is the `D.6.13` windowed macOS PDF reader and
+The supported desktop product is the `D.6.14` windowed macOS PDF reader and
 local parser. It opens a PDF in place, waits for an explicit Parse action, and
 returns reviewable source-aligned output.
 
@@ -28,6 +28,8 @@ returns reviewable source-aligned output.
 - [x] Accessible Show boxes toolbar toggle with Reduce Motion support
 - [x] Markdown copy, save, and reveal
 - [x] File-backed `run.json` and `result.md` artifacts
+- [x] Durable per-parser, per-page `idle` / `inProgress` / `done` / `attention` / `error` lifecycle
+- [x] Accessible lazy page-state UI with visible text and symbols in addition to color
 - [x] No account, network workflow, SQLite, policy, agents, or sidecars
 - [ ] Clean-profile Baidu Unlimited-OCR dogfood on Apple silicon
 - [ ] Manual large/scanned/malformed PDF regression pass

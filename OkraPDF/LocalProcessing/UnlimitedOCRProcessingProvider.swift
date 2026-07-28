@@ -107,6 +107,16 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
                    (try? pageStore.status(pageNumber: $0)) != .succeeded
                }) {
                 try pageStore.markProcessing(pageNumber: nextPage)
+                request.pageProgress(
+                    LocalPageProgressUpdate(
+                        parserID: request.parserID,
+                        pageNumber: nextPage,
+                        state: .inProgress,
+                        completedPageCount: initialManifest.completedPageCount,
+                        totalPageCount: pageURLs.count,
+                        message: "Parsing page \(nextPage) of \(pageURLs.count)"
+                    )
+                )
             }
             let outputURL = pageStore.resultURL
             progress(
@@ -153,11 +163,26 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
                         for completedPageCount in (observedPageCount + 1)...newCompletedPageCount {
                             request.pageProgress(
                                 LocalPageProgressUpdate(
+                                    parserID: request.parserID,
                                     pageNumber: completedPageCount,
+                                    state: .done,
                                     completedPageCount: completedPageCount,
-                                    totalPageCount: pageURLs.count
+                                    totalPageCount: pageURLs.count,
+                                    message: "Saved page \(completedPageCount) of \(pageURLs.count)"
                                 )
                             )
+                            if completedPageCount < pageURLs.count {
+                                request.pageProgress(
+                                    LocalPageProgressUpdate(
+                                        parserID: request.parserID,
+                                        pageNumber: completedPageCount + 1,
+                                        state: .inProgress,
+                                        completedPageCount: completedPageCount,
+                                        totalPageCount: pageURLs.count,
+                                        message: "Parsing page \(completedPageCount + 1) of \(pageURLs.count)"
+                                    )
+                                )
+                            }
                             progress(
                                 0.2 + (0.8 * Double(completedPageCount) / Double(pageURLs.count)),
                                 "Saved page \(completedPageCount) of \(pageURLs.count)"
@@ -185,10 +210,24 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
                 monitorTask.cancel()
                 await monitorTask.value
                 let completedPages = (try? pageStore.reconcileCompletedPages().completedPageCount) ?? 0
-                if completedPages < pageURLs.count {
+                if completedPages < pageURLs.count, !(error is CancellationError) {
                     try? pageStore.markFailed(
                         pageNumber: completedPages + 1,
                         error: error
+                    )
+                }
+                if completedPages < pageURLs.count {
+                    request.pageProgress(
+                        LocalPageProgressUpdate(
+                            parserID: request.parserID,
+                            pageNumber: completedPages + 1,
+                            state: error is CancellationError ? .attention : .error,
+                            completedPageCount: completedPages,
+                            totalPageCount: pageURLs.count,
+                            message: error is CancellationError
+                                ? "Canceled. Resume to continue page \(completedPages + 1)."
+                                : error.localizedDescription
+                        )
                     )
                 }
                 throw error
@@ -200,10 +239,13 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
             if manifest.completedPageCount > 0 {
                 request.pageProgress(
                     LocalPageProgressUpdate(
+                        parserID: request.parserID,
                         pageNumber: manifest.lastCompletedPageNumber
                             ?? manifest.completedPageCount,
+                        state: .done,
                         completedPageCount: manifest.completedPageCount,
-                        totalPageCount: pageURLs.count
+                        totalPageCount: pageURLs.count,
+                        message: "Saved page \(manifest.lastCompletedPageNumber ?? manifest.completedPageCount) of \(pageURLs.count)"
                     )
                 )
             }

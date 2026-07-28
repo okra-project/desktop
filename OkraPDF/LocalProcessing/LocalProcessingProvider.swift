@@ -1,6 +1,6 @@
 import Foundation
 
-enum LocalProviderID: String, CaseIterable, Codable, Hashable {
+enum LocalProviderID: String, CaseIterable, Codable, Hashable, Sendable {
     case appleVision = "apple-vision"
     case unlimitedOCR = "unlimited-ocr"
 }
@@ -43,9 +43,12 @@ enum LocalProviderAvailability: Equatable {
 }
 
 struct LocalPageProgressUpdate: Equatable, Sendable {
+    let parserID: LocalProviderID
     let pageNumber: Int
+    let state: ParserLifecycleState
     let completedPageCount: Int
     let totalPageCount: Int
+    let message: String?
 
     var fraction: Double {
         guard totalPageCount > 0 else { return 0 }
@@ -56,6 +59,7 @@ struct LocalPageProgressUpdate: Equatable, Sendable {
 typealias LocalPageProgress = @Sendable (LocalPageProgressUpdate) -> Void
 
 struct LocalProcessingRequest: Sendable {
+    let parserID: LocalProviderID
     let fileName: String
     let sourceURL: URL
     let outputDirectory: URL
@@ -63,12 +67,14 @@ struct LocalProcessingRequest: Sendable {
     let pageProgress: LocalPageProgress
 
     init(
+        parserID: LocalProviderID,
         fileName: String,
         sourceURL: URL,
         outputDirectory: URL,
         expectedPageCount: Int,
         pageProgress: @escaping LocalPageProgress = { _ in }
     ) {
+        self.parserID = parserID
         self.fileName = fileName
         self.sourceURL = sourceURL
         self.outputDirectory = outputDirectory
@@ -115,6 +121,7 @@ struct LocalProcessingRun: Identifiable, Codable, Equatable {
     var cancelRequestedAt: Date? = nil
     var resumeCount: Int? = nil
     var eventSequence: Int? = nil
+    var pageLifecycles: [ParserPageLifecycle]? = nil
 }
 
 struct LocalProcessingRunEvent: Codable, Equatable, Sendable {

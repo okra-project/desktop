@@ -36,9 +36,12 @@ final class ResumableFixtureProcessingProvider: LocalProcessingProvider, @unchec
                 let manifest = try store.reconcileCompletedPages()
                 request.pageProgress(
                     LocalPageProgressUpdate(
+                        parserID: request.parserID,
                         pageNumber: pageNumber,
+                        state: .done,
                         completedPageCount: manifest.completedPageCount,
-                        totalPageCount: pageCount
+                        totalPageCount: pageCount,
+                        message: "Restored page \(pageNumber) of \(pageCount) from disk"
                     )
                 )
                 continue
@@ -49,6 +52,17 @@ final class ResumableFixtureProcessingProvider: LocalProcessingProvider, @unchec
                 "Processing page \(pageNumber) of \(pageCount)"
             )
             try store.markProcessing(pageNumber: pageNumber)
+            let completedBeforePage = (try? store.reconcileCompletedPages().completedPageCount) ?? 0
+            request.pageProgress(
+                LocalPageProgressUpdate(
+                    parserID: request.parserID,
+                    pageNumber: pageNumber,
+                    state: .inProgress,
+                    completedPageCount: completedBeforePage,
+                    totalPageCount: pageCount,
+                    message: "Processing page \(pageNumber) of \(pageCount)"
+                )
+            )
             try store.writePage(
                 pageNumber: pageNumber,
                 markdown: "## Page \(pageNumber)\n\nFixture \(pageNumber)"
@@ -56,9 +70,12 @@ final class ResumableFixtureProcessingProvider: LocalProcessingProvider, @unchec
             let manifest = try store.reconcileCompletedPages()
             request.pageProgress(
                 LocalPageProgressUpdate(
+                    parserID: request.parserID,
                     pageNumber: pageNumber,
+                    state: .done,
                     completedPageCount: manifest.completedPageCount,
-                    totalPageCount: pageCount
+                    totalPageCount: pageCount,
+                    message: "Saved page \(pageNumber) of \(pageCount)"
                 )
             )
             progress(
