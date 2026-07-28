@@ -121,6 +121,7 @@ jobs:
             swift test --filter PackagedAppLaunchTests.packagedAppRemainsAlive
 
       - name: Notarize and staple app
+        id: notarize
         shell: bash
         run: |
           set -euo pipefail
@@ -129,9 +130,24 @@ jobs:
             --apple-id "${APPLE_ID}" \
             --password "${APPLE_APP_SPECIFIC_PASSWORD}" \
             --team-id "${APPLE_TEAM_ID}" \
-            --wait
+            --wait 2>&1 | tee "${RUNNER_TEMP}/notary-submit.log"
           xcrun stapler staple "build/Okra.app"
           xcrun stapler validate "build/Okra.app"
+
+      - name: Dump notarization log on failure
+        if: failure() && steps.notarize.outcome == 'failure'
+        shell: bash
+        run: |
+          set -uo pipefail
+          SUBMISSION_ID="$(awk '/^  id: /{print $2; exit}' "${RUNNER_TEMP}/notary-submit.log" 2>/dev/null)"
+          if [[ -z "${SUBMISSION_ID}" ]]; then
+            echo "No notary submission id captured"
+            exit 0
+          fi
+          xcrun notarytool log "${SUBMISSION_ID}" \
+            --apple-id "${APPLE_ID}" \
+            --password "${APPLE_APP_SPECIFIC_PASSWORD}" \
+            --team-id "${APPLE_TEAM_ID}" || true
 
       - name: Package, notarize, and verify DMG
         id: artifact
