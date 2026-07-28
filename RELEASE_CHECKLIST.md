@@ -2,7 +2,7 @@
 
 Current train: `desktop-v0.5.0-beta.N`
 
-Roadmap item: `D.6.7`
+Roadmap item: `D.6.8`
 
 ## Product contract
 
@@ -22,6 +22,8 @@ Roadmap item: `D.6.7`
 - [x] Passive stall warning after 90 seconds without progress updates
 - [x] Low-memory warning while a local run is active
 - [x] Cross-instance Baidu Unlimited-OCR run queue with a visible waiting state
+- [x] Throttled launch check plus manual Check for Updates against the newest desktop GitHub prerelease
+- [x] Dismissible per-release update banner with a View Release action
 - [x] Cancel Run action with persisted cancel intent and terminal canceled state
 - [x] Interrupted-run recovery and same-run Resume action
 - [x] Atomic page-level Markdown checkpoints for Apple Vision and Baidu Unlimited-OCR
@@ -52,14 +54,15 @@ Roadmap item: `D.6.7`
 - [x] Mid-run `run.json` progress and 120-page checkpoint persistence coverage
 - [x] Cancel ordering, orphan recovery, checkpoint resume, and child-process termination coverage
 - [x] Run-health stall/memory decision logic and cross-process lock queue coverage
+- [x] Update version ordering, release selection, dismissal, and throttle coverage
 - [x] Synthetic aToken fixture covers whitespace decoding, malformed markers, normalized boxes, HTML preservation, and repeated-tail suppression
 - [x] Default app state constructs every bundled provider without terminating
 - [x] Packaged app starts with builder-only SwiftPM resources hidden
-- [x] Quarantined notarized beta.8 through beta.12 DMGs start through LaunchServices before publishing (2026-07-28)
+- [x] Quarantined notarized beta.8 through beta.13 DMGs start through LaunchServices before publishing (2026-07-28)
 - [x] Remote-control, dispatch, registry, and model-catalog tests removed
 - [x] `swift build` on an unrestricted macOS shell (2026-07-24)
 - [x] Canonical website mark checksum and packaged-resource coverage
-- [x] `swift test` on an unrestricted macOS shell (46 tests / 11 suites passed, 2026-07-28)
+- [x] `swift test` on an unrestricted macOS shell (55 tests / 13 suites passed, 2026-07-28)
 - [x] Python output-parser and resume tests (5/5 passed, 2026-07-27)
 
 ## Manual smoke test
@@ -86,6 +89,7 @@ Roadmap item: `D.6.7`
 - [x] GitHub prerelease `desktop-v0.5.0-beta.10` with structured Baidu output, DMG, and SHA-256 asset (2026-07-27)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.11` with durable cancel/resume, DMG, and SHA-256 asset (2026-07-27)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.12` with truthful run health, DMG, and SHA-256 asset (2026-07-28)
+- [x] GitHub prerelease `desktop-v0.5.0-beta.13` with beta update awareness, DMG, and SHA-256 asset (2026-07-28)
 - [x] Developer ID Application signature for team `449BD89VDV`
 - [x] Hardened runtime
 - [x] App and DMG accepted by Apple notarization and stapled
