@@ -4,7 +4,9 @@ struct StructuredExtractionBlockView: View {
     let block: StructuredExtractionBlock
     let pageNumber: Int
     let isSelected: Bool
+    let isHovered: Bool
     let selectBlock: (String) -> Void
+    let hoverBlock: (String, Bool) -> Void
 
     var body: some View {
         Group {
@@ -19,14 +21,18 @@ struct StructuredExtractionBlockView: View {
             }
         }
         .background(
-            isSelected ? Color.primary.opacity(0.08) : Color(nsColor: .controlBackgroundColor),
+            isSelected || isHovered
+                ? Color.primary.opacity(isSelected ? 0.08 : 0.05)
+                : Color(nsColor: .controlBackgroundColor),
             in: .rect(cornerRadius: WorkspaceTheme.cardRadius)
         )
         .overlay {
             RoundedRectangle(cornerRadius: WorkspaceTheme.cardRadius)
                 .strokeBorder(
-                    isSelected ? Color.primary.opacity(0.52) : Color.clear,
-                    lineWidth: 2
+                    isSelected
+                        ? Color.primary.opacity(0.52)
+                        : Color.primary.opacity(isHovered ? 0.32 : 0),
+                    lineWidth: isSelected ? 2 : 1.5
                 )
         }
         .accessibilityLabel("\(block.type) block on page \(pageNumber): \(block.displayText)")
@@ -36,6 +42,10 @@ struct StructuredExtractionBlockView: View {
                 ? "Shows and highlights this extraction box in the source PDF"
                 : "No source box is available for this block"
         )
+        .onHover { isHovering in
+            guard hasSourceBox else { return }
+            hoverBlock(block.id, isHovering)
+        }
     }
 
     private var hasSourceBox: Bool {

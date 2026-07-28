@@ -378,6 +378,15 @@ struct LocalProcessingProviderTests {
         coordinator.selectStructuredBlock(firstOverlay.id)
         #expect(coordinator.selectedStructuredBlockID == firstOverlay.id)
         #expect(coordinator.showsPDFBoundingBoxes)
+        coordinator.hoverStructuredBlock(firstOverlay.id, isHovering: true)
+        #expect(coordinator.hoveredStructuredBlockID == firstOverlay.id)
+        #expect(coordinator.previewHoveredStructuredBlockID == firstOverlay.id)
+        coordinator.hoverStructuredBlock(firstOverlay.id, isHovering: false)
+        coordinator.hoverPDFOverlay(firstOverlay.id)
+        #expect(coordinator.hoveredStructuredBlockID == firstOverlay.id)
+        #expect(coordinator.previewHoveredStructuredBlockID == nil)
+        coordinator.hoverPDFOverlay(nil)
+        #expect(coordinator.hoveredStructuredBlockID == nil)
 
         let runDirectory = workspace.runsRoot.appendingPathComponent(run.id, isDirectory: true)
         #expect(FileManager.default.fileExists(atPath: runDirectory.appendingPathComponent("run.json").path))
@@ -429,8 +438,8 @@ struct LocalProcessingProviderTests {
         #expect(reopened.selectedStructuredBlockID == nil)
     }
 
-    @Test("Apple Vision writes Markdown for a single-page PDF", .timeLimit(.minutes(1)))
-    func appleVisionWritesMarkdownForSinglePagePDF() async throws {
+    @Test("Apple Vision writes structured native-text boxes and exposes hover state", .timeLimit(.minutes(1)))
+    func appleVisionWritesStructuredNativeTextBoxes() async throws {
         let workspace = try TestWorkspace(prefix: "okra-vision")
         try FileManager.default.createDirectory(at: workspace.root, withIntermediateDirectories: true)
 
@@ -440,8 +449,15 @@ struct LocalProcessingProviderTests {
         label.frame = NSRect(x: 72, y: 640, width: 468, height: 60)
         page.addSubview(label)
         let pdfData = page.dataWithPDF(inside: page.bounds)
+        let sourceDocument = try #require(PDFDocument(data: pdfData))
+        let sourcePage = try #require(sourceDocument.page(at: 0))
+        sourcePage.setBounds(
+            CGRect(x: 40, y: 40, width: 532, height: 700),
+            for: .cropBox
+        )
+        sourcePage.rotation = 90
         let pdfURL = workspace.root.appendingPathComponent("sample.pdf")
-        try pdfData.write(to: pdfURL)
+        try #require(sourceDocument.dataRepresentation()).write(to: pdfURL)
 
         let result = try await AppleVisionProcessingProvider().process(
             request: LocalProcessingRequest(
@@ -458,6 +474,33 @@ struct LocalProcessingProviderTests {
         #expect(markdown.contains("# sample.pdf"))
         #expect(markdown.contains("## Page 1"))
         #expect(markdown.contains("Local extraction sample"))
+        let structuredOutputURL = try #require(result.structuredOutputURL)
+        let structuredDocument = try StructuredExtractionDocument.load(from: structuredOutputURL)
+        let structuredPage = try #require(structuredDocument.pages.first)
+        let structuredBlock = try #require(structuredPage.blocks.first)
+        let bbox = try #require(structuredBlock.bbox)
+        #expect(structuredDocument.provider.id == "apple-vision")
+        #expect(structuredDocument.complete)
+        #expect(structuredBlock.sourceType == "pdf-text-line")
+        #expect(structuredPage.blocks.allSatisfy { $0.bbox?.clippedNormalizedRect != nil })
+
+        let reopenedSource = try #require(PDFDocument(url: pdfURL))
+        let reopenedPage = try #require(reopenedSource.page(at: 0))
+        let characterCount = (reopenedPage.string as NSString?)?.length ?? 0
+        let selection = try #require(
+            reopenedPage.selection(for: NSRange(location: 0, length: characterCount))?
+                .selectionsByLine()
+                .first
+        )
+        let expectedPageBounds = selection.bounds(for: reopenedPage)
+            .intersection(reopenedPage.bounds(for: .cropBox))
+        let actualPageBounds = try #require(
+            PDFBoundingBoxGeometry.pageBounds(for: bbox, on: reopenedPage)
+        )
+        #expect(abs(actualPageBounds.minX - expectedPageBounds.minX) < 0.001)
+        #expect(abs(actualPageBounds.minY - expectedPageBounds.minY) < 0.001)
+        #expect(abs(actualPageBounds.width - expectedPageBounds.width) < 0.001)
+        #expect(abs(actualPageBounds.height - expectedPageBounds.height) < 0.001)
         let pageStore = LocalPageCheckpointStore(
             outputDirectory: workspace.root.appendingPathComponent("output", isDirectory: true),
             totalPages: 1,
@@ -467,6 +510,53 @@ struct LocalProcessingProviderTests {
         #expect(pageManifest.completedPageCount == 1)
         #expect(pageManifest.currentPageStatus == .succeeded)
         #expect(FileManager.default.fileExists(atPath: pageStore.pageURL(pageNumber: 1).path))
+        #expect(
+            FileManager.default.fileExists(
+                atPath: pageStore.pageURL(pageNumber: 1)
+                    .deletingPathExtension()
+                    .appendingPathExtension("json")
+                    .path
+            )
+        )
+
+        let provider = AppleVisionProcessingProvider()
+        let coordinator = LocalProcessingCoordinator(
+            providers: [provider],
+            runsRoot: workspace.runsRoot,
+            userDefaults: workspace.defaults
+        )
+        let localDocument = LocalPDFDocument(
+            id: pdfURL.path,
+            fileName: pdfURL.lastPathComponent,
+            filePath: pdfURL.path,
+            totalPages: 1
+        )
+        coordinator.load(document: localDocument)
+        coordinator.run(document: localDocument)
+        try await waitUntil("Apple Vision parsing to finish") { coordinator.isRunning == false }
+
+        let overlay = try #require(coordinator.pdfBoundingBoxOverlays.first)
+        #expect(coordinator.latestRun?.providerId == "apple-vision")
+        #expect(coordinator.structuredOutput?.provider.id == "apple-vision")
+
+        coordinator.showsPDFBoundingBoxes = false
+        coordinator.hoverStructuredBlock(overlay.id, isHovering: true)
+        #expect(coordinator.hoveredStructuredBlockID == overlay.id)
+        #expect(coordinator.previewHoveredStructuredBlockID == overlay.id)
+        #expect(coordinator.showsPDFBoundingBoxes == false)
+        coordinator.hoverStructuredBlock(overlay.id, isHovering: false)
+        #expect(coordinator.hoveredStructuredBlockID == nil)
+
+        coordinator.showsPDFBoundingBoxes = true
+        coordinator.hoverPDFOverlay(overlay.id)
+        #expect(coordinator.hoveredStructuredBlockID == overlay.id)
+        #expect(coordinator.previewHoveredStructuredBlockID == nil)
+        coordinator.showsPDFBoundingBoxes = false
+        #expect(coordinator.hoveredStructuredBlockID == nil)
+
+        coordinator.selectStructuredBlock(overlay.id)
+        #expect(coordinator.selectedStructuredBlockID == overlay.id)
+        #expect(coordinator.showsPDFBoundingBoxes)
     }
 
     private func makePDF(pageTexts: [String]) throws -> Data {

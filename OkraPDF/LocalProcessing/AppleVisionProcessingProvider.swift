@@ -23,11 +23,23 @@ final class AppleVisionProcessingProvider: LocalProcessingProvider, @unchecked S
                 documentHeader: "# \(request.fileName)"
             )
             try pageStore.prepare()
+            let structuredOutputURL = request.outputDirectory.appendingPathComponent("result.json")
+            var structuredPages: [StructuredExtractionPage] = []
 
             for index in 0..<document.pageCount {
                 try Task.checkCancellation()
                 let pageNumber = index + 1
-                if try pageStore.status(pageNumber: pageNumber) == .succeeded {
+                let structuredPageURL = pageStore.pageURL(pageNumber: pageNumber)
+                    .deletingPathExtension()
+                    .appendingPathExtension("json")
+                if try pageStore.status(pageNumber: pageNumber) == .succeeded,
+                   let restoredPage = try? StructuredExtractionPage.load(from: structuredPageURL) {
+                    structuredPages.append(restoredPage)
+                    try Self.structuredDocument(
+                        title: request.fileName,
+                        pageCount: document.pageCount,
+                        pages: structuredPages
+                    ).write(to: structuredOutputURL)
                     let manifest = try pageStore.reconcileCompletedPages()
                     request.pageProgress(
                         LocalPageProgressUpdate(
@@ -51,13 +63,16 @@ final class AppleVisionProcessingProvider: LocalProcessingProvider, @unchecked S
 
                     let nativeText = page.string?
                         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                    let text: String
-                    if nativeText.count >= 20 {
+                    let structuredPage: StructuredExtractionPage
+                    if nativeText.isEmpty == false {
                         progress(
                             Double(index) / Double(document.pageCount),
                             "Reading page \(pageNumber) of \(document.pageCount)"
                         )
-                        text = nativeText
+                        structuredPage = AppleVisionStructuredExtractor.nativePage(
+                            from: page,
+                            pageNumber: pageNumber
+                        )
                     } else {
                         progress(
                             Double(index) / Double(document.pageCount),
@@ -73,14 +88,22 @@ final class AppleVisionProcessingProvider: LocalProcessingProvider, @unchecked S
                         recognition.usesLanguageCorrection = true
                         let handler = VNImageRequestHandler(cgImage: image, options: [:])
                         try handler.perform([recognition])
-                        text = (recognition.results ?? [])
-                            .compactMap { $0.topCandidates(1).first?.string }
-                            .joined(separator: "\n")
+                        structuredPage = AppleVisionStructuredExtractor.scannedPage(
+                            from: recognition.results ?? [],
+                            pageNumber: pageNumber
+                        )
                     }
+                    try structuredPage.write(to: structuredPageURL)
                     try pageStore.writePage(
                         pageNumber: pageNumber,
-                        markdown: "## Page \(pageNumber)\n\n\(text)"
+                        markdown: "## Page \(pageNumber)\n\n\(structuredPage.markdown)"
                     )
+                    structuredPages.append(structuredPage)
+                    try Self.structuredDocument(
+                        title: request.fileName,
+                        pageCount: document.pageCount,
+                        pages: structuredPages
+                    ).write(to: structuredOutputURL)
                     let manifest = try pageStore.reconcileCompletedPages()
                     request.pageProgress(
                         LocalPageProgressUpdate(
@@ -100,8 +123,17 @@ final class AppleVisionProcessingProvider: LocalProcessingProvider, @unchecked S
             }
 
             let outputURL = try pageStore.assembleResult()
+            try Self.structuredDocument(
+                title: request.fileName,
+                pageCount: document.pageCount,
+                pages: structuredPages
+            ).write(to: structuredOutputURL)
             progress(1, "Extraction complete")
-            return LocalProcessingResult(outputURL: outputURL, pageCount: document.pageCount)
+            return LocalProcessingResult(
+                outputURL: outputURL,
+                pageCount: document.pageCount,
+                structuredOutputURL: structuredOutputURL
+            )
         }
 
         return try await withTaskCancellationHandler {
@@ -109,5 +141,27 @@ final class AppleVisionProcessingProvider: LocalProcessingProvider, @unchecked S
         } onCancel: {
             worker.cancel()
         }
+    }
+
+    private static func structuredDocument(
+        title: String,
+        pageCount: Int,
+        pages: [StructuredExtractionPage]
+    ) -> StructuredExtractionDocument {
+        let orderedPages = pages.sorted { $0.pageNumber < $1.pageNumber }
+        return StructuredExtractionDocument(
+            schemaVersion: 1,
+            object: "local_extraction",
+            provider: StructuredExtractionProvider(
+                id: LocalProviderID.appleVision.rawValue,
+                name: "Apple Vision"
+            ),
+            title: title,
+            pageCount: pageCount,
+            completedPageCount: orderedPages.count,
+            complete: orderedPages.count == pageCount,
+            simulation: false,
+            pages: orderedPages
+        )
     }
 }

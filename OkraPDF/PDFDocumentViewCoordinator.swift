@@ -2,6 +2,7 @@ import PDFKit
 
 final class PDFDocumentViewCoordinator {
     var onOverlaySelection: (String) -> Void
+    var onOverlayHover: (String?) -> Void
 
     private weak var pdfView: PDFBoundingBoxView?
     private weak var renderedDocument: PDFDocument?
@@ -9,9 +10,20 @@ final class PDFDocumentViewCoordinator {
     private var annotationsByOverlayID: [String: PDFAnnotation] = [:]
     private var overlaysByID: [String: PDFBoundingBoxOverlay] = [:]
     private var selectedOverlayID: String?
+    private var hoveredOverlayID: String?
+    private var pointerOverlayID: String?
 
     init(onOverlaySelection: @escaping (String) -> Void) {
         self.onOverlaySelection = onOverlaySelection
+        onOverlayHover = { _ in }
+    }
+
+    init(
+        onOverlaySelection: @escaping (String) -> Void,
+        onOverlayHover: @escaping (String?) -> Void
+    ) {
+        self.onOverlaySelection = onOverlaySelection
+        self.onOverlayHover = onOverlayHover
     }
 
     func connect(to pdfView: PDFBoundingBoxView) {
@@ -19,12 +31,16 @@ final class PDFDocumentViewCoordinator {
         pdfView.handleOverlayClick = { [weak self] page, point in
             self?.handleOverlayClick(on: page, at: point) ?? false
         }
+        pdfView.handleOverlayHover = { [weak self] page, point in
+            self?.handleOverlayHover(on: page, at: point)
+        }
     }
 
     func synchronize(
         document: PDFDocument?,
         overlays: [PDFBoundingBoxOverlay],
-        selectedOverlayID: String?
+        selectedOverlayID: String?,
+        hoveredOverlayID: String? = nil
     ) {
         guard let pdfView, let document else {
             removeManagedAnnotations()
@@ -38,9 +54,14 @@ final class PDFDocumentViewCoordinator {
             rebuildAnnotations(overlays: overlays, in: document, pdfView: pdfView)
         }
 
-        let selectionChanged = self.selectedOverlayID != selectedOverlayID
-        if selectionChanged || documentChanged || overlaysChanged {
-            updateSelection(selectedOverlayID, in: pdfView)
+        let highlightingChanged = self.selectedOverlayID != selectedOverlayID
+            || self.hoveredOverlayID != hoveredOverlayID
+        if highlightingChanged || documentChanged || overlaysChanged {
+            updateHighlighting(
+                selectedOverlayID: selectedOverlayID,
+                hoveredOverlayID: hoveredOverlayID,
+                in: pdfView
+            )
         }
 
         renderedDocument = document
@@ -61,6 +82,8 @@ final class PDFDocumentViewCoordinator {
         overlaysByID.removeAll()
         renderedOverlays.removeAll()
         selectedOverlayID = nil
+        hoveredOverlayID = nil
+        pointerOverlayID = nil
     }
 
     private func rebuildAnnotations(
@@ -76,7 +99,8 @@ final class PDFDocumentViewCoordinator {
                   let annotation = PDFBoundingBoxAnnotationFactory.make(
                       overlay: overlay,
                       on: page,
-                      selected: overlay.id == selectedOverlayID
+                      selected: overlay.id == selectedOverlayID,
+                      hovered: overlay.id == hoveredOverlayID
                   ) else {
                 continue
             }
@@ -90,9 +114,17 @@ final class PDFDocumentViewCoordinator {
         }
     }
 
-    private func updateSelection(_ newSelection: String?, in pdfView: PDFBoundingBoxView) {
-        let changedIDs = Set([selectedOverlayID, newSelection].compactMap { $0 })
+    private func updateHighlighting(
+        selectedOverlayID newSelection: String?,
+        hoveredOverlayID newHover: String?,
+        in pdfView: PDFBoundingBoxView
+    ) {
+        let selectionChanged = selectedOverlayID != newSelection
+        let changedIDs = Set(
+            [selectedOverlayID, hoveredOverlayID, newSelection, newHover].compactMap { $0 }
+        )
         selectedOverlayID = newSelection
+        hoveredOverlayID = newHover
 
         for id in changedIDs {
             guard let annotation = annotationsByOverlayID[id],
@@ -102,14 +134,16 @@ final class PDFDocumentViewCoordinator {
             PDFBoundingBoxAnnotationFactory.applyStyle(
                 to: annotation,
                 label: overlay.label,
-                selected: id == newSelection
+                selected: id == newSelection,
+                hovered: id == newHover
             )
             if let page = annotation.page {
                 pdfView.annotationsChanged(on: page)
             }
         }
 
-        guard let newSelection,
+        guard selectionChanged,
+              let newSelection,
               let annotation = annotationsByOverlayID[newSelection],
               let page = annotation.page else {
             return
@@ -118,15 +152,32 @@ final class PDFDocumentViewCoordinator {
     }
 
     func handleOverlayClick(on page: PDFPage, at point: CGPoint) -> Bool {
-        let hit = annotationsByOverlayID
+        guard let overlayID = overlayID(on: page, at: point) else { return false }
+        onOverlaySelection(overlayID)
+        return true
+    }
+
+    @discardableResult
+    func handleOverlayHover(on page: PDFPage?, at point: CGPoint?) -> String? {
+        let overlayID: String? = if let page, let point {
+            overlayID(on: page, at: point)
+        } else {
+            nil
+        }
+        guard pointerOverlayID != overlayID else { return overlayID }
+        pointerOverlayID = overlayID
+        onOverlayHover(overlayID)
+        return overlayID
+    }
+
+    private func overlayID(on page: PDFPage, at point: CGPoint) -> String? {
+        annotationsByOverlayID
             .filter { $0.value.page === page && $0.value.bounds.contains(point) }
             .min { left, right in
                 let leftArea = left.value.bounds.width * left.value.bounds.height
                 let rightArea = right.value.bounds.width * right.value.bounds.height
                 return leftArea < rightArea
-            }
-        guard let overlayID = hit?.key else { return false }
-        onOverlaySelection(overlayID)
-        return true
+            }?
+            .key
     }
 }

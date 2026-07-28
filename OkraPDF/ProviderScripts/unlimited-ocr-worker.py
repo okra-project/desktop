@@ -96,15 +96,23 @@ def canonical_category(raw_category: str) -> str:
     return CATEGORY_ALIASES.get(normalized, normalized)
 
 
+def bbox_scale(values: list[float]) -> int:
+    # Unlimited-OCR's native layout space is 0...1000, but compatible model
+    # conversions can emit already-normalized coordinates. Preserve both
+    # contracts instead of shrinking normalized boxes by another factor of 1000.
+    return 1 if all(abs(value) <= 1.0 for value in values) else 1000
+
+
 def normalized_bbox(values: list[float]) -> dict[str, float | str]:
-    x1, y1, x2, y2 = [min(max(value, 0.0), 1000.0) for value in values]
+    scale = bbox_scale(values)
+    x1, y1, x2, y2 = [min(max(value, 0.0), float(scale)) for value in values]
     left, right = sorted((x1, x2))
     top, bottom = sorted((y1, y2))
     return {
-        "x": round(left / 1000.0, 6),
-        "y": round(top / 1000.0, 6),
-        "width": round((right - left) / 1000.0, 6),
-        "height": round((bottom - top) / 1000.0, 6),
+        "x": round(left / scale, 6),
+        "y": round(top / scale, 6),
+        "width": round((right - left) / scale, 6),
+        "height": round((bottom - top) / scale, 6),
         "unit": "normalized",
         "origin": "top-left",
     }
@@ -192,7 +200,7 @@ def parse_model_output(
             "sourceBbox": [round(value, 3) for value in source_bbox]
             if source_bbox
             else None,
-            "sourceBboxScale": 1000 if source_bbox else None,
+            "sourceBboxScale": bbox_scale(source_bbox) if source_bbox else None,
         }
         blocks.append(block)
 

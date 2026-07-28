@@ -1,10 +1,8 @@
 import Foundation
 
 extension StructuredExtractionDocument {
-    var unlimitedOCRPDFOverlays: [PDFBoundingBoxOverlay] {
-        guard provider.id == LocalProviderID.unlimitedOCR.rawValue else { return [] }
-
-        return pages.flatMap { page -> [PDFBoundingBoxOverlay] in
+    var pdfBoundingBoxOverlays: [PDFBoundingBoxOverlay] {
+        pages.flatMap { page -> [PDFBoundingBoxOverlay] in
             guard page.pageNumber > 0, page.pageNumber <= pageCount else { return [] }
 
             return page.blocks.compactMap { block in
@@ -12,6 +10,7 @@ extension StructuredExtractionDocument {
 
                 return PDFBoundingBoxOverlay(
                     id: block.id,
+                    providerName: provider.name,
                     pageNumber: page.pageNumber,
                     label: block.overlayLabel,
                     text: block.displayText,

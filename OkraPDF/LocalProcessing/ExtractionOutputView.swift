@@ -32,20 +32,19 @@ struct ExtractionOutputView: View {
                             StructuredExtractionPreview(
                                 document: document,
                                 selectedBlockID: coordinator.selectedStructuredBlockID,
-                                selectBlock: coordinator.selectStructuredBlock
+                                hoveredBlockID: coordinator.hoveredStructuredBlockID,
+                                selectBlock: coordinator.selectStructuredBlock,
+                                hoverBlock: coordinator.hoverStructuredBlock
                             )
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(WorkspaceTheme.standardSpacing)
                         }
                         .onReceive(coordinator.$selectedStructuredBlockID.removeDuplicates()) { id in
-                            guard let id else { return }
-                            if reduceMotion {
-                                proxy.scrollTo(id, anchor: .center)
-                            } else {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    proxy.scrollTo(id, anchor: .center)
-                                }
-                            }
+                            scroll(to: id, using: proxy)
+                        }
+                        .onReceive(coordinator.$hoveredStructuredBlockID.removeDuplicates()) { id in
+                            guard coordinator.structuredBlockHoverSource == .pdf else { return }
+                            scroll(to: id, using: proxy)
                         }
                     }
                 } else {
@@ -103,6 +102,17 @@ struct ExtractionOutputView: View {
             coordinator.revealStructuredOutput()
         } else {
             coordinator.revealOutput()
+        }
+    }
+
+    private func scroll(to id: String?, using proxy: ScrollViewProxy) {
+        guard let id else { return }
+        if reduceMotion {
+            proxy.scrollTo(id, anchor: .center)
+        } else {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                proxy.scrollTo(id, anchor: .center)
+            }
         }
     }
 }

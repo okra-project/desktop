@@ -1,6 +1,44 @@
 import CoreGraphics
 
 extension StructuredExtractionBoundingBox {
+    static func normalizedTopLeft(rect: CGRect) -> StructuredExtractionBoundingBox? {
+        guard rect.origin.x.isFinite,
+              rect.origin.y.isFinite,
+              rect.width.isFinite,
+              rect.height.isFinite else {
+            return nil
+        }
+
+        let bbox = StructuredExtractionBoundingBox(
+            x: rect.minX,
+            y: rect.minY,
+            width: rect.width,
+            height: rect.height,
+            unit: "normalized",
+            origin: "top-left"
+        )
+        guard let clippedRect = bbox.clippedNormalizedRect else { return nil }
+        return StructuredExtractionBoundingBox(
+            x: clippedRect.minX,
+            y: clippedRect.minY,
+            width: clippedRect.width,
+            height: clippedRect.height,
+            unit: "normalized",
+            origin: "top-left"
+        )
+    }
+
+    static func visionNormalizedBottomLeft(rect: CGRect) -> StructuredExtractionBoundingBox? {
+        normalizedTopLeft(
+            rect: CGRect(
+                x: rect.minX,
+                y: 1 - rect.maxY,
+                width: rect.width,
+                height: rect.height
+            )
+        )
+    }
+
     var clippedNormalizedRect: CGRect? {
         guard unit == "normalized",
               origin == "top-left",

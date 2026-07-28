@@ -3,7 +3,9 @@ import SwiftUI
 struct StructuredExtractionPreview: View {
     let document: StructuredExtractionDocument
     let selectedBlockID: String?
+    let hoveredBlockID: String?
     let selectBlock: (String) -> Void
+    let hoverBlock: (String, Bool) -> Void
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: WorkspaceTheme.sectionSpacing) {
@@ -25,7 +27,9 @@ struct StructuredExtractionPreview: View {
                             block: block,
                             pageNumber: page.pageNumber,
                             isSelected: block.id == selectedBlockID,
-                            selectBlock: selectBlock
+                            isHovered: block.id == hoveredBlockID,
+                            selectBlock: selectBlock,
+                            hoverBlock: hoverBlock
                         )
                         .id(block.id)
                     }

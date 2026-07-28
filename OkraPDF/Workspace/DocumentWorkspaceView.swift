@@ -24,7 +24,10 @@ struct DocumentWorkspaceView: View {
                         overlays: coordinator.pdfBoundingBoxOverlays,
                         showsOverlays: coordinator.showsPDFBoundingBoxes,
                         selectedOverlayID: coordinator.selectedStructuredBlockID,
-                        onOverlaySelection: coordinator.selectStructuredBlock
+                        hoveredOverlayID: coordinator.hoveredStructuredBlockID,
+                        transientOverlayID: coordinator.previewHoveredStructuredBlockID,
+                        onOverlaySelection: coordinator.selectStructuredBlock,
+                        onOverlayHover: coordinator.hoverPDFOverlay
                     )
                     DropTargetOverlayView(isVisible: isDropTargeted)
                 }

@@ -17,6 +17,12 @@ struct StructuredExtractionDocument: Codable, Equatable, Sendable {
             from: Data(contentsOf: url)
         )
     }
+
+    func write(to url: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(self).write(to: url, options: .atomic)
+    }
 }
 
 struct StructuredExtractionProvider: Codable, Equatable, Sendable {
@@ -33,6 +39,19 @@ struct StructuredExtractionPage: Codable, Equatable, Identifiable, Sendable {
     let plainText: String
     let blocks: [StructuredExtractionBlock]
     let diagnostics: StructuredExtractionDiagnostics
+
+    static func load(from url: URL) throws -> StructuredExtractionPage {
+        try JSONDecoder().decode(
+            StructuredExtractionPage.self,
+            from: Data(contentsOf: url)
+        )
+    }
+
+    func write(to url: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(self).write(to: url, options: .atomic)
+    }
 }
 
 struct StructuredExtractionBlock: Codable, Equatable, Identifiable, Sendable {

@@ -54,6 +54,7 @@ struct StructuredExtractionOutputTests {
         #expect(document.complete)
         #expect(block.type == "title")
         #expect(block.sourceBbox == [10, 20, 300, 50])
+        #expect(block.sourceBboxScale == 1000)
         #expect(bbox.width == 0.29)
         #expect(bbox.origin == "top-left")
         #expect(bbox.compactLabel == "x 1% · y 2% · 29% × 3%")
@@ -75,5 +76,78 @@ struct StructuredExtractionOutputTests {
         #expect(block.displayText.contains("Item  |  Total"))
         #expect(block.displayText.contains("Fee  |  $49"))
         #expect(block.displayText.contains("<table>") == false)
+    }
+
+    @Test("Apple Vision observations become top-left normalized structured blocks")
+    func appleVisionObservationsBecomeStructuredBlocks() throws {
+        let page = AppleVisionStructuredExtractor.scannedPage(
+            from: [
+                AppleVisionStructuredExtractor.RecognizedLine(
+                    text: "Top line",
+                    normalizedBottomLeftBounds: CGRect(
+                        x: 0.2,
+                        y: 0.7,
+                        width: 0.3,
+                        height: 0.1
+                    )
+                ),
+                AppleVisionStructuredExtractor.RecognizedLine(
+                    text: "Bottom line",
+                    normalizedBottomLeftBounds: CGRect(
+                        x: 0.1,
+                        y: 0.05,
+                        width: 0.5,
+                        height: 0.08
+                    )
+                ),
+            ],
+            pageNumber: 2
+        )
+
+        #expect(page.pageNumber == 2)
+        #expect(page.markdown == "Top line\nBottom line")
+        #expect(page.blocks.map(\.id) == ["page-2-block-1", "page-2-block-2"])
+        #expect(page.blocks.allSatisfy { $0.sourceType == "vision-text-observation" })
+        #expect(page.blocks.allSatisfy { $0.sourceBboxScale == 1 })
+
+        let topBox = try #require(page.blocks.first?.bbox)
+        #expect(abs(topBox.x - 0.2) < 0.000_001)
+        #expect(abs(topBox.y - 0.2) < 0.000_001)
+        #expect(abs(topBox.width - 0.3) < 0.000_001)
+        #expect(abs(topBox.height - 0.1) < 0.000_001)
+    }
+
+    @Test("Apple Vision structured documents persist in the shared result shape")
+    func appleVisionDocumentRoundTrips() throws {
+        let workspace = try TestWorkspace(prefix: "okra-vision-structured")
+        try FileManager.default.createDirectory(at: workspace.root, withIntermediateDirectories: true)
+        let page = AppleVisionStructuredExtractor.scannedPage(
+            from: [
+                AppleVisionStructuredExtractor.RecognizedLine(
+                    text: "Receipt total",
+                    normalizedBottomLeftBounds: CGRect(x: 0.1, y: 0.1, width: 0.4, height: 0.1)
+                )
+            ],
+            pageNumber: 1
+        )
+        let document = StructuredExtractionDocument(
+            schemaVersion: 1,
+            object: "local_extraction",
+            provider: StructuredExtractionProvider(id: "apple-vision", name: "Apple Vision"),
+            title: "receipt.pdf",
+            pageCount: 1,
+            completedPageCount: 1,
+            complete: true,
+            simulation: false,
+            pages: [page]
+        )
+        let url = workspace.root.appendingPathComponent("result.json")
+
+        try document.write(to: url)
+        let restored = try StructuredExtractionDocument.load(from: url)
+
+        #expect(restored == document)
+        #expect(restored.pdfBoundingBoxOverlays.map(\.id) == ["page-1-block-1"])
+        #expect(restored.pdfBoundingBoxOverlays.first?.providerName == "Apple Vision")
     }
 }

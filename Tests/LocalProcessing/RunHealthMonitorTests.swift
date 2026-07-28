@@ -4,8 +4,6 @@ import Testing
 
 @MainActor
 struct RunHealthMonitorTests {
-    private static let oneGiB: UInt64 = 1 << 30
-
     private func makeDocument(in workspace: TestWorkspace) throws -> LocalPDFDocument {
         try FileManager.default.createDirectory(at: workspace.root, withIntermediateDirectories: true)
         let sourceURL = workspace.root.appendingPathComponent("slow.pdf")
@@ -33,8 +31,8 @@ struct RunHealthMonitorTests {
             memorySampler: {
                 SystemMemoryStatus(
                     freeBytes: 300 * 1_000_000,
-                    swapUsedBytes: 11 * Self.oneGiB,
-                    swapTotalBytes: 12 * Self.oneGiB
+                    swapUsedBytes: 11 * UInt64(1 << 30),
+                    swapTotalBytes: 12 * UInt64(1 << 30)
                 )
             },
             stallThreshold: 0.3,
@@ -70,9 +68,9 @@ struct RunHealthMonitorTests {
             userDefaults: workspace.defaults,
             memorySampler: {
                 SystemMemoryStatus(
-                    freeBytes: 8 * Self.oneGiB,
+                    freeBytes: 8 * UInt64(1 << 30),
                     swapUsedBytes: 0,
-                    swapTotalBytes: 4 * Self.oneGiB
+                    swapTotalBytes: 4 * UInt64(1 << 30)
                 )
             },
             stallThreshold: 0.3,
