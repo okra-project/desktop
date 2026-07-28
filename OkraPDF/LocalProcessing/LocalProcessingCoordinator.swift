@@ -21,6 +21,8 @@ final class LocalProcessingCoordinator: ObservableObject {
     @Published private(set) var latestRun: LocalProcessingRun?
     @Published private(set) var recentRuns: [LocalProcessingRun] = []
     @Published private(set) var outputText = ""
+    @Published private(set) var structuredOutputText = ""
+    @Published private(set) var structuredOutput: StructuredExtractionDocument?
     @Published private(set) var progress = 0.0
     @Published private(set) var completedPageCount = 0
     @Published private(set) var totalPageCount = 0
@@ -88,11 +90,18 @@ final class LocalProcessingCoordinator: ObservableObject {
         return URL(fileURLWithPath: outputPath)
     }
 
+    var structuredOutputURL: URL? {
+        guard let structuredOutputPath = latestRun?.structuredOutputPath else { return nil }
+        return URL(fileURLWithPath: structuredOutputPath)
+    }
+
     func load(document: LocalPDFDocument) {
         currentSourcePath = document.filePath
         currentFileName = document.fileName
         latestRun = nil
         outputText = ""
+        structuredOutputText = ""
+        structuredOutput = nil
         progress = 0
         completedPageCount = 0
         totalPageCount = document.totalPages
@@ -183,6 +192,7 @@ final class LocalProcessingCoordinator: ObservableObject {
             executionMode: provider.availability().isSimulated ? "simulation" : "local",
             status: "running",
             outputPath: nil,
+            structuredOutputPath: nil,
             errorMessage: nil,
             pageCount: 0,
             completedPageCount: 0,
@@ -204,6 +214,8 @@ final class LocalProcessingCoordinator: ObservableObject {
         currentFileName = document.fileName
         latestRun = run
         outputText = ""
+        structuredOutputText = ""
+        structuredOutput = nil
         progress = 0
         completedPageCount = 0
         totalPageCount = document.totalPages
@@ -251,6 +263,7 @@ final class LocalProcessingCoordinator: ObservableObject {
                 }
                 run.status = "succeeded"
                 run.outputPath = result.outputURL.path
+                run.structuredOutputPath = result.structuredOutputURL?.path
                 run.pageCount = result.pageCount
                 run.completedPageCount = result.pageCount
                 run.totalPageCount = max(document.totalPages, result.pageCount)
@@ -266,7 +279,7 @@ final class LocalProcessingCoordinator: ObservableObject {
                     statusMessage = provider.availability().isSimulated
                         ? "Simulation complete · model weights were not loaded."
                         : "Parsed locally with \(provider.descriptor.name)."
-                    loadOutputText()
+                    loadOutputs()
                 }
             } catch {
                 if let trackedRun = latestRun, trackedRun.id == runID {
@@ -307,7 +320,7 @@ final class LocalProcessingCoordinator: ObservableObject {
         statusMessage = run.status == "succeeded"
             ? "Parsed locally with \(run.providerName)."
             : run.errorMessage ?? "This run did not finish."
-        loadOutputText()
+        loadOutputs()
     }
 
     func refreshRecentRuns() {
@@ -337,11 +350,23 @@ final class LocalProcessingCoordinator: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([outputURL])
     }
 
+    func revealStructuredOutput() {
+        guard let structuredOutputURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([structuredOutputURL])
+    }
+
     func copyOutput() {
         guard !outputText.isEmpty else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(outputText, forType: .string)
         statusMessage = "Copied Markdown."
+    }
+
+    func copyStructuredOutput() {
+        guard !structuredOutputText.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(structuredOutputText, forType: .string)
+        statusMessage = "Copied structured JSON."
     }
 
     func saveOutputAs() {
@@ -364,6 +389,26 @@ final class LocalProcessingCoordinator: ObservableObject {
         }
     }
 
+    func saveStructuredOutputAs() {
+        guard !structuredOutputText.isEmpty else { return }
+
+        let panel = NSSavePanel()
+        panel.title = "Save Structured Extraction"
+        panel.prompt = "Save"
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "\(URL(fileURLWithPath: currentFileName).deletingPathExtension().lastPathComponent).json"
+
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+
+        do {
+            try structuredOutputText.write(to: destination, atomically: true, encoding: .utf8)
+            statusMessage = "Saved structured JSON."
+        } catch {
+            statusMessage = "Could not save structured JSON: \(error.localizedDescription)"
+        }
+    }
+
     private func provider(for id: LocalProviderID) -> (any LocalProcessingProvider)? {
         providers.first { $0.descriptor.id == id }
     }
@@ -376,11 +421,21 @@ final class LocalProcessingCoordinator: ObservableObject {
         try data.write(to: runDirectory.appendingPathComponent("run.json"), options: .atomic)
     }
 
-    private func loadOutputText() {
+    private func loadOutputs() {
         guard let outputURL else {
             outputText = ""
+            structuredOutputText = ""
+            structuredOutput = nil
             return
         }
         outputText = (try? String(contentsOf: outputURL, encoding: .utf8)) ?? ""
+
+        guard let structuredOutputURL else {
+            structuredOutputText = ""
+            structuredOutput = nil
+            return
+        }
+        structuredOutputText = (try? String(contentsOf: structuredOutputURL, encoding: .utf8)) ?? ""
+        structuredOutput = try? StructuredExtractionDocument.load(from: structuredOutputURL)
     }
 }

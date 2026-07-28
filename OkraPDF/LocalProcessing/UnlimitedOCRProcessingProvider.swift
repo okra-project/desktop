@@ -188,8 +188,16 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
                 )
             }
             _ = try pageStore.assembleResult()
+            let structuredOutputURL = outputURL.deletingPathExtension().appendingPathExtension("json")
+            guard FileManager.default.fileExists(atPath: structuredOutputURL.path) else {
+                throw LocalProcessingError.missingOutput("Baidu Unlimited-OCR structured JSON")
+            }
             progress(1, runtime.isSimulation ? "Simulation complete" : "Extraction complete")
-            return LocalProcessingResult(outputURL: outputURL, pageCount: pageURLs.count)
+            return LocalProcessingResult(
+                outputURL: outputURL,
+                pageCount: pageURLs.count,
+                structuredOutputURL: structuredOutputURL
+            )
         }.value
     }
 }

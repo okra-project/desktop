@@ -265,10 +265,16 @@ struct LocalProcessingProviderTests {
         #expect(coordinator.outputText.contains("HF_DATASETS_OFFLINE=1"))
         #expect(coordinator.outputText.contains("## Page 1"))
         #expect(coordinator.outputText.contains("## Page \(expectedPageCount)"))
+        #expect(coordinator.structuredOutput?.provider.id == "unlimited-ocr")
+        #expect(coordinator.structuredOutput?.pageCount == expectedPageCount)
+        #expect(coordinator.structuredOutput?.completedPageCount == expectedPageCount)
+        #expect(coordinator.structuredOutput?.complete == true)
+        #expect(coordinator.structuredOutput?.simulation == true)
 
         let runDirectory = workspace.runsRoot.appendingPathComponent(run.id, isDirectory: true)
         #expect(FileManager.default.fileExists(atPath: runDirectory.appendingPathComponent("run.json").path))
         #expect(FileManager.default.fileExists(atPath: runDirectory.appendingPathComponent("result.md").path))
+        #expect(FileManager.default.fileExists(atPath: runDirectory.appendingPathComponent("result.json").path))
         #expect(
             FileManager.default.fileExists(
                 atPath: runDirectory.appendingPathComponent("pages/page-0001.png").path
@@ -302,6 +308,7 @@ struct LocalProcessingProviderTests {
         let persisted = try decoder.decode(LocalProcessingRun.self, from: manifestData)
         #expect(persisted.executionMode == "simulation")
         #expect(persisted.status == "succeeded")
+        #expect(persisted.structuredOutputPath == runDirectory.appendingPathComponent("result.json").path)
     }
 
     @Test("Apple Vision writes Markdown for a single-page PDF", .timeLimit(.minutes(1)))
