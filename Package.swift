@@ -16,7 +16,8 @@ let package = Package(
             path: "OkraPDF",
             resources: [
                 .copy("AppIcon.png"),
-                .copy("ProviderScripts")
+                .copy("ProviderScripts"),
+                .copy("PluginScripts")
             ]
         ),
         .testTarget(

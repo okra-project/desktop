@@ -20,6 +20,7 @@ struct ContentView: View {
                 registry: state.workspaceTools,
                 selectedToolID: $state.selectedWorkspaceToolID,
                 coordinator: state.localProcessing,
+                plugins: state.localPlugins,
                 openPDF: state.openPDFPicker
             )
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
@@ -38,6 +39,7 @@ struct ContentView: View {
                 document: state.selectedDocument,
                 importError: state.importError,
                 coordinator: state.localProcessing,
+                plugins: state.localPlugins,
                 parse: state.parseSelectedDocument,
                 openRun: state.openRun,
                 revealPDF: state.revealSelectedPDF
@@ -50,7 +52,11 @@ struct ContentView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button("Open PDF", systemImage: "folder", action: state.openPDFPicker)
                     .keyboardShortcut("o", modifiers: .command)
-                    .disabled(state.localProcessing.isRunning || state.localProcessing.isInstalling)
+                    .disabled(
+                        state.localProcessing.isRunning
+                            || state.localProcessing.isInstalling
+                            || state.localPlugins.isRunning
+                    )
             }
         }
         .onDrop(
@@ -68,6 +74,7 @@ struct ContentView: View {
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
         guard state.localProcessing.isRunning == false,
               state.localProcessing.isInstalling == false,
+              state.localPlugins.isRunning == false,
               let provider = providers.first(where: {
                   $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
               }) else {

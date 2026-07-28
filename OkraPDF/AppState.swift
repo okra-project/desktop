@@ -11,20 +11,24 @@ final class AppState: ObservableObject {
 
     let localProcessing: LocalProcessingCoordinator
     let workspaceTools: WorkspaceToolRegistry
+    let localPlugins: LocalPluginCoordinator
 
     init() {
         localProcessing = LocalProcessingCoordinator()
-        workspaceTools = .standard
+        localPlugins = LocalPluginCoordinator()
+        workspaceTools = .withPresidio
         selectedWorkspaceToolID = workspaceTools.resolvedSelection(nil)
         openCommandLinePDFIfPresent()
     }
 
     init(
         localProcessing: LocalProcessingCoordinator,
-        workspaceTools: WorkspaceToolRegistry = .standard,
+        localPlugins: LocalPluginCoordinator? = nil,
+        workspaceTools: WorkspaceToolRegistry = .withPresidio,
         selectedWorkspaceToolID: WorkspaceToolID? = nil
     ) {
         self.localProcessing = localProcessing
+        self.localPlugins = localPlugins ?? LocalPluginCoordinator()
         self.workspaceTools = workspaceTools
         self.selectedWorkspaceToolID = workspaceTools.resolvedSelection(selectedWorkspaceToolID)
     }
@@ -45,6 +49,11 @@ final class AppState: ObservableObject {
 
     func openPDF(_ url: URL) {
         importError = nil
+
+        guard localPlugins.isRunning == false else {
+            importError = "Wait for PII detection to finish or cancel it before opening another PDF."
+            return
+        }
 
         guard url.isFileURL, url.pathExtension.lowercased() == UTType.pdf.preferredFilenameExtension else {
             importError = "Choose a PDF file."
@@ -67,6 +76,7 @@ final class AppState: ObservableObject {
         )
         selectedDocument = document
         localProcessing.load(document: document)
+        localPlugins.load(run: localProcessing.latestRun)
     }
 
     func parseSelectedDocument() {
@@ -82,6 +92,7 @@ final class AppState: ObservableObject {
             importError = "The original PDF for \(run.fileName) is no longer at \(run.sourcePath)."
         }
         localProcessing.selectRun(run)
+        localPlugins.load(run: run)
     }
 
     func revealSelectedPDF() {

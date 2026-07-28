@@ -14,7 +14,8 @@ local parser, and explicitly click **Parse** when you want readable local output
 6. Baidu Unlimited-OCR runs draw their detected layout boxes over the source
    PDF and offer a matching block preview, Markdown, and JSON.
 7. Cancel a long run without losing finished pages, then resume from its checkpoint.
-8. Copy, save, or reveal Markdown or JSON from the inspector.
+8. Select **Detect PII** on the left to install Presidio NER or analyze the completed extraction offline.
+9. Copy, save, or reveal Markdown, extraction JSON, or PII detection JSON from the inspector.
 
 The workspace follows the same tool-centric hierarchy as okraPDF's web PDF
 Studio: tools on the left, the uninterrupted document in the center, and the
@@ -31,6 +32,8 @@ Nothing is uploaded. Run artifacts stay on the Mac under:
 ~/Library/Application Support/okraPDF/Runs/{runId}/page-progress.json
 ~/Library/Application Support/okraPDF/Runs/{runId}/page-results/page-0001.md
 ~/Library/Application Support/okraPDF/Runs/{runId}/page-results/page-0001.json  # Baidu Unlimited-OCR
+~/Library/Application Support/okraPDF/Runs/{runId}/plugins/presidio-ner/request.json
+~/Library/Application Support/okraPDF/Runs/{runId}/plugins/presidio-ner/result.json
 ```
 
 Apple Vision and Baidu Unlimited-OCR checkpoint each completed page to disk
@@ -63,6 +66,24 @@ document because its CLI does not expose trustworthy per-page completion.
 Provider setup may download dependencies and model artifacts once. Extraction
 does not make cloud or network calls.
 
+## Local tools
+
+The left registry contains optional operations that run after parsing. Their
+configuration and action live in the right inspector. Plugins are not OCR
+providers and never appear in the parser picker.
+
+- **Presidio NER** — installs the pinned `presidio-analyzer` package and spaCy
+  `en_core_web_lg` model under `~/.okra/plugins/presidio-ner/`. After setup,
+  Hugging Face and Transformers are forced offline and extracted text stays on
+  the Mac. Presidio returns typed character spans. Baidu structured blocks also
+  retain their page and normalized block box; Markdown-only providers return
+  text-only findings because they do not expose a reliable text-to-page map.
+  Box-backed candidates are also flattened into the shared `boxes[]` contract
+  (`page`, `x`, `y`, `w`, `h`, `type`, `text`, `score`, `source`).
+
+PII findings are review candidates, not completed redactions. This release does
+not draw or burn redaction boxes into the source PDF.
+
 ## Download
 
 Download the Apple-silicon beta from the
@@ -82,7 +103,7 @@ swift build
 ```
 
 The executable product is `Okra`. Package resources include the local
-`ProviderScripts/` installers and worker.
+`ProviderScripts/` and `PluginScripts/` installers and workers.
 
 ## Tests
 
@@ -97,14 +118,17 @@ chrome renders the logo or the `Okra` name, never a logo-plus-wordmark lockup.
 
 The retained test surface covers the explicit read-before-parse contract, the
 tool-registry selection contract, explicit Parse action, run manifests and
-history, provider registration, setup
-progress/cancellation, pinned-model integrity metadata, Apple Vision Markdown
+history, provider registration, setup progress/cancellation, pinned-model
+integrity metadata, Apple Vision Markdown
 output, Baidu output token/layout parsing, PDF bounding-box geometry and
 interaction, and a full Baidu Unlimited-OCR simulation through PDF page
 rendering, the bundled Python worker, offline flags,
 page-level checkpoints, persisted Markdown plus JSON, durable cancel ordering,
 orphan recovery, same-run checkpoint resume, and provider-process termination.
-A large-document test verifies 120 independently readable page files.
+A large-document test verifies 120 independently readable page files. Presidio
+tests cover registry permissions, structured block-to-box mapping, bounded
+Markdown fallback, offline simulation, per-run result persistence, and worker
+span mapping.
 
 ## Simulate Baidu Unlimited-OCR end to end
 
@@ -142,4 +166,5 @@ set `LSUIElement`; the PDF reader belongs in the Dock while it is open.
 - Dogfood Docling setup and extraction on a clean profile.
 - Dogfood the complete 2.4 GB Baidu Unlimited-OCR checkpoint download and
   extraction with the network disconnected after setup.
+- Dogfood Presidio setup, then detect PII with the network disconnected.
 - Dogfood the signed build on a second Mac.

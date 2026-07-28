@@ -5,6 +5,7 @@ struct WorkspaceToolRegistryView: View {
     let registry: WorkspaceToolRegistry
     @Binding var selectedToolID: WorkspaceToolID
     @ObservedObject var coordinator: LocalProcessingCoordinator
+    @ObservedObject var plugins: LocalPluginCoordinator
     let openPDF: () -> Void
 
     var body: some View {
@@ -15,7 +16,7 @@ struct WorkspaceToolRegistryView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.bordered)
-                .disabled(coordinator.isRunning || coordinator.isInstalling)
+                .disabled(coordinator.isRunning || coordinator.isInstalling || plugins.isRunning)
             } header: {
                 VStack(alignment: .leading, spacing: WorkspaceTheme.compactSpacing) {
                     BrandMarkView()
@@ -39,12 +40,12 @@ struct WorkspaceToolRegistryView: View {
             ForEach(registry.categories) { category in
                 Section(category.rawValue) {
                     ForEach(registry.tools(in: category)) { tool in
+                        let status = status(for: tool.id)
                         WorkspaceToolRegistryRow(
                             tool: tool,
                             isSelected: selectedToolID == tool.id,
-                            statusLabel: tool.id == .extract ? extractionStatusLabel : tool.registryLabel,
-                            statusIsActive: tool.id == .extract
-                                && (coordinator.isRunning || coordinator.selectedAvailability.isReady)
+                            statusLabel: status.label,
+                            statusIsActive: status.isActive
                         ) {
                             selectedToolID = tool.id
                         }
@@ -68,14 +69,31 @@ struct WorkspaceToolRegistryView: View {
         .navigationTitle("Tools")
     }
 
-    private var extractionStatusLabel: String {
-        if coordinator.isRunning {
-            return "Running"
+    private func status(for toolID: WorkspaceToolID) -> (label: String, isActive: Bool) {
+        if toolID == .extract {
+            if coordinator.isRunning {
+                return ("Running", true)
+            }
+            if coordinator.isInstalling {
+                return ("Setting up", false)
+            }
+            return coordinator.selectedAvailability.isReady
+                ? ("Ready", true)
+                : ("Setup required", false)
         }
-        if coordinator.isInstalling {
-            return "Setting up"
+
+        if toolID == .presidioNER {
+            if plugins.isRunning, plugins.activePluginID == .presidioNER {
+                return ("Running", true)
+            }
+            if plugins.isInstalling, plugins.activePluginID == .presidioNER {
+                return ("Setting up", false)
+            }
+            let availability = plugins.availability(for: .presidioNER)
+            return (availability.message, availability.isReady)
         }
-        return coordinator.selectedAvailability.isReady ? "Ready" : "Setup required"
+
+        return ("Unavailable", false)
     }
 }
 

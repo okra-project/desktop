@@ -2,9 +2,7 @@
 
 Current train: `desktop-v0.5.0-beta.N`
 
-Roadmap item: `D.6.11`
-
-Workspace information-architecture refinement: `D.6.3`
+Roadmap items: `D.6.11`, `D.6.3` workspace refinement, `S-REDACT.2` desktop slice
 
 ## Product contract
 
@@ -36,6 +34,11 @@ Workspace information-architecture refinement: `D.6.3`
 - [x] Source-PDF bounding boxes for valid Baidu normalized layout blocks
 - [x] Two-way source-box and preview-card selection across zoom, scroll, crop, and rotation
 - [x] Accessible Show boxes toolbar toggle; overlays remain screen-only and never mutate the source PDF
+- [x] Built-in local plugin registry separated from the parser provider contract
+- [x] Presidio NER setup/readiness state and pinned English spaCy model checksum
+- [x] Offline PII candidate detection over completed Markdown or structured output
+- [x] Baidu page/block boxes retained in Presidio findings when available
+- [x] Presidio candidates explicitly distinguished from completed redactions
 - [x] Copy, Save As, and Reveal actions for Markdown and JSON
 - [x] No cloud upload or remote-control surface
 
@@ -51,6 +54,8 @@ Workspace information-architecture refinement: `D.6.3`
 - [x] Docling inference forces Hugging Face/Transformers offline mode
 - [x] Baidu Unlimited-OCR inference forces Hugging Face/Transformers offline mode
 - [x] Provider setup is visibly distinct from offline extraction
+- [x] Presidio setup is visibly distinct from offline plugin execution
+- [x] Plugin request/result artifacts stay under the owning local run directory
 
 ## Automated verification
 
@@ -64,13 +69,17 @@ Workspace information-architecture refinement: `D.6.3`
 - [x] PDF overlay adapter, clipping, crop/rotation geometry, annotation ownership, and click-selection coverage
 - [x] Default app state constructs every bundled provider without terminating
 - [x] Built-in workspace registry ordering, uniqueness, and selection fallback coverage
+- [x] Default app state constructs the built-in local plugin registry
+- [x] Presidio registry, bounded-input, box-mapping, simulation, and persistence coverage
+- [x] Presidio worker span/box contract tests and installer syntax verification
 - [x] Packaged app starts with builder-only SwiftPM resources hidden
 - [x] Quarantined notarized beta.8 through beta.15 DMGs start through LaunchServices before publishing (2026-07-28)
 - [x] Remote-control, dispatch, agent-registry, and model-catalog tests removed
 - [x] `swift build` on an unrestricted macOS shell (2026-07-24)
 - [x] Canonical website mark checksum and packaged-resource coverage
-- [x] `swift test` on an unrestricted macOS shell (56 tests / 13 suites passed, 2026-07-28)
-- [x] Python output-parser, resume, and appcast tests (9/9 passed, 2026-07-28)
+- [x] `swift test` on an unrestricted macOS shell (60 tests / 14 suites passed, 2026-07-28)
+- [x] Python output-parser, appcast, resume, and Presidio worker tests (11/11 passed, 2026-07-28)
+- [x] `swift build -c release` with bundled provider and plugin scripts (2026-07-28)
 
 ## Manual smoke test
 
@@ -86,6 +95,7 @@ Workspace information-architecture refinement: `D.6.3`
 - [x] Run the labeled Baidu Unlimited-OCR simulation on a multi-page PDF (3 pages, 2026-07-27)
 - [ ] Select Baidu boxes from both the PDF and preview on a rotated/cropped dogfood PDF
 - [ ] Set up Baidu Unlimited-OCR on a 16 GB Apple-silicon Mac and extract offline
+- [ ] Set up Presidio NER, disconnect the network, and verify names plus identifiers are detected
 
 ## Distribution
 
