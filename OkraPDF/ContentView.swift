@@ -8,6 +8,28 @@ struct ContentView: View {
     @State private var isDropTargeted = false
 
     var body: some View {
+        VStack(spacing: 0) {
+            if let update = state.visibleUpdate {
+                UpdateBannerView(
+                    update: update,
+                    openRelease: state.openUpdateRelease,
+                    dismiss: state.dismissUpdateBanner
+                )
+            } else if let notice = state.manualUpdateCheckNotice {
+                WorkspaceNoticeView(
+                    message: notice,
+                    systemImage: "checkmark.circle",
+                    color: WorkspaceTheme.brand
+                )
+            }
+            workspaceContent
+        }
+        .task {
+            await state.checkForUpdatesIfDue()
+        }
+    }
+
+    private var workspaceContent: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             WorkspaceSidebarView(
                 document: state.selectedDocument,

@@ -24,6 +24,11 @@ struct okraPDFApp: App {
                 Button("Open PDF…", action: appState.openPDFPicker)
                     .keyboardShortcut("o", modifiers: .command)
             }
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    Task { await appState.checkForUpdates(manual: true) }
+                }
+            }
         }
     }
 }
