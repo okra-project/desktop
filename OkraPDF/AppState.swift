@@ -7,18 +7,27 @@ import UniformTypeIdentifiers
 final class AppState: ObservableObject {
     @Published private(set) var selectedDocument: LocalPDFDocument?
     @Published var importError: String?
+    @Published var selectedWorkspaceToolID: WorkspaceToolID
 
     let localProcessing: LocalProcessingCoordinator
+    let workspaceTools: WorkspaceToolRegistry
 
     init() {
         localProcessing = LocalProcessingCoordinator()
+        workspaceTools = .standard
+        selectedWorkspaceToolID = workspaceTools.resolvedSelection(nil)
         openCommandLinePDFIfPresent()
     }
 
-    init(localProcessing: LocalProcessingCoordinator) {
+    init(
+        localProcessing: LocalProcessingCoordinator,
+        workspaceTools: WorkspaceToolRegistry = .standard,
+        selectedWorkspaceToolID: WorkspaceToolID? = nil
+    ) {
         self.localProcessing = localProcessing
+        self.workspaceTools = workspaceTools
+        self.selectedWorkspaceToolID = workspaceTools.resolvedSelection(selectedWorkspaceToolID)
     }
-
 
     func openPDFPicker() {
         let panel = NSOpenPanel()
