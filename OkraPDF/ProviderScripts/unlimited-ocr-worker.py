@@ -295,6 +295,61 @@ def append_page(output: Path, markdown: str) -> None:
         output_file.write(markdown.rstrip("\n") + "\n\n")
 
 
+def load_persisted_page(
+    page_output_directory: Path,
+    page_number: int,
+) -> dict[str, Any] | None:
+    markdown_path = page_output_directory / f"page-{page_number:04d}.md"
+    json_path = page_output_directory / f"page-{page_number:04d}.json"
+    if not markdown_path.exists() or not json_path.exists():
+        return None
+    try:
+        page = json.loads(json_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return page if isinstance(page, dict) else None
+
+
+def persist_document_outputs(
+    output: Path,
+    structured_output: Path,
+    page_output_directory: Path,
+    header: str,
+    title: str,
+    total_page_count: int,
+    pages: list[dict[str, Any]],
+    simulation: bool,
+) -> None:
+    ordered_pages = sorted(pages, key=lambda page: int(page["pageNumber"]))
+    markdown_sections = [
+        (
+            page_output_directory
+            / f"page-{int(page['pageNumber']):04d}.md"
+        ).read_text(encoding="utf-8").strip()
+        for page in ordered_pages
+    ]
+    markdown = header.strip() + "\n\n"
+    if markdown_sections:
+        markdown += "\n\n".join(markdown_sections) + "\n"
+    write_atomic(output, markdown)
+    write_atomic(
+        structured_output,
+        json.dumps(
+            document_payload(
+                title,
+                total_page_count,
+                ordered_pages,
+                complete=len(ordered_pages) == total_page_count,
+                simulation=simulation,
+            ),
+            indent=2,
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+        + "\n",
+    )
+
+
 def update_page_progress(
     progress_path: Path,
     page_number: int,
@@ -339,8 +394,28 @@ def main() -> None:
                 f"HF_DATASETS_OFFLINE={os.environ.get('HF_DATASETS_OFFLINE', '')}."
             ),
         ])
-        write_atomic(output, header + "\n\n")
         for page_number, image_path in enumerate(args.images, start=1):
+            persisted_page = load_persisted_page(page_output_directory, page_number)
+            if persisted_page is not None:
+                structured_pages.append(persisted_page)
+                persist_document_outputs(
+                    output,
+                    structured_output,
+                    page_output_directory,
+                    header,
+                    args.title,
+                    len(args.images),
+                    structured_pages,
+                    simulation=True,
+                )
+                update_page_progress(
+                    page_progress,
+                    page_number,
+                    "succeeded",
+                    len(structured_pages),
+                )
+                print(f"Restored page {page_number} of {len(args.images)}", flush=True)
+                continue
             update_page_progress(
                 page_progress,
                 page_number,
@@ -361,22 +436,15 @@ def main() -> None:
                 section,
                 structured_page,
             )
-            append_page(output, section)
-            write_atomic(
+            persist_document_outputs(
+                output,
                 structured_output,
-                json.dumps(
-                    document_payload(
-                        args.title,
-                        len(args.images),
-                        structured_pages,
-                        complete=page_number == len(args.images),
-                        simulation=True,
-                    ),
-                    indent=2,
-                    sort_keys=True,
-                    ensure_ascii=False,
-                )
-                + "\n",
+                page_output_directory,
+                header,
+                args.title,
+                len(args.images),
+                structured_pages,
+                simulation=True,
             )
             update_page_progress(
                 page_progress,
@@ -393,9 +461,30 @@ def main() -> None:
 
     model, processor = load(args.model)
     config = load_config(args.model)
-    write_atomic(output, f"# {args.title}\n\n")
+    header = f"# {args.title}"
 
     for page_number, image_path in enumerate(args.images, start=1):
+        persisted_page = load_persisted_page(page_output_directory, page_number)
+        if persisted_page is not None:
+            structured_pages.append(persisted_page)
+            persist_document_outputs(
+                output,
+                structured_output,
+                page_output_directory,
+                header,
+                args.title,
+                len(args.images),
+                structured_pages,
+                simulation=False,
+            )
+            update_page_progress(
+                page_progress,
+                page_number,
+                "succeeded",
+                len(structured_pages),
+            )
+            print(f"Restored page {page_number} of {len(args.images)}", flush=True)
+            continue
         update_page_progress(
             page_progress,
             page_number,
@@ -433,22 +522,15 @@ def main() -> None:
             section,
             structured_page,
         )
-        append_page(output, section)
-        write_atomic(
+        persist_document_outputs(
+            output,
             structured_output,
-            json.dumps(
-                document_payload(
-                    args.title,
-                    len(args.images),
-                    structured_pages,
-                    complete=page_number == len(args.images),
-                    simulation=False,
-                ),
-                indent=2,
-                sort_keys=True,
-                ensure_ascii=False,
-            )
-            + "\n",
+            page_output_directory,
+            header,
+            args.title,
+            len(args.images),
+            structured_pages,
+            simulation=False,
         )
         update_page_progress(
             page_progress,

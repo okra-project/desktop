@@ -39,6 +39,8 @@ final class LocalProcessingCoordinator: ObservableObject {
     private var currentSourcePath: String?
     private var currentFileName = "extraction.pdf"
     private var installationTask: Task<Void, Never>?
+    private var processingTask: Task<Void, Never>?
+    private var activeRun: LocalProcessingRun?
 
     init(
         providers: [any LocalProcessingProvider] = [
@@ -71,6 +73,7 @@ final class LocalProcessingCoordinator: ObservableObject {
 
         refreshAvailability()
         refreshRecentRuns()
+        recoverOrphanedRuns()
     }
 
     var descriptors: [LocalProviderDescriptor] {
@@ -95,9 +98,31 @@ final class LocalProcessingCoordinator: ObservableObject {
         return URL(fileURLWithPath: structuredOutputPath)
     }
 
+    var canResumeLatestRun: Bool {
+        guard !isRunning,
+              !isInstalling,
+              let run = latestRun,
+              ["canceled", "failed", "interrupted"].contains(run.status),
+              FileManager.default.fileExists(atPath: run.sourcePath),
+              let providerID = LocalProviderID(rawValue: run.providerId),
+              let provider = provider(for: providerID) else {
+            return false
+        }
+        return provider.availability().isReady
+    }
+
     func load(document: LocalPDFDocument) {
         currentSourcePath = document.filePath
         currentFileName = document.fileName
+        setupErrorMessage = nil
+        refreshAvailability()
+        refreshRecentRuns()
+
+        if let run = recentRuns.first(where: { $0.sourcePath == document.filePath }) {
+            display(run: run)
+            return
+        }
+
         latestRun = nil
         outputText = ""
         structuredOutputText = ""
@@ -105,9 +130,6 @@ final class LocalProcessingCoordinator: ObservableObject {
         progress = 0
         completedPageCount = 0
         totalPageCount = document.totalPages
-        setupErrorMessage = nil
-        refreshAvailability()
-        refreshRecentRuns()
         statusMessage = selectedAvailability.isReady
             ? "Ready to parse with \(selectedDescriptor.name)."
             : selectedAvailability.message
@@ -198,29 +220,99 @@ final class LocalProcessingCoordinator: ObservableObject {
             completedPageCount: 0,
             totalPageCount: document.totalPages,
             startedAt: Date(),
-            completedAt: nil
+            completedAt: nil,
+            progress: 0,
+            statusMessage: "Starting \(provider.descriptor.name)…",
+            updatedAt: Date(),
+            resumeCount: 0,
+            eventSequence: 0
         )
 
         do {
             try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
-            try persist(run, in: runDirectory)
-            refreshRecentRuns()
+            try recordTransition(&run, type: "run.started", in: runDirectory)
         } catch {
             statusMessage = "Could not start extraction: \(error.localizedDescription)"
             return
         }
 
+        beginProcessing(run: run, document: document, provider: provider, in: runDirectory)
+    }
+
+    func cancelRun() {
+        guard isRunning, var run = activeRun, run.status == "running" else { return }
+        let runDirectory = LocalProviderPaths.runDirectory(runsRoot: runsRoot, runID: run.id)
+        run.status = "canceling"
+        run.cancelRequestedAt = Date()
+        run.statusMessage = "Canceling after the current operation…"
+
+        do {
+            try recordTransition(&run, type: "run.cancel_requested", in: runDirectory)
+        } catch {
+            statusMessage = "Could not save the cancellation request: \(error.localizedDescription)"
+            return
+        }
+
+        activeRun = run
+        upsertRecentRun(run)
+        if latestRun?.id == run.id {
+            latestRun = run
+            statusMessage = run.statusMessage ?? "Canceling…"
+        }
+        processingTask?.cancel()
+    }
+
+    func resume(document: LocalPDFDocument) {
+        guard canResumeLatestRun,
+              var run = latestRun,
+              run.sourcePath == document.filePath,
+              let providerID = LocalProviderID(rawValue: run.providerId),
+              let provider = provider(for: providerID) else {
+            return
+        }
+
+        selectedProviderID = providerID
+        let runDirectory = LocalProviderPaths.runDirectory(runsRoot: runsRoot, runID: run.id)
+        let completed = run.completedPageCount ?? 0
+        let total = run.totalPageCount ?? document.totalPages
+        run.status = "running"
+        run.errorMessage = nil
+        run.completedAt = nil
+        run.cancelRequestedAt = nil
+        run.resumeCount = (run.resumeCount ?? 0) + 1
+        run.progress = total > 0 ? Double(completed) / Double(total) : 0
+        run.statusMessage = completed > 0
+            ? "Resuming after \(completed) of \(total) saved pages…"
+            : "Restarting \(provider.descriptor.name)…"
+
+        do {
+            try recordTransition(&run, type: "run.resumed", in: runDirectory)
+        } catch {
+            statusMessage = "Could not resume extraction: \(error.localizedDescription)"
+            return
+        }
+
+        beginProcessing(run: run, document: document, provider: provider, in: runDirectory)
+    }
+
+    private func beginProcessing(
+        run: LocalProcessingRun,
+        document: LocalPDFDocument,
+        provider: any LocalProcessingProvider,
+        in runDirectory: URL
+    ) {
+        let runID = run.id
+
         currentSourcePath = document.filePath
         currentFileName = document.fileName
+        activeRun = run
         latestRun = run
-        outputText = ""
-        structuredOutputText = ""
-        structuredOutput = nil
-        progress = 0
-        completedPageCount = 0
-        totalPageCount = document.totalPages
+        upsertRecentRun(run)
+        progress = run.progress ?? 0
+        completedPageCount = run.completedPageCount ?? 0
+        totalPageCount = run.totalPageCount ?? document.totalPages
         isRunning = true
-        statusMessage = "Starting \(provider.descriptor.name)…"
+        statusMessage = run.statusMessage ?? "Starting \(provider.descriptor.name)…"
 
         let request = LocalProcessingRequest(
             fileName: document.fileName,
@@ -230,7 +322,8 @@ final class LocalProcessingCoordinator: ObservableObject {
             pageProgress: { [weak self] update in
                 Task { @MainActor in
                     guard let self,
-                          self.latestRun?.id == runID,
+                          var trackedRun = self.activeRun,
+                          trackedRun.id == runID,
                           update.completedPageCount >= self.completedPageCount else {
                         return
                     }
@@ -239,66 +332,112 @@ final class LocalProcessingCoordinator: ObservableObject {
                     self.progress = max(self.progress, update.fraction)
                     self.statusMessage = "Saved page \(update.pageNumber) of \(update.totalPageCount) to disk"
 
-                    guard var trackedRun = self.latestRun else { return }
                     trackedRun.pageCount = update.completedPageCount
                     trackedRun.completedPageCount = update.completedPageCount
                     trackedRun.totalPageCount = update.totalPageCount
-                    self.latestRun = trackedRun
-                    try? self.persist(trackedRun, in: runDirectory)
-                    if let index = self.recentRuns.firstIndex(where: { $0.id == runID }) {
-                        self.recentRuns[index] = trackedRun
+                    trackedRun.progress = self.progress
+                    trackedRun.statusMessage = self.statusMessage
+                    try? self.recordTransition(
+                        &trackedRun,
+                        type: "run.page_checkpoint",
+                        in: runDirectory
+                    )
+                    self.activeRun = trackedRun
+                    self.upsertRecentRun(trackedRun)
+                    if self.latestRun?.id == runID {
+                        self.latestRun = trackedRun
                     }
                 }
             }
         )
 
-        Task {
+        processingTask = Task { [weak self] in
+            guard let self else { return }
             do {
                 let result = try await provider.process(request: request) { [weak self] fraction, message in
                     Task { @MainActor in
-                        guard let self, self.latestRun?.id == runID else { return }
-                        self.progress = min(max(fraction, 0), 1)
+                        guard let self,
+                              var trackedRun = self.activeRun,
+                              trackedRun.id == runID else { return }
+                        self.progress = max(self.progress, min(max(fraction, 0), 1))
                         self.statusMessage = message
+                        trackedRun.progress = self.progress
+                        trackedRun.statusMessage = message
+                        try? self.recordTransition(
+                            &trackedRun,
+                            type: "run.progress",
+                            in: runDirectory
+                        )
+                        self.activeRun = trackedRun
+                        self.upsertRecentRun(trackedRun)
+                        if self.latestRun?.id == runID {
+                            self.latestRun = trackedRun
+                        }
                     }
                 }
-                run.status = "succeeded"
-                run.outputPath = result.outputURL.path
-                run.structuredOutputPath = result.structuredOutputURL?.path
-                run.pageCount = result.pageCount
-                run.completedPageCount = result.pageCount
-                run.totalPageCount = max(document.totalPages, result.pageCount)
-                run.completedAt = Date()
-                try persist(run, in: runDirectory)
-                refreshRecentRuns()
+                try Task.checkCancellation()
+                guard var completedRun = activeRun, completedRun.id == runID else { return }
+                completedRun.status = "succeeded"
+                completedRun.outputPath = result.outputURL.path
+                completedRun.structuredOutputPath = result.structuredOutputURL?.path
+                completedRun.pageCount = result.pageCount
+                completedRun.completedPageCount = result.pageCount
+                completedRun.totalPageCount = max(document.totalPages, result.pageCount)
+                completedRun.progress = 1
+                completedRun.completedAt = Date()
+                completedRun.statusMessage = provider.availability().isSimulated
+                    ? "Simulation complete · model weights were not loaded."
+                    : "Parsed locally with \(provider.descriptor.name)."
+                try recordTransition(&completedRun, type: "run.succeeded", in: runDirectory)
+                activeRun = completedRun
+                upsertRecentRun(completedRun)
 
                 if currentSourcePath == document.filePath {
-                    latestRun = run
+                    latestRun = completedRun
                     progress = 1
                     completedPageCount = result.pageCount
                     totalPageCount = max(document.totalPages, result.pageCount)
-                    statusMessage = provider.availability().isSimulated
-                        ? "Simulation complete · model weights were not loaded."
-                        : "Parsed locally with \(provider.descriptor.name)."
+                    statusMessage = completedRun.statusMessage ?? "Extraction complete."
                     loadOutputs()
                 }
-            } catch {
-                if let trackedRun = latestRun, trackedRun.id == runID {
-                    run.pageCount = trackedRun.pageCount
-                    run.completedPageCount = trackedRun.completedPageCount
-                    run.totalPageCount = trackedRun.totalPageCount
+            } catch is CancellationError {
+                if var canceledRun = activeRun, canceledRun.id == runID {
+                    let completed = canceledRun.completedPageCount ?? 0
+                    let total = canceledRun.totalPageCount ?? document.totalPages
+                    canceledRun.status = "canceled"
+                    canceledRun.errorMessage = nil
+                    canceledRun.completedAt = Date()
+                    canceledRun.progress = total > 0 ? Double(completed) / Double(total) : 0
+                    canceledRun.statusMessage = "Canceled · \(completed) of \(total) pages saved."
+                    try? recordTransition(&canceledRun, type: "run.canceled", in: runDirectory)
+                    activeRun = canceledRun
+                    upsertRecentRun(canceledRun)
+                    if currentSourcePath == document.filePath {
+                        latestRun = canceledRun
+                        progress = canceledRun.progress ?? 0
+                        completedPageCount = completed
+                        totalPageCount = total
+                        statusMessage = canceledRun.statusMessage ?? "Canceled."
+                    }
                 }
-                run.status = "failed"
-                run.errorMessage = error.localizedDescription
-                run.completedAt = Date()
-                try? persist(run, in: runDirectory)
-                refreshRecentRuns()
-
-                if currentSourcePath == document.filePath {
-                    latestRun = run
-                    statusMessage = error.localizedDescription
+            } catch {
+                if var failedRun = activeRun, failedRun.id == runID {
+                    failedRun.status = "failed"
+                    failedRun.errorMessage = error.localizedDescription
+                    failedRun.completedAt = Date()
+                    failedRun.statusMessage = error.localizedDescription
+                    try? recordTransition(&failedRun, type: "run.failed", in: runDirectory)
+                    activeRun = failedRun
+                    upsertRecentRun(failedRun)
+                    if currentSourcePath == document.filePath {
+                        latestRun = failedRun
+                        statusMessage = error.localizedDescription
+                    }
                 }
             }
+            activeRun = nil
             isRunning = false
+            processingTask = nil
         }
     }
 
@@ -308,18 +447,20 @@ final class LocalProcessingCoordinator: ObservableObject {
     }
 
     func selectRun(_ run: LocalProcessingRun) {
-        latestRun = run
         currentSourcePath = run.sourcePath
         currentFileName = run.fileName
+        display(run: run)
+    }
+
+    private func display(run: LocalProcessingRun) {
+        latestRun = run
         completedPageCount = run.completedPageCount
             ?? (run.status == "succeeded" ? run.pageCount : 0)
         totalPageCount = run.totalPageCount ?? run.pageCount
-        progress = totalPageCount > 0
+        progress = run.progress ?? (totalPageCount > 0
             ? Double(completedPageCount) / Double(totalPageCount)
-            : (run.status == "succeeded" ? 1 : 0)
-        statusMessage = run.status == "succeeded"
-            ? "Parsed locally with \(run.providerName)."
-            : run.errorMessage ?? "This run did not finish."
+            : (run.status == "succeeded" ? 1 : 0))
+        statusMessage = displayMessage(for: run)
         loadOutputs()
     }
 
@@ -413,12 +554,102 @@ final class LocalProcessingCoordinator: ObservableObject {
         providers.first { $0.descriptor.id == id }
     }
 
-    private func persist(_ run: LocalProcessingRun, in runDirectory: URL) throws {
+    private func recoverOrphanedRuns() {
+        for index in recentRuns.indices where ["running", "canceling"].contains(recentRuns[index].status) {
+            var run = recentRuns[index]
+            let completed = run.completedPageCount ?? 0
+            let total = run.totalPageCount ?? run.pageCount
+            run.status = "interrupted"
+            run.errorMessage = nil
+            run.statusMessage = "Run interrupted when okraPDF closed · \(completed) of \(total) pages saved."
+            run.progress = total > 0 ? Double(completed) / Double(total) : 0
+            let runDirectory = LocalProviderPaths.runDirectory(runsRoot: runsRoot, runID: run.id)
+            try? recordTransition(&run, type: "run.interrupted", in: runDirectory)
+            recentRuns[index] = run
+        }
+    }
+
+    private func displayMessage(for run: LocalProcessingRun) -> String {
+        if let message = run.statusMessage, message.isEmpty == false {
+            return message
+        }
+        switch run.status {
+        case "succeeded":
+            return "Parsed locally with \(run.providerName)."
+        case "canceled":
+            return "Canceled. Resume to keep the saved page checkpoints."
+        case "interrupted":
+            return "Run interrupted. Resume to keep the saved page checkpoints."
+        case "failed":
+            return run.errorMessage ?? "This run failed."
+        case "canceling":
+            return "Canceling after the current operation…"
+        case "running":
+            return "Extraction is running."
+        default:
+            return run.errorMessage ?? "This run did not finish."
+        }
+    }
+
+    private func upsertRecentRun(_ run: LocalProcessingRun) {
+        if let index = recentRuns.firstIndex(where: { $0.id == run.id }) {
+            recentRuns[index] = run
+        } else {
+            recentRuns.append(run)
+        }
+        recentRuns = Array(recentRuns.sorted { $0.startedAt > $1.startedAt }.prefix(12))
+    }
+
+    private func recordTransition(
+        _ run: inout LocalProcessingRun,
+        type: String,
+        in runDirectory: URL
+    ) throws {
+        let timestamp = Date()
+        run.updatedAt = timestamp
+        run.progress = min(max(run.progress ?? 0, 0), 1)
+        run.eventSequence = (run.eventSequence ?? 0) + 1
+        try persistSnapshot(run, in: runDirectory)
+        try? appendEvent(
+            LocalProcessingRunEvent(
+                sequence: run.eventSequence ?? 1,
+                type: type,
+                runId: run.id,
+                status: run.status,
+                progress: run.progress ?? 0,
+                completedPageCount: run.completedPageCount ?? 0,
+                totalPageCount: run.totalPageCount ?? run.pageCount,
+                message: run.statusMessage ?? run.errorMessage ?? "",
+                createdAt: timestamp
+            ),
+            in: runDirectory
+        )
+    }
+
+    private func persistSnapshot(_ run: LocalProcessingRun, in runDirectory: URL) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(run)
         try data.write(to: runDirectory.appendingPathComponent("run.json"), options: .atomic)
+    }
+
+    private func appendEvent(_ event: LocalProcessingRunEvent, in runDirectory: URL) throws {
+        let eventURL = runDirectory.appendingPathComponent("events.jsonl")
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        var data = try encoder.encode(event)
+        data.append(0x0A)
+
+        if FileManager.default.fileExists(atPath: eventURL.path) == false {
+            FileManager.default.createFile(atPath: eventURL.path, contents: nil)
+        }
+        let handle = try FileHandle(forWritingTo: eventURL)
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        try handle.write(contentsOf: data)
+        try handle.synchronize()
     }
 
     private func loadOutputs() {

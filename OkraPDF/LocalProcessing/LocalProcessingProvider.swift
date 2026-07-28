@@ -110,6 +110,24 @@ struct LocalProcessingRun: Identifiable, Codable, Equatable {
     var totalPageCount: Int? = nil
     let startedAt: Date
     var completedAt: Date?
+    var progress: Double? = nil
+    var statusMessage: String? = nil
+    var updatedAt: Date? = nil
+    var cancelRequestedAt: Date? = nil
+    var resumeCount: Int? = nil
+    var eventSequence: Int? = nil
+}
+
+struct LocalProcessingRunEvent: Codable, Equatable, Sendable {
+    let sequence: Int
+    let type: String
+    let runId: String
+    let status: String
+    let progress: Double
+    let completedPageCount: Int
+    let totalPageCount: Int
+    let message: String
+    let createdAt: Date
 }
 
 typealias LocalProcessingProgress = @Sendable (_ fraction: Double, _ message: String) -> Void

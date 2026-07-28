@@ -23,6 +23,16 @@ struct RunProgressView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                coordinator.cancelRun()
+            } label: {
+                Text(coordinator.latestRun?.status == "canceling" ? "Canceling…" : "Cancel Run")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .disabled(coordinator.latestRun?.status == "canceling")
+            .accessibilityHint("Stops local processing and keeps completed page checkpoints")
         }
         .padding(WorkspaceTheme.standardSpacing)
         .background(.quaternary.opacity(0.25), in: .rect(cornerRadius: WorkspaceTheme.cardRadius))

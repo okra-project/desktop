@@ -15,7 +15,7 @@ final class AppleVisionProcessingProvider: LocalProcessingProvider, @unchecked S
         request: LocalProcessingRequest,
         progress: @escaping LocalProcessingProgress
     ) async throws -> LocalProcessingResult {
-        try await Task.detached(priority: .userInitiated) {
+        let worker = Task.detached(priority: .userInitiated) {
             let document = try PDFPageRenderer.openDocument(at: request.sourceURL)
             let pageStore = LocalPageCheckpointStore(
                 outputDirectory: request.outputDirectory,
@@ -27,6 +27,21 @@ final class AppleVisionProcessingProvider: LocalProcessingProvider, @unchecked S
             for index in 0..<document.pageCount {
                 try Task.checkCancellation()
                 let pageNumber = index + 1
+                if try pageStore.status(pageNumber: pageNumber) == .succeeded {
+                    let manifest = try pageStore.reconcileCompletedPages()
+                    request.pageProgress(
+                        LocalPageProgressUpdate(
+                            pageNumber: pageNumber,
+                            completedPageCount: manifest.completedPageCount,
+                            totalPageCount: document.pageCount
+                        )
+                    )
+                    progress(
+                        Double(manifest.completedPageCount) / Double(document.pageCount),
+                        "Restored page \(pageNumber) of \(document.pageCount) from disk"
+                    )
+                    continue
+                }
                 try pageStore.markProcessing(pageNumber: pageNumber)
 
                 do {
@@ -66,10 +81,11 @@ final class AppleVisionProcessingProvider: LocalProcessingProvider, @unchecked S
                         pageNumber: pageNumber,
                         markdown: "## Page \(pageNumber)\n\n\(text)"
                     )
+                    let manifest = try pageStore.reconcileCompletedPages()
                     request.pageProgress(
                         LocalPageProgressUpdate(
                             pageNumber: pageNumber,
-                            completedPageCount: pageNumber,
+                            completedPageCount: manifest.completedPageCount,
                             totalPageCount: document.pageCount
                         )
                     )
@@ -86,6 +102,12 @@ final class AppleVisionProcessingProvider: LocalProcessingProvider, @unchecked S
             let outputURL = try pageStore.assembleResult()
             progress(1, "Extraction complete")
             return LocalProcessingResult(outputURL: outputURL, pageCount: document.pageCount)
-        }.value
+        }
+
+        return try await withTaskCancellationHandler {
+            try await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
     }
 }
