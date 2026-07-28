@@ -57,7 +57,7 @@ does not make cloud or network calls.
 ## Download
 
 Download the Apple-silicon beta from the
-[`desktop-v0.5.0-beta.14` GitHub Release](https://github.com/okra-project/okrapdf-desktop/releases/tag/desktop-v0.5.0-beta.14).
+[`desktop-v0.5.0-beta.14` GitHub Release](https://github.com/okra-project/desktop/releases/tag/desktop-v0.5.0-beta.14).
 The app and DMG are Developer ID signed, hardened, notarized by Apple, and
 stapled for normal Gatekeeper opening on other Macs.
 
