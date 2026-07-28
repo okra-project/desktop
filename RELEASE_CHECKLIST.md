@@ -51,7 +51,7 @@ Roadmap item: `D.6.5`
 - [x] Remote-control, dispatch, registry, and model-catalog tests removed
 - [x] `swift build` on an unrestricted macOS shell (2026-07-24)
 - [x] Canonical website mark checksum and packaged-resource coverage
-- [x] `swift test` on an unrestricted macOS shell (29 tests / 7 suites passed, 2026-07-27)
+- [x] `swift test` on an unrestricted macOS shell (30 tests / 7 suites passed, 2026-07-27)
 - [x] Python output-parser tests (4/4 passed, 2026-07-27)
 
 ## Manual smoke test

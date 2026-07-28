@@ -106,6 +106,7 @@ def normalized_bbox(values: list[float]) -> dict[str, float | str]:
         "width": round((right - left) / 1000.0, 6),
         "height": round((bottom - top) / 1000.0, 6),
         "unit": "normalized",
+        "origin": "top-left",
     }
 
 

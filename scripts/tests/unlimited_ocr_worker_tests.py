@@ -48,6 +48,7 @@ class UnlimitedOCROutputParserTests(unittest.TestCase):
                 "width": 0.29,
                 "height": 0.03,
                 "unit": "normalized",
+                "origin": "top-left",
             },
         )
         self.assertIn("<table>", page["markdown"])

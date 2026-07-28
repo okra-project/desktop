@@ -26,7 +26,7 @@ struct StructuredExtractionOutputTests {
                   "type": "title",
                   "sourceType": "title",
                   "text": "Deposit form",
-                  "bbox": {"x": 0.01, "y": 0.02, "width": 0.29, "height": 0.03, "unit": "normalized"},
+                  "bbox": {"x": 0.01, "y": 0.02, "width": 0.29, "height": 0.03, "unit": "normalized", "origin": "top-left"},
                   "sourceBbox": [10, 20, 300, 50],
                   "sourceBboxScale": 1000
                 }],
@@ -55,6 +55,25 @@ struct StructuredExtractionOutputTests {
         #expect(block.type == "title")
         #expect(block.sourceBbox == [10, 20, 300, 50])
         #expect(bbox.width == 0.29)
+        #expect(bbox.origin == "top-left")
         #expect(bbox.compactLabel == "x 1% · y 2% · 29% × 3%")
+    }
+
+    @Test("Structured table blocks expose readable preview text without changing JSON text")
+    func tableBlocksExposeReadablePreviewText() throws {
+        let block = StructuredExtractionBlock(
+            id: "page-1-block-1",
+            type: "table",
+            sourceType: "table",
+            text: "<table><tr><th>Item</th><th>Total</th></tr><tr><td>Fee</td><td>$49</td></tr></table>",
+            bbox: nil,
+            sourceBbox: nil,
+            sourceBboxScale: nil
+        )
+
+        #expect(block.text.contains("<table>"))
+        #expect(block.displayText.contains("Item  |  Total"))
+        #expect(block.displayText.contains("Fee  |  $49"))
+        #expect(block.displayText.contains("<table>") == false)
     }
 }

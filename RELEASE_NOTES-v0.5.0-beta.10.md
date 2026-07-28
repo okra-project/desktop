@@ -44,9 +44,9 @@ None. Existing runs without `result.json` continue to open as Markdown. The new
 - Four Python parser tests cover tokenizer decoding, tagged and Ollama-style
   layout lines, malformed marker recovery, normalized boxes, HTML table
   preservation, plain-text fallback, loop suppression, and JSON round trips.
-- 29 Swift Testing tests pass across seven suites, including structured JSON
-  decoding and the simulated Baidu PDF → pages → Markdown + JSON → persisted-run
-  workflow.
+- 30 Swift Testing tests pass across seven suites, including structured JSON
+  decoding, readable HTML-table previews, and the simulated Baidu PDF → pages →
+  Markdown + JSON → persisted-run workflow.
 - Release automation runs both parser and Swift tests before Developer ID
   signing, app and DMG notarization/stapling, Gatekeeper assessment, and the
   quarantined-DMG LaunchServices check.

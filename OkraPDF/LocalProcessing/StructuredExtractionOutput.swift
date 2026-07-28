@@ -43,6 +43,21 @@ struct StructuredExtractionBlock: Codable, Equatable, Identifiable, Sendable {
     let bbox: StructuredExtractionBoundingBox?
     let sourceBbox: [Double]?
     let sourceBboxScale: Int?
+
+    var displayText: String {
+        guard type == "table" else { return text }
+        return text
+            .replacingOccurrences(of: "</td>", with: "  |  ", options: .caseInsensitive)
+            .replacingOccurrences(of: "</th>", with: "  |  ", options: .caseInsensitive)
+            .replacingOccurrences(of: "</tr>", with: "\n", options: .caseInsensitive)
+            .replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
 
 struct StructuredExtractionBoundingBox: Codable, Equatable, Sendable {
@@ -51,6 +66,7 @@ struct StructuredExtractionBoundingBox: Codable, Equatable, Sendable {
     let width: Double
     let height: Double
     let unit: String
+    let origin: String
 
     var compactLabel: String {
         let xPercent = Int((x * 100).rounded())

@@ -155,15 +155,15 @@ private struct StructuredExtractionBlockView: View {
     private var blockText: some View {
         switch block.type {
         case "title":
-            Text(block.text).font(.headline)
+            Text(block.displayText).font(.headline)
         case "heading", "header":
-            Text(block.text).font(.subheadline.weight(.semibold))
+            Text(block.displayText).font(.subheadline.weight(.semibold))
         case "table", "equation":
-            Text(block.text).font(.system(.caption, design: .monospaced))
+            Text(block.displayText).font(.system(.caption, design: .monospaced))
         case "caption", "footer":
-            Text(block.text).font(.caption).foregroundStyle(.secondary)
+            Text(block.displayText).font(.caption).foregroundStyle(.secondary)
         default:
-            Text(block.text).font(.callout)
+            Text(block.displayText).font(.callout)
         }
     }
 }
