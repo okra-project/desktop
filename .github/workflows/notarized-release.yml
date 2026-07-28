@@ -96,6 +96,10 @@ jobs:
           codesign --verify --strict --deep "build/Okra.app"
           codesign --display --verbose=4 "build/Okra.app" 2>&1 | grep -E 'Authority=Developer ID Application|TeamIdentifier=|Runtime Version='
           [[ "$(lipo -archs build/Okra.app/Contents/MacOS/Okra)" == "arm64" ]]
+          RELEASE_BIN_PATH="$(swift build -c release --show-bin-path)"
+          OKRA_DESKTOP_PACKAGED_APP_PATH="${PWD}/build/Okra.app" \
+          OKRA_DESKTOP_RESOURCE_BUNDLE_FALLBACK_PATH="${RELEASE_BIN_PATH}/okraPDF_Okra.bundle" \
+            swift test --filter PackagedAppLaunchTests.packagedAppRemainsAlive
 
       - name: Notarize and staple app
         shell: bash
@@ -135,6 +139,10 @@ jobs:
           hdiutil verify "${DMG}"
           spctl --assess --type execute --verbose=4 "build/Okra.app"
           spctl --assess --type open --context context:primary-signature --verbose=4 "${DMG}"
+          RELEASE_BIN_PATH="$(swift build -c release --show-bin-path)"
+          OKRA_DESKTOP_PACKAGED_DMG_PATH="${PWD}/${DMG}" \
+          OKRA_DESKTOP_RESOURCE_BUNDLE_FALLBACK_PATH="${RELEASE_BIN_PATH}/okraPDF_Okra.bundle" \
+            swift test --filter PackagedAppLaunchTests.quarantinedDMGLaunchesThroughLaunchServices
           shasum -a 256 "${DMG}" | sed 's#  build/#  #' > "${DMG}.sha256"
           echo "dmg=${DMG}" >> "${GITHUB_OUTPUT}"
           echo "checksum=${DMG}.sha256" >> "${GITHUB_OUTPUT}"

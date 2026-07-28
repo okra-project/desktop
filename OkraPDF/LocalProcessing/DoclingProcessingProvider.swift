@@ -15,10 +15,9 @@ final class DoclingProcessingProvider: LocalProcessingProvider, @unchecked Senda
     }
 
     func install(progress: @escaping @Sendable (LocalProviderSetupProgress) -> Void) async throws {
-        guard let scriptURL = Bundle.module.url(
-            forResource: "install-docling",
-            withExtension: "sh",
-            subdirectory: "ProviderScripts"
+        guard let scriptURL = ProviderResources.scriptURL(
+            named: "install-docling",
+            extension: "sh"
         ) else {
             throw LocalProcessingError.missingResource("Docling installer")
         }

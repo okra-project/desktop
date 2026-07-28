@@ -17,10 +17,9 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) {
         self.installer = installer
-        let workerURL = Bundle.module.url(
-            forResource: "unlimited-ocr-worker",
-            withExtension: "py",
-            subdirectory: "ProviderScripts"
+        let workerURL = ProviderResources.scriptURL(
+            named: "unlimited-ocr-worker",
+            extension: "py"
         )
         if let runtime {
             self.runtime = runtime
@@ -52,10 +51,9 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
 
     func install(progress: @escaping @Sendable (LocalProviderSetupProgress) -> Void) async throws {
         guard !runtime.isSimulation else { return }
-        guard let scriptURL = Bundle.module.url(
-            forResource: "install-unlimited-ocr",
-            withExtension: "sh",
-            subdirectory: "ProviderScripts"
+        guard let scriptURL = ProviderResources.scriptURL(
+            named: "install-unlimited-ocr",
+            extension: "sh"
         ) else {
             throw LocalProcessingError.missingResource("Baidu Unlimited-OCR installer")
         }
