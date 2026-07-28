@@ -43,11 +43,39 @@ enum LocalProviderAvailability: Equatable {
     }
 }
 
-struct LocalProcessingRequest {
+struct LocalPageProgressUpdate: Equatable, Sendable {
+    let pageNumber: Int
+    let completedPageCount: Int
+    let totalPageCount: Int
+
+    var fraction: Double {
+        guard totalPageCount > 0 else { return 0 }
+        return Double(completedPageCount) / Double(totalPageCount)
+    }
+}
+
+typealias LocalPageProgress = @Sendable (LocalPageProgressUpdate) -> Void
+
+struct LocalProcessingRequest: Sendable {
     let fileName: String
     let sourceURL: URL
     let outputDirectory: URL
     let expectedPageCount: Int
+    let pageProgress: LocalPageProgress
+
+    init(
+        fileName: String,
+        sourceURL: URL,
+        outputDirectory: URL,
+        expectedPageCount: Int,
+        pageProgress: @escaping LocalPageProgress = { _ in }
+    ) {
+        self.fileName = fileName
+        self.sourceURL = sourceURL
+        self.outputDirectory = outputDirectory
+        self.expectedPageCount = expectedPageCount
+        self.pageProgress = pageProgress
+    }
 }
 
 struct LocalProcessingResult {
@@ -66,6 +94,8 @@ struct LocalProcessingRun: Identifiable, Codable, Equatable {
     var outputPath: String?
     var errorMessage: String?
     var pageCount: Int
+    var completedPageCount: Int? = nil
+    var totalPageCount: Int? = nil
     let startedAt: Date
     var completedAt: Date?
 }

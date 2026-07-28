@@ -17,54 +17,73 @@ final class AppleVisionProcessingProvider: LocalProcessingProvider, @unchecked S
     ) async throws -> LocalProcessingResult {
         try await Task.detached(priority: .userInitiated) {
             let document = try PDFPageRenderer.openDocument(at: request.sourceURL)
-            var sections: [String] = ["# \(request.fileName)"]
+            let pageStore = LocalPageCheckpointStore(
+                outputDirectory: request.outputDirectory,
+                totalPages: document.pageCount,
+                documentHeader: "# \(request.fileName)"
+            )
+            try pageStore.prepare()
 
             for index in 0..<document.pageCount {
                 try Task.checkCancellation()
-                guard let page = document.page(at: index) else {
-                    throw LocalProcessingError.invalidPDF
-                }
+                let pageNumber = index + 1
+                try pageStore.markProcessing(pageNumber: pageNumber)
 
-                let nativeText = page.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                let text: String
-                if nativeText.count >= 20 {
+                do {
+                    guard let page = document.page(at: index) else {
+                        throw LocalProcessingError.invalidPDF
+                    }
+
+                    let nativeText = page.string?
+                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    let text: String
+                    if nativeText.count >= 20 {
+                        progress(
+                            Double(index) / Double(document.pageCount),
+                            "Reading page \(pageNumber) of \(document.pageCount)"
+                        )
+                        text = nativeText
+                    } else {
+                        progress(
+                            Double(index) / Double(document.pageCount),
+                            "Recognizing scanned page \(pageNumber) of \(document.pageCount)"
+                        )
+                        let image = try PDFPageRenderer.pageImage(
+                            from: document,
+                            at: index,
+                            maxDimension: 2_400
+                        )
+                        let recognition = VNRecognizeTextRequest()
+                        recognition.recognitionLevel = .accurate
+                        recognition.usesLanguageCorrection = true
+                        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+                        try handler.perform([recognition])
+                        text = (recognition.results ?? [])
+                            .compactMap { $0.topCandidates(1).first?.string }
+                            .joined(separator: "\n")
+                    }
+                    try pageStore.writePage(
+                        pageNumber: pageNumber,
+                        markdown: "## Page \(pageNumber)\n\n\(text)"
+                    )
+                    request.pageProgress(
+                        LocalPageProgressUpdate(
+                            pageNumber: pageNumber,
+                            completedPageCount: pageNumber,
+                            totalPageCount: document.pageCount
+                        )
+                    )
                     progress(
-                        Double(index) / Double(document.pageCount),
-                        "Reading page \(index + 1) of \(document.pageCount)"
+                        Double(pageNumber) / Double(document.pageCount),
+                        "Saved page \(pageNumber) of \(document.pageCount)"
                     )
-                    text = nativeText
-                } else {
-                    progress(
-                        Double(index) / Double(document.pageCount),
-                        "Recognizing scanned page \(index + 1) of \(document.pageCount)"
-                    )
-                    let image = try PDFPageRenderer.pageImage(
-                        from: document,
-                        at: index,
-                        maxDimension: 2_400
-                    )
-                    let recognition = VNRecognizeTextRequest()
-                    recognition.recognitionLevel = .accurate
-                    recognition.usesLanguageCorrection = true
-                    let handler = VNImageRequestHandler(cgImage: image, options: [:])
-                    try handler.perform([recognition])
-                    text = (recognition.results ?? [])
-                        .compactMap { $0.topCandidates(1).first?.string }
-                        .joined(separator: "\n")
+                } catch {
+                    try? pageStore.markFailed(pageNumber: pageNumber, error: error)
+                    throw error
                 }
-                sections.append("## Page \(index + 1)\n\n\(text)")
             }
 
-            try FileManager.default.createDirectory(
-                at: request.outputDirectory,
-                withIntermediateDirectories: true
-            )
-            let outputURL = request.outputDirectory.appendingPathComponent("result.md")
-            try sections.joined(separator: "\n\n").write(
-                to: outputURL,
-                atomically: true,
-                encoding: .utf8
-            )
+            let outputURL = try pageStore.assembleResult()
             progress(1, "Extraction complete")
             return LocalProcessingResult(outputURL: outputURL, pageCount: document.pageCount)
         }.value

@@ -19,6 +19,7 @@ Roadmap item: `D.6.3`
 - [x] Pinned Baidu model revision and SHA-256 verification before readiness
 - [x] Truthfully labeled Baidu Unlimited-OCR simulation mode
 - [x] Streaming progress and local errors
+- [x] Atomic page-level Markdown checkpoints for Apple Vision and Baidu Unlimited-OCR
 - [x] Selectable Markdown output
 - [x] Copy, Save As, and Reveal actions
 - [x] No cloud upload or remote-control surface
@@ -38,6 +39,7 @@ Roadmap item: `D.6.3`
 
 - [x] Local-processing tests retained
 - [x] Simulated Baidu Unlimited-OCR PDF → pages → worker → Markdown → manifest E2E
+- [x] Mid-run `run.json` progress and 120-page checkpoint persistence coverage
 - [x] Default app state constructs every bundled provider without terminating
 - [x] Packaged app starts with builder-only SwiftPM resources hidden
 - [x] Quarantined notarized beta.8 DMG starts through LaunchServices before publishing (2026-07-27)

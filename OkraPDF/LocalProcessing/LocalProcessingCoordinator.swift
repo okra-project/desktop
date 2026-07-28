@@ -22,6 +22,8 @@ final class LocalProcessingCoordinator: ObservableObject {
     @Published private(set) var recentRuns: [LocalProcessingRun] = []
     @Published private(set) var outputText = ""
     @Published private(set) var progress = 0.0
+    @Published private(set) var completedPageCount = 0
+    @Published private(set) var totalPageCount = 0
     @Published private(set) var statusMessage = "Choose a local parser and extract."
     @Published private(set) var isRunning = false
     @Published private(set) var isInstalling = false
@@ -92,6 +94,8 @@ final class LocalProcessingCoordinator: ObservableObject {
         latestRun = nil
         outputText = ""
         progress = 0
+        completedPageCount = 0
+        totalPageCount = document.totalPages
         setupErrorMessage = nil
         refreshAvailability()
         refreshRecentRuns()
@@ -181,6 +185,8 @@ final class LocalProcessingCoordinator: ObservableObject {
             outputPath: nil,
             errorMessage: nil,
             pageCount: 0,
+            completedPageCount: 0,
+            totalPageCount: document.totalPages,
             startedAt: Date(),
             completedAt: nil
         )
@@ -199,6 +205,8 @@ final class LocalProcessingCoordinator: ObservableObject {
         latestRun = run
         outputText = ""
         progress = 0
+        completedPageCount = 0
+        totalPageCount = document.totalPages
         isRunning = true
         statusMessage = "Starting \(provider.descriptor.name)…"
 
@@ -206,7 +214,30 @@ final class LocalProcessingCoordinator: ObservableObject {
             fileName: document.fileName,
             sourceURL: document.fileURL,
             outputDirectory: runDirectory,
-            expectedPageCount: document.totalPages
+            expectedPageCount: document.totalPages,
+            pageProgress: { [weak self] update in
+                Task { @MainActor in
+                    guard let self,
+                          self.latestRun?.id == runID,
+                          update.completedPageCount >= self.completedPageCount else {
+                        return
+                    }
+                    self.completedPageCount = update.completedPageCount
+                    self.totalPageCount = update.totalPageCount
+                    self.progress = max(self.progress, update.fraction)
+                    self.statusMessage = "Saved page \(update.pageNumber) of \(update.totalPageCount) to disk"
+
+                    guard var trackedRun = self.latestRun else { return }
+                    trackedRun.pageCount = update.completedPageCount
+                    trackedRun.completedPageCount = update.completedPageCount
+                    trackedRun.totalPageCount = update.totalPageCount
+                    self.latestRun = trackedRun
+                    try? self.persist(trackedRun, in: runDirectory)
+                    if let index = self.recentRuns.firstIndex(where: { $0.id == runID }) {
+                        self.recentRuns[index] = trackedRun
+                    }
+                }
+            }
         )
 
         Task {
@@ -221,6 +252,8 @@ final class LocalProcessingCoordinator: ObservableObject {
                 run.status = "succeeded"
                 run.outputPath = result.outputURL.path
                 run.pageCount = result.pageCount
+                run.completedPageCount = result.pageCount
+                run.totalPageCount = max(document.totalPages, result.pageCount)
                 run.completedAt = Date()
                 try persist(run, in: runDirectory)
                 refreshRecentRuns()
@@ -228,12 +261,19 @@ final class LocalProcessingCoordinator: ObservableObject {
                 if currentSourcePath == document.filePath {
                     latestRun = run
                     progress = 1
+                    completedPageCount = result.pageCount
+                    totalPageCount = max(document.totalPages, result.pageCount)
                     statusMessage = provider.availability().isSimulated
                         ? "Simulation complete · model weights were not loaded."
                         : "Parsed locally with \(provider.descriptor.name)."
                     loadOutputText()
                 }
             } catch {
+                if let trackedRun = latestRun, trackedRun.id == runID {
+                    run.pageCount = trackedRun.pageCount
+                    run.completedPageCount = trackedRun.completedPageCount
+                    run.totalPageCount = trackedRun.totalPageCount
+                }
                 run.status = "failed"
                 run.errorMessage = error.localizedDescription
                 run.completedAt = Date()
@@ -258,7 +298,12 @@ final class LocalProcessingCoordinator: ObservableObject {
         latestRun = run
         currentSourcePath = run.sourcePath
         currentFileName = run.fileName
-        progress = run.status == "succeeded" ? 1 : 0
+        completedPageCount = run.completedPageCount
+            ?? (run.status == "succeeded" ? run.pageCount : 0)
+        totalPageCount = run.totalPageCount ?? run.pageCount
+        progress = totalPageCount > 0
+            ? Double(completedPageCount) / Double(totalPageCount)
+            : (run.status == "succeeded" ? 1 : 0)
         statusMessage = run.status == "succeeded"
             ? "Parsed locally with \(run.providerName)."
             : run.errorMessage ?? "This run did not finish."

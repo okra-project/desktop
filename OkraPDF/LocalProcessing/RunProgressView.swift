@@ -14,6 +14,11 @@ struct RunProgressView: View {
             }
             ProgressView(value: coordinator.progress)
                 .accessibilityLabel(coordinator.statusMessage)
+            if coordinator.totalPageCount > 0 {
+                Text("\(coordinator.completedPageCount) of \(coordinator.totalPageCount) pages saved")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Text(coordinator.statusMessage)
                 .font(.callout)
                 .foregroundStyle(.secondary)
