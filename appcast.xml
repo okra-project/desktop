@@ -1,9 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
   <channel>
     <title>okraPDF Desktop Updates</title>
     <link>https://raw.githubusercontent.com/okra-project/desktop/main/appcast.xml</link>
     <description>In-app beta updates for the okraPDF desktop app.</description>
     <language>en</language>
+    <item>
+      <title>okraPDF Desktop v0.5.0-beta.16</title>
+      <sparkle:version>202607280831</sparkle:version>
+      <sparkle:shortVersionString>0.5.0-beta.16</sparkle:shortVersionString>
+      <pubDate>Tue, 28 Jul 2026 08:36:46 +0000</pubDate>
+      <link>https://github.com/okra-project/desktop/releases/tag/desktop-v0.5.0-beta.16</link>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/okra-project/desktop/releases/download/desktop-v0.5.0-beta.16/Okra-0.5.0-beta.16.dmg" sparkle:edSignature="RZVKhfyrOcj/nEqHD/YwI3MimDid5Hw0onTi2K9ULV3+Fz8ooQ+LpK5gdtNqyGtYQw0YEz8UY6jOzKV1b4aUCw==" length="2393188" type="application/octet-stream" />
+    </item>
   </channel>
 </rss>
