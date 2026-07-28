@@ -56,6 +56,11 @@ jobs:
           CERTIFICATE_PATH="${RUNNER_TEMP}/developer-id.p12"
           KEYCHAIN_PATH="${RUNNER_TEMP}/app-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(uuidgen)"
+          ORIGINAL_KEYCHAIN_LIST_PATH="${RUNNER_TEMP}/original-user-keychains.txt"
+
+          security list-keychains -d user \
+            | sed -e 's/^[[:space:]]*"//' -e 's/"$//' \
+            > "${ORIGINAL_KEYCHAIN_LIST_PATH}"
 
           if [[ "${CSC_LINK}" == https://* ]]; then
             curl --fail --silent --show-error --location "${CSC_LINK}" --output "${CERTIFICATE_PATH}"
@@ -76,7 +81,13 @@ jobs:
             -s \
             -k "${KEYCHAIN_PASSWORD}" \
             "${KEYCHAIN_PATH}"
-          security list-keychains -d user -s "${KEYCHAIN_PATH}"
+          ORIGINAL_KEYCHAINS=()
+          while IFS= read -r KEYCHAIN; do
+            if [[ -n "${KEYCHAIN}" ]]; then
+              ORIGINAL_KEYCHAINS+=("${KEYCHAIN}")
+            fi
+          done < "${ORIGINAL_KEYCHAIN_LIST_PATH}"
+          security list-keychains -d user -s "${KEYCHAIN_PATH}" "${ORIGINAL_KEYCHAINS[@]}"
 
           SIGNING_IDENTITY="$(security find-identity -v -p codesigning "${KEYCHAIN_PATH}" | awk -F'"' '/Developer ID Application/{print $2; exit}')"
           if [[ -z "${SIGNING_IDENTITY}" ]]; then
@@ -86,6 +97,7 @@ jobs:
 
           echo "APPLE_SIGNING_IDENTITY=${SIGNING_IDENTITY}" >> "${GITHUB_ENV}"
           echo "RELEASE_KEYCHAIN_PATH=${KEYCHAIN_PATH}" >> "${GITHUB_ENV}"
+          echo "RELEASE_ORIGINAL_KEYCHAIN_LIST_PATH=${ORIGINAL_KEYCHAIN_LIST_PATH}" >> "${GITHUB_ENV}"
 
       - name: Test and build signed app
         shell: bash
@@ -184,4 +196,15 @@ jobs:
         run: |
           if [[ -n "${RELEASE_KEYCHAIN_PATH:-}" ]]; then
             security delete-keychain "${RELEASE_KEYCHAIN_PATH}" || true
+          fi
+          if [[ -f "${RELEASE_ORIGINAL_KEYCHAIN_LIST_PATH:-}" ]]; then
+            ORIGINAL_KEYCHAINS=()
+            while IFS= read -r KEYCHAIN; do
+              if [[ -n "${KEYCHAIN}" ]]; then
+                ORIGINAL_KEYCHAINS+=("${KEYCHAIN}")
+              fi
+            done < "${RELEASE_ORIGINAL_KEYCHAIN_LIST_PATH}"
+            if [[ "${#ORIGINAL_KEYCHAINS[@]}" -gt 0 ]]; then
+              security list-keychains -d user -s "${ORIGINAL_KEYCHAINS[@]}"
+            fi
           fi
