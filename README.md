@@ -57,16 +57,57 @@ document because its CLI does not expose trustworthy per-page completion.
 Provider setup may download dependencies and model artifacts once. Extraction
 does not make cloud or network calls.
 
-## Download
+## Friends beta
 
-Download the Apple-silicon beta from the
-[`desktop-v0.5.0-beta.18` GitHub Release](https://github.com/okra-project/desktop/releases/tag/desktop-v0.5.0-beta.18).
-The app and DMG are Developer ID signed, hardened, notarized by Apple, and
-stapled for normal Gatekeeper opening on other Macs.
+`desktop-v0.5.0-beta.19` is a prerelease for selected testers using an
+Apple-silicon Mac with macOS 13 or later. Processing is local-only. For this
+round, use **Apple Vision**: it is built into macOS and requires no model or
+Python setup.
 
-From beta.16 on, the app updates itself: it checks a signed update feed daily
-and **Check for Updates…** downloads, verifies, and relaunches into the newest
-beta without another manual DMG download.
+Real Docling and Baidu Unlimited-OCR setup and inference are outside this
+testing round. Baidu simulation, if you encounter it in developer instructions,
+is internal workflow QA and is not evidence of OCR quality.
+
+### Install
+
+1. Download `Okra-0.5.0-beta.19.dmg` from the
+   [`desktop-v0.5.0-beta.19` GitHub prerelease](https://github.com/okra-project/desktop/releases/tag/desktop-v0.5.0-beta.19).
+2. Optionally download the adjacent `.sha256` file and, from the Downloads
+   folder, run `shasum -a 256 -c Okra-0.5.0-beta.19.dmg.sha256`.
+3. Open the DMG, drag **Okra** to **Applications**, and eject the DMG.
+4. Open **Okra** from Finder's Applications folder. The app and DMG are
+   Developer ID signed, hardened, notarized by Apple, and stapled for normal
+   Gatekeeper opening.
+
+### Five-minute path
+
+1. Open or drop a PDF and confirm that merely opening it does not start
+   extraction.
+2. Leave **Apple Vision** selected and click **Parse**.
+3. Copy the resulting Markdown, then use **Save As** to write a `.md` file.
+
+### Update
+
+The app checks its signed update feed daily. You can also choose **Check for
+Updates…** in the app menu to download, verify, install, and relaunch into the
+newest beta. If in-app updating fails, download the newer DMG from the
+[GitHub Releases page](https://github.com/okra-project/desktop/releases) and
+repeat the installation steps above.
+
+### Feedback
+
+For lightweight feedback, reply directly to the maintainer who sent you the
+build. For a technical bug, [open a GitHub issue](https://github.com/okra-project/desktop/issues/new)
+and include:
+
+- macOS version and Mac model/chip;
+- PDF type and page count;
+- reproduction steps;
+- expected and actual behavior; and
+- a screenshot when it helps explain the problem.
+
+Do not attach confidential PDFs or paste sensitive extracted text into a public
+issue. Describe the document shape or use a non-sensitive substitute instead.
 
 ## Build
 
@@ -120,7 +161,7 @@ swift test --filter baiduUnlimitedOCREndToEndSimulationOnPDF
 ## Package a local beta
 
 ```bash
-./scripts/build-dmg.sh 0.5.0-beta.18
+./scripts/build-dmg.sh 0.5.0-beta.19
 ```
 
 The optional second argument is the integer `CFBundleVersion` build number

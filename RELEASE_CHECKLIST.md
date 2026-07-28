@@ -2,7 +2,7 @@
 
 Current train: `desktop-v0.5.0-beta.N`
 
-Roadmap item: `D.6.11`
+Roadmap item: `D.6.12`
 
 ## Product contract
 
@@ -68,7 +68,26 @@ Roadmap item: `D.6.11`
 - [x] `swift test` on an unrestricted macOS shell (52 tests / 12 suites passed, 2026-07-28)
 - [x] Python output-parser, resume, and appcast tests (9/9 passed, 2026-07-28)
 
-## Manual smoke test
+## Friend-core manual regression
+
+Run every line below against the exact downloadable beta.19 prerelease
+candidate. Record evidence on issue #48; do not use a local build.
+
+- [ ] Open a one-page text PDF and confirm no extraction starts until **Parse** is clicked
+- [ ] Replace it with a multi-page scanned PDF and again confirm no automatic extraction
+- [ ] Parse both documents with Apple Vision
+- [ ] Confirm multi-page progress remains visible and the app stays responsive
+- [ ] Copy output and paste it into a plain-text editor
+- [ ] Use **Save As** and verify the resulting `.md` file
+- [ ] Use **Reveal** and verify both the stored output and source PDF locations
+- [ ] Repeat the Apple Vision flow with the network disconnected
+- [ ] Try one invalid or corrupt input and confirm the app rejects or reports it without crashing
+
+## Broader product regression
+
+These retained checks do not replace the friend-core lines above. Do not mark
+the real-provider checks complete from Baidu simulation, and do not block the
+friend round on real Docling or Baidu setup/inference.
 
 - [x] Launch and confirm the reader window and canonical green Dock icon appear (2026-07-27)
 - [ ] Drop a one-page text PDF and confirm no extraction starts
@@ -106,3 +125,7 @@ Roadmap item: `D.6.11`
 - [x] App and DMG accepted by Apple notarization and stapled
 - [x] Re-downloaded app and DMG accepted by `spctl` as `Notarized Developer ID`
 - [ ] Second-Mac clean-install DMG pass
+- [ ] Exact beta.19 candidate DMG and SHA-256 assets published as an unannounced prerelease
+- [ ] Exact candidate passes the automated signing, notarization, Gatekeeper, DMG, quarantine-launch, and appcast gates
+- [ ] Friend-equivalent clean-Mac install and Apple Vision extraction recorded on issue #47
+- [ ] Signed in-place **Install and Relaunch** update evidence recorded on issue #39
