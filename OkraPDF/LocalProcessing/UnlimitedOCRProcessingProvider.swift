@@ -130,6 +130,20 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
                 arguments.append("--simulate")
             }
 
+            // Each worker loads its own multi-GB model copy into unified
+            // memory, so queue concurrent local runs instead of letting them
+            // thrash. Waiting is surfaced as a visible status, never hidden.
+            let runGate = LocalExclusiveFileLock(
+                url: runtime.rootURL.appendingPathComponent("worker.lock")
+            )
+            try await runGate.acquire {
+                progress(
+                    0.22,
+                    "Waiting for another Baidu Unlimited-OCR run to finish…"
+                )
+            }
+            defer { runGate.release() }
+
             let monitorTask = Task.detached(priority: .utility) {
                 var observedPageCount = initialManifest.completedPageCount
                 while Task.isCancelled == false {

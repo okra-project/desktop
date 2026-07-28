@@ -31,16 +31,22 @@ final class LocalProcessingCoordinator: ObservableObject {
     @Published private(set) var isInstalling = false
     @Published private(set) var setupProgress: LocalProviderSetupProgress?
     @Published private(set) var setupErrorMessage: String?
+    @Published private(set) var runHealthMessage: String?
 
     private static let providerDefaultsKey = "localProcessing.selectedProvider"
     private let providers: [any LocalProcessingProvider]
     private let runsRoot: URL
     private let userDefaults: UserDefaults
+    private let memorySampler: @Sendable () -> SystemMemoryStatus
+    private let stallThreshold: TimeInterval
+    private let healthPollInterval: TimeInterval
     private var currentSourcePath: String?
     private var currentFileName = "extraction.pdf"
     private var installationTask: Task<Void, Never>?
     private var processingTask: Task<Void, Never>?
+    private var healthMonitorTask: Task<Void, Never>?
     private var activeRun: LocalProcessingRun?
+    private var lastProgressEventAt = Date()
 
     init(
         providers: [any LocalProcessingProvider] = [
@@ -49,11 +55,17 @@ final class LocalProcessingCoordinator: ObservableObject {
             UnlimitedOCRProcessingProvider(),
         ],
         runsRoot: URL = LocalProviderPaths.runsRoot,
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = .standard,
+        memorySampler: @escaping @Sendable () -> SystemMemoryStatus = SystemMemorySampler.sample,
+        stallThreshold: TimeInterval = 90,
+        healthPollInterval: TimeInterval = 5
     ) {
         self.providers = providers
         self.runsRoot = runsRoot
         self.userDefaults = userDefaults
+        self.memorySampler = memorySampler
+        self.stallThreshold = stallThreshold
+        self.healthPollInterval = healthPollInterval
 
         if providers.first(where: { $0.descriptor.id == .unlimitedOCR })?.availability().isSimulated == true {
             selectedProviderID = .unlimitedOCR
@@ -313,6 +325,7 @@ final class LocalProcessingCoordinator: ObservableObject {
         totalPageCount = run.totalPageCount ?? document.totalPages
         isRunning = true
         statusMessage = run.statusMessage ?? "Starting \(provider.descriptor.name)…"
+        startHealthMonitor()
 
         let request = LocalProcessingRequest(
             fileName: document.fileName,
@@ -327,6 +340,7 @@ final class LocalProcessingCoordinator: ObservableObject {
                           update.completedPageCount >= self.completedPageCount else {
                         return
                     }
+                    self.noteProgressEvent()
                     self.completedPageCount = update.completedPageCount
                     self.totalPageCount = update.totalPageCount
                     self.progress = max(self.progress, update.fraction)
@@ -359,6 +373,7 @@ final class LocalProcessingCoordinator: ObservableObject {
                         guard let self,
                               var trackedRun = self.activeRun,
                               trackedRun.id == runID else { return }
+                        self.noteProgressEvent()
                         self.progress = max(self.progress, min(max(fraction, 0), 1))
                         self.statusMessage = message
                         trackedRun.progress = self.progress
@@ -438,7 +453,37 @@ final class LocalProcessingCoordinator: ObservableObject {
             activeRun = nil
             isRunning = false
             processingTask = nil
+            stopHealthMonitor()
         }
+    }
+
+    private func noteProgressEvent() {
+        lastProgressEventAt = Date()
+        runHealthMessage = nil
+    }
+
+    private func startHealthMonitor() {
+        healthMonitorTask?.cancel()
+        lastProgressEventAt = Date()
+        runHealthMessage = nil
+        healthMonitorTask = Task { [weak self] in
+            while Task.isCancelled == false {
+                try? await Task.sleep(for: .seconds(self?.healthPollInterval ?? 5))
+                guard let self, Task.isCancelled == false, self.isRunning else { return }
+                guard self.activeRun?.status == "running" else { continue }
+                self.runHealthMessage = LocalRunHealth.message(
+                    idleFor: Date().timeIntervalSince(self.lastProgressEventAt),
+                    stallThreshold: self.stallThreshold,
+                    memory: self.memorySampler()
+                )
+            }
+        }
+    }
+
+    private func stopHealthMonitor() {
+        healthMonitorTask?.cancel()
+        healthMonitorTask = nil
+        runHealthMessage = nil
     }
 
     func revealRunsFolder() {

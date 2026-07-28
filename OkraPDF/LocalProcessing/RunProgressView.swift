@@ -23,6 +23,13 @@ struct RunProgressView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if let healthMessage = coordinator.runHealthMessage {
+                Label(healthMessage, systemImage: "exclamationmark.triangle")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("Run health warning: \(healthMessage)")
+            }
 
             Button {
                 coordinator.cancelRun()
