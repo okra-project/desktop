@@ -1,6 +1,6 @@
 # okraPDF Desktop — Launch Checklist
 
-The supported desktop product is the `D.6.11` windowed macOS PDF reader and
+The supported desktop product is the `D.6.12` windowed macOS PDF reader and
 local parser. It opens a PDF in place, waits for an explicit Parse action, and
 returns reviewable source-aligned output.
 
@@ -59,8 +59,10 @@ is required by one of the supported local parsers.
 ```bash
 cd apps/desktop
 swift test
-./scripts/build-dmg.sh 0.5.0-beta.18
+./scripts/build-dmg.sh 0.5.0-beta.19
 ```
 
-Do not promote the parser to a stable release until the manual provider checks
-and second-Mac install gate are recorded in `RELEASE_CHECKLIST.md`.
+Treat beta.19 as a selected-tester friends beta, not a stable release. Do not
+send its link until the exact candidate passes the friend-core regression,
+second-Mac install, and signed in-place update gates recorded in
+`RELEASE_CHECKLIST.md`.
