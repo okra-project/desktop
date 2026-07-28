@@ -29,9 +29,12 @@ Roadmap item: `D.6.13`
 - [x] Baidu tokenizer-marker decoding and `<|det|>` layout parsing
 - [x] Typed normalized blocks in per-page and aggregate `result.json`
 - [x] Deterministic repeated-tail suppression with diagnostics
-- [x] Preview, Markdown, and JSON output modes for Baidu runs
+- [x] Preview, Markdown, and JSON output modes for Apple Vision and Baidu runs
 - [x] Source-PDF bounding boxes for valid Baidu normalized layout blocks
+- [x] Apple Vision structured output and source-PDF boxes for native text and scanned OCR observations
+- [x] Provider-neutral source-PDF overlays for Apple Vision and Baidu Unlimited-OCR
 - [x] Two-way source-box and preview-card selection across zoom, scroll, crop, and rotation
+- [x] Two-way source-box and preview-card hover highlighting, including card scroll-into-view
 - [x] Accessible Show boxes toolbar toggle; overlays remain screen-only and never mutate the source PDF
 - [x] Copy, Save As, and Reveal actions for Markdown and JSON
 - [x] No cloud upload or remote-control surface
@@ -43,7 +46,7 @@ Roadmap item: `D.6.13`
 - [x] Run lifecycle persisted as `run.json` under Application Support
 - [x] Pollable progress snapshots and sequenced lifecycle stream persisted as `run.json` and `events.jsonl`
 - [x] Results stored beside each run manifest as `result.md`
-- [x] Baidu structured results stored beside each run manifest as `result.json`
+- [x] Apple Vision and Baidu structured results stored beside each run manifest as `result.json`
 - [x] Recent local runs re-open from the workspace sidebar
 - [x] Baidu Unlimited-OCR inference forces Hugging Face/Transformers offline mode
 - [x] Provider setup is visibly distinct from offline extraction
@@ -57,7 +60,8 @@ Roadmap item: `D.6.13`
 - [x] Run-health stall/memory decision logic and cross-process lock queue coverage
 - [x] Appcast item insertion, newest-first ordering, and re-run replacement coverage
 - [x] Synthetic aToken fixture covers whitespace decoding, malformed markers, normalized boxes, HTML preservation, and repeated-tail suppression
-- [x] PDF overlay adapter, clipping, crop/rotation geometry, annotation ownership, and click-selection coverage
+- [x] Provider-neutral PDF overlay adapter, clipping, fixed crop/rotation geometry, annotation ownership, click-selection, and hover-state coverage
+- [x] Apple Vision native-text and scanned-observation structured-output coverage
 - [x] Default app state constructs every bundled provider without terminating
 - [x] Packaged app starts with builder-only SwiftPM resources hidden
 - [x] Quarantined notarized beta.8 through beta.15 DMGs start through LaunchServices before publishing (2026-07-28)
@@ -65,8 +69,8 @@ Roadmap item: `D.6.13`
 - [x] Docling provider, tests, and Docling-only bundled resources removed for beta.20
 - [x] `swift build` on an unrestricted macOS shell (2026-07-28)
 - [x] Canonical website mark checksum and packaged-resource coverage
-- [x] `swift test` on an unrestricted macOS shell (53 tests / 12 suites passed, 2026-07-28)
-- [x] Python output-parser, resume, and appcast tests (9/9 passed, 2026-07-28)
+- [x] `swift test` on an unrestricted macOS shell (55 tests / 12 suites passed, 2026-07-28)
+- [x] Python output-parser, resume, and appcast tests (10/10 passed, 2026-07-28)
 
 ## Friend-core manual regression
 

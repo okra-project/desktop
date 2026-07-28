@@ -39,9 +39,9 @@ Do not start a dev server or watch process.
 - Apple Vision remains the zero-setup default.
 - The source PDF remains in place; do not reintroduce a copied-file library.
 - Successful output is normalized to `result.md` beside a small `run.json` manifest.
-  Baidu Unlimited-OCR also writes `result.json` with typed blocks and normalized
-  top-left layout boxes. Valid Baidu boxes render as removable, screen-only
-  PDFKit annotations over the source PDF and support two-way selection with the
-  block preview; do not expose raw tokenizer artifacts or mutate the source PDF.
+  Both providers also write `result.json` with typed blocks and normalized
+  top-left layout boxes. Valid boxes render as removable, screen-only PDFKit
+  annotations over the source PDF and support two-way selection and hover with
+  the block preview; do not expose raw tokenizer artifacts or mutate the source PDF.
 - Do not add SQLite, cloud fields, policy/spend models, chat, or document agents.
 - Use system controls and accessible SF Symbols only for functional affordances.
