@@ -17,7 +17,17 @@ Nothing is uploaded. Run artifacts stay on the Mac under:
 ```text
 ~/Library/Application Support/okraPDF/Runs/{runId}/run.json
 ~/Library/Application Support/okraPDF/Runs/{runId}/result.md
+~/Library/Application Support/okraPDF/Runs/{runId}/page-progress.json
+~/Library/Application Support/okraPDF/Runs/{runId}/page-results/page-0001.md
 ```
+
+Apple Vision and Baidu Unlimited-OCR checkpoint each completed page to disk
+atomically. `run.json` and `page-progress.json` record the completed/total page
+counts while a parse is still running, so a large-document failure preserves
+every finished page and exposes the exact restart boundary. `result.md` is
+assembled from the page files in numeric order. Docling currently remains a
+document-level operation because its CLI does not expose trustworthy per-page
+completion callbacks.
 
 ## Local providers
 
@@ -59,7 +69,8 @@ The retained test surface covers the explicit read-before-parse contract, the
 explicit Parse action, run manifests and history, provider registration, setup
 progress/cancellation, pinned-model integrity metadata, Apple Vision Markdown
 output, and a full Baidu Unlimited-OCR simulation through PDF page rendering,
-the bundled Python worker, offline flags, and persisted Markdown.
+the bundled Python worker, offline flags, page-level checkpoints, and persisted
+Markdown. A large-document test verifies 120 independently readable page files.
 
 ## Simulate Baidu Unlimited-OCR end to end
 

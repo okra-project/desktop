@@ -98,6 +98,66 @@ struct LocalProcessingProviderTests {
         )
     }
 
+    @Test("Page progress is persisted while extraction is still running", .timeLimit(.minutes(1)))
+    func pageProgressPersistsDuringExtraction() async throws {
+        let workspace = try TestWorkspace(prefix: "okra-live-page-progress")
+        try FileManager.default.createDirectory(at: workspace.root, withIntermediateDirectories: true)
+        let sourceURL = workspace.root.appendingPathComponent("large.pdf")
+        try Data("pdf".utf8).write(to: sourceURL)
+        let pageCount = 3
+        let coordinator = LocalProcessingCoordinator(
+            providers: [IncrementalFixtureProcessingProvider(pageCount: pageCount)],
+            runsRoot: workspace.runsRoot,
+            userDefaults: workspace.defaults
+        )
+        let document = LocalPDFDocument(
+            id: sourceURL.path,
+            fileName: sourceURL.lastPathComponent,
+            filePath: sourceURL.path,
+            totalPages: pageCount
+        )
+
+        coordinator.run(document: document)
+        try await waitUntil("first page checkpoint to be persisted") {
+            coordinator.completedPageCount == 1
+        }
+
+        let activeRun = try #require(coordinator.latestRun)
+        let runDirectory = workspace.runsRoot.appendingPathComponent(
+            activeRun.id,
+            isDirectory: true
+        )
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let persistedDuringRun = try decoder.decode(
+            LocalProcessingRun.self,
+            from: Data(contentsOf: runDirectory.appendingPathComponent("run.json"))
+        )
+        #expect(coordinator.isRunning)
+        #expect(persistedDuringRun.status == "running")
+        #expect(persistedDuringRun.completedPageCount == 1)
+        #expect(persistedDuringRun.totalPageCount == pageCount)
+        #expect(persistedDuringRun.pageCount == 1)
+        #expect(
+            FileManager.default.fileExists(
+                atPath: runDirectory
+                    .appendingPathComponent("page-results/page-0001.md")
+                    .path
+            )
+        )
+        #expect(
+            FileManager.default.fileExists(
+                atPath: runDirectory.appendingPathComponent("result.md").path
+            ) == false
+        )
+
+        try await waitUntil("incremental extraction to finish") {
+            coordinator.isRunning == false
+        }
+        #expect(coordinator.completedPageCount == pageCount)
+        #expect(coordinator.progress == 1)
+    }
+
     @Test("Opening a PDF does not start extraction")
     func openingPDFDoesNotStartExtraction() throws {
         let workspace = try TestWorkspace(prefix: "okra-open")
@@ -192,6 +252,8 @@ struct LocalProcessingProviderTests {
         #expect(run.executionMode == "simulation")
         #expect(run.pageCount == expectedPageCount)
         #expect(coordinator.progress == 1)
+        #expect(coordinator.completedPageCount == expectedPageCount)
+        #expect(coordinator.totalPageCount == expectedPageCount)
         #expect(coordinator.statusMessage == "Simulation complete · model weights were not loaded.")
         #expect(
             coordinator.outputText.contains(
@@ -217,6 +279,20 @@ struct LocalProcessingProviderTests {
                 atPath: runDirectory
                     .appendingPathComponent(String(format: "pages/page-%04d.png", expectedPageCount))
                     .path
+            )
+        )
+        let pageStore = LocalPageCheckpointStore(
+            outputDirectory: runDirectory,
+            totalPages: expectedPageCount,
+            documentHeader: "# \(pdfURL.lastPathComponent)"
+        )
+        let pageManifest = try pageStore.loadManifest()
+        #expect(pageManifest.completedPageCount == expectedPageCount)
+        #expect(pageManifest.currentPageStatus == .succeeded)
+        #expect(pageManifest.lastCompletedPageNumber == expectedPageCount)
+        #expect(
+            FileManager.default.fileExists(
+                atPath: pageStore.pageURL(pageNumber: expectedPageCount).path
             )
         )
 
@@ -257,6 +333,15 @@ struct LocalProcessingProviderTests {
         #expect(markdown.contains("# sample.pdf"))
         #expect(markdown.contains("## Page 1"))
         #expect(markdown.contains("okraPDF local extraction"))
+        let pageStore = LocalPageCheckpointStore(
+            outputDirectory: workspace.root.appendingPathComponent("output", isDirectory: true),
+            totalPages: 1,
+            documentHeader: "# sample.pdf"
+        )
+        let pageManifest = try pageStore.loadManifest()
+        #expect(pageManifest.completedPageCount == 1)
+        #expect(pageManifest.currentPageStatus == .succeeded)
+        #expect(FileManager.default.fileExists(atPath: pageStore.pageURL(pageNumber: 1).path))
     }
 
     private func makePDF(pageTexts: [String]) throws -> Data {
