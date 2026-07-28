@@ -68,7 +68,7 @@ enum DesktopUpdateStatus: Equatable, Sendable {
 /// offline check maps to `.unknown` so the UI never invents update state.
 struct DesktopUpdateChecker: Sendable {
     static let defaultReleasesURL = URL(
-        string: "https://api.github.com/repos/steventsao/okrapdf-desktop/releases?per_page=10"
+        string: "https://api.github.com/repos/okra-project/okrapdf-desktop/releases?per_page=10"
     )!
 
     private static let tagPrefix = "desktop-v"
