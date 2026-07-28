@@ -350,6 +350,14 @@ struct LocalProcessingProviderTests {
         #expect(coordinator.structuredOutput?.completedPageCount == expectedPageCount)
         #expect(coordinator.structuredOutput?.complete == true)
         #expect(coordinator.structuredOutput?.simulation == true)
+        #expect(coordinator.pdfBoundingBoxOverlays.count == expectedPageCount)
+        #expect(coordinator.pdfBoundingBoxOverlays.map(\.pageNumber) == Array(1...expectedPageCount))
+
+        let firstOverlay = try #require(coordinator.pdfBoundingBoxOverlays.first)
+        coordinator.showsPDFBoundingBoxes = false
+        coordinator.selectStructuredBlock(firstOverlay.id)
+        #expect(coordinator.selectedStructuredBlockID == firstOverlay.id)
+        #expect(coordinator.showsPDFBoundingBoxes)
 
         let runDirectory = workspace.runsRoot.appendingPathComponent(run.id, isDirectory: true)
         #expect(FileManager.default.fileExists(atPath: runDirectory.appendingPathComponent("run.json").path))
@@ -389,6 +397,16 @@ struct LocalProcessingProviderTests {
         #expect(persisted.executionMode == "simulation")
         #expect(persisted.status == "succeeded")
         #expect(persisted.structuredOutputPath == runDirectory.appendingPathComponent("result.json").path)
+
+        let reopened = LocalProcessingCoordinator(
+            providers: [provider],
+            runsRoot: workspace.runsRoot,
+            userDefaults: workspace.defaults
+        )
+        reopened.load(document: document)
+        #expect(reopened.latestRun?.id == run.id)
+        #expect(reopened.pdfBoundingBoxOverlays.count == expectedPageCount)
+        #expect(reopened.selectedStructuredBlockID == nil)
     }
 
     @Test("Apple Vision writes Markdown for a single-page PDF", .timeLimit(.minutes(1)))

@@ -23,6 +23,8 @@ final class LocalProcessingCoordinator: ObservableObject {
     @Published private(set) var outputText = ""
     @Published private(set) var structuredOutputText = ""
     @Published private(set) var structuredOutput: StructuredExtractionDocument?
+    @Published private(set) var selectedStructuredBlockID: String?
+    @Published var showsPDFBoundingBoxes = true
     @Published private(set) var progress = 0.0
     @Published private(set) var completedPageCount = 0
     @Published private(set) var totalPageCount = 0
@@ -110,6 +112,14 @@ final class LocalProcessingCoordinator: ObservableObject {
         return URL(fileURLWithPath: structuredOutputPath)
     }
 
+    var pdfBoundingBoxOverlays: [PDFBoundingBoxOverlay] {
+        guard latestRun?.providerId == LocalProviderID.unlimitedOCR.rawValue,
+              latestRun?.status == "succeeded" else {
+            return []
+        }
+        return structuredOutput?.unlimitedOCRPDFOverlays ?? []
+    }
+
     var canResumeLatestRun: Bool {
         guard !isRunning,
               !isInstalling,
@@ -139,6 +149,7 @@ final class LocalProcessingCoordinator: ObservableObject {
         outputText = ""
         structuredOutputText = ""
         structuredOutput = nil
+        selectedStructuredBlockID = nil
         progress = 0
         completedPageCount = 0
         totalPageCount = document.totalPages
@@ -319,6 +330,7 @@ final class LocalProcessingCoordinator: ObservableObject {
         currentFileName = document.fileName
         activeRun = run
         latestRun = run
+        selectedStructuredBlockID = nil
         upsertRecentRun(run)
         progress = run.progress ?? 0
         completedPageCount = run.completedPageCount ?? 0
@@ -497,8 +509,15 @@ final class LocalProcessingCoordinator: ObservableObject {
         display(run: run)
     }
 
+    func selectStructuredBlock(_ id: String) {
+        guard pdfBoundingBoxOverlays.contains(where: { $0.id == id }) else { return }
+        showsPDFBoundingBoxes = true
+        selectedStructuredBlockID = id
+    }
+
     private func display(run: LocalProcessingRun) {
         latestRun = run
+        selectedStructuredBlockID = nil
         completedPageCount = run.completedPageCount
             ?? (run.status == "succeeded" ? run.pageCount : 0)
         totalPageCount = run.totalPageCount ?? run.pageCount
@@ -702,6 +721,7 @@ final class LocalProcessingCoordinator: ObservableObject {
             outputText = ""
             structuredOutputText = ""
             structuredOutput = nil
+            selectedStructuredBlockID = nil
             return
         }
         outputText = (try? String(contentsOf: outputURL, encoding: .utf8)) ?? ""
@@ -709,9 +729,14 @@ final class LocalProcessingCoordinator: ObservableObject {
         guard let structuredOutputURL else {
             structuredOutputText = ""
             structuredOutput = nil
+            selectedStructuredBlockID = nil
             return
         }
         structuredOutputText = (try? String(contentsOf: structuredOutputURL, encoding: .utf8)) ?? ""
         structuredOutput = try? StructuredExtractionDocument.load(from: structuredOutputURL)
+        if let selectedStructuredBlockID,
+           pdfBoundingBoxOverlays.contains(where: { $0.id == selectedStructuredBlockID }) == false {
+            self.selectedStructuredBlockID = nil
+        }
     }
 }
