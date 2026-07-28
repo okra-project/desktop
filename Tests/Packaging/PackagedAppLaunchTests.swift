@@ -147,6 +147,11 @@ struct PackagedAppLaunchTests {
             .appendingPathComponent("Resources", isDirectory: true)
             .appendingPathComponent("okraPDF_Okra.bundle", isDirectory: true)
             .appendingPathComponent("ProviderScripts", isDirectory: true)
+        let pluginScriptsURL = appURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("Resources", isDirectory: true)
+            .appendingPathComponent("okraPDF_Okra.bundle", isDirectory: true)
+            .appendingPathComponent("PluginScripts", isDirectory: true)
         let brandMarkURL = appURL
             .appendingPathComponent("Contents", isDirectory: true)
             .appendingPathComponent("Resources", isDirectory: true)
@@ -156,6 +161,22 @@ struct PackagedAppLaunchTests {
 
         try #require(fileManager.isExecutableFile(atPath: executableURL.path))
         try #require(fileManager.fileExists(atPath: providerScriptsURL.path))
+        try #require(fileManager.fileExists(atPath: pluginScriptsURL.path))
+        try #require(
+            fileManager.fileExists(
+                atPath: pluginScriptsURL.appendingPathComponent("install-presidio-ner.sh").path
+            )
+        )
+        try #require(
+            fileManager.fileExists(
+                atPath: pluginScriptsURL.appendingPathComponent("presidio-ner-worker.py").path
+            )
+        )
+        #expect(
+            fileManager.fileExists(
+                atPath: pluginScriptsURL.appendingPathComponent("__pycache__").path
+            ) == false
+        )
         try #require(fileManager.fileExists(atPath: brandMarkURL.path))
         #expect(bundle.bundleIdentifier == "com.okrapdf.desktop")
         #expect(bundle.object(forInfoDictionaryKey: "LSUIElement") == nil)

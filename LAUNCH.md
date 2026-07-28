@@ -1,8 +1,9 @@
 # okraPDF Desktop — Launch Checklist
 
 The supported desktop product is the `D.6.11` windowed macOS PDF reader and
-local parser. It opens a PDF in place, waits for an explicit Parse action, and
-returns reviewable source-aligned output.
+local parser plus the narrowly scoped `S-REDACT.2` desktop plugin slice. It
+opens a PDF in place, waits for explicit tool actions, and lets optional local
+operations consume completed extraction artifacts.
 
 ## Versioning
 
@@ -27,11 +28,15 @@ returns reviewable source-aligned output.
 - [x] Truthfully labeled Baidu Unlimited-OCR end-to-end simulation mode
 - [x] Baidu bounding boxes rendered over the source PDF with two-way selection
 - [x] Accessible Show boxes toolbar toggle with Reduce Motion support
+- [x] Built-in local operation registry kept separate from parser selection
+- [x] Optional Presidio NER setup and offline PII candidate detection
+- [x] Per-run Presidio request/result artifacts with Baidu block boxes when available
 - [x] Markdown copy, save, and reveal
 - [x] File-backed `run.json` and `result.md` artifacts
-- [x] No account, network workflow, SQLite, policy, agents, or sidecars
+- [x] No account, cloud workflow, SQLite, policy, agents, or remote sidecars
 - [ ] Clean-profile Docling dogfood with the network disconnected
 - [ ] Clean-profile Baidu Unlimited-OCR dogfood on Apple silicon
+- [ ] Clean-profile Presidio setup and offline detection dogfood
 - [ ] Manual large/scanned/malformed PDF regression pass
 
 ## Distribution gate

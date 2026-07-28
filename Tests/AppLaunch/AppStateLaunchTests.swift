@@ -19,8 +19,9 @@ struct AppStateLaunchTests {
                 == [.appleVision, .docling, .unlimitedOCR]
         )
         #expect(coordinator.selectedProviderID == .appleVision)
+        #expect(state.localPlugins.definitions.map(\.id) == [.presidioNER])
         #expect(state.selectedDocument == nil)
-        #expect(state.workspaceTools.tools.map(\.id) == [.extract])
+        #expect(state.workspaceTools.tools.map(\.id) == [.extract, .presidioNER])
         #expect(state.selectedWorkspaceToolID == .extract)
     }
 

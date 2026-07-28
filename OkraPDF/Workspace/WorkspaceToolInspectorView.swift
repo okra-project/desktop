@@ -5,6 +5,7 @@ struct WorkspaceToolInspectorView: View {
     let document: LocalPDFDocument?
     let importError: String?
     @ObservedObject var coordinator: LocalProcessingCoordinator
+    @ObservedObject var plugins: LocalPluginCoordinator
     let parse: () -> Void
     let openRun: (LocalProcessingRun) -> Void
     let revealPDF: () -> Void
@@ -39,6 +40,11 @@ struct WorkspaceToolInspectorView: View {
                 parse: parse,
                 openRun: openRun,
                 revealPDF: revealPDF
+            )
+        } else if tool.id == .presidioNER {
+            PresidioInspectorView(
+                coordinator: plugins,
+                sourceRun: coordinator.latestRun
             )
         } else {
             WorkspaceNoticeView(
