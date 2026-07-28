@@ -59,7 +59,7 @@ is required by one of the supported local parsers.
 ```bash
 cd apps/desktop
 swift test
-./scripts/build-dmg.sh 0.5.0-beta.17
+./scripts/build-dmg.sh 0.5.0-beta.18
 ```
 
 Do not promote the parser to a stable release until the manual provider checks

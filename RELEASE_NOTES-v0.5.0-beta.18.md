@@ -1,4 +1,4 @@
-# okraPDF Desktop v0.5.0-beta.17
+# okraPDF Desktop v0.5.0-beta.18
 
 ## Goal
 
@@ -47,14 +47,14 @@ None. Existing runs remain compatible. Only successful Baidu Unlimited-OCR
 
 ## Rollout
 
-Merge the release PR, confirm the `desktop-v0.5.0-beta.17` milestone has zero
+Merge the release PR, confirm the `desktop-v0.5.0-beta.18` milestone has zero
 open items, close the milestone, then publish the matching tag. The notarized
 release workflow will publish the Apple-silicon DMG, checksum, and signed
 Sparkle appcast entry.
 
 ## Rollback
 
-Point users back to `desktop-v0.5.0-beta.16`. The feature adds no migration and
+Point users back to `desktop-v0.5.0-beta.17`. The feature adds no migration and
 does not modify PDFs, existing run manifests, or stored structured output.
 
 ## Owner

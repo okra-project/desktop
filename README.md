@@ -60,7 +60,7 @@ does not make cloud or network calls.
 ## Download
 
 Download the Apple-silicon beta from the
-[`desktop-v0.5.0-beta.17` GitHub Release](https://github.com/okra-project/desktop/releases/tag/desktop-v0.5.0-beta.17).
+[`desktop-v0.5.0-beta.18` GitHub Release](https://github.com/okra-project/desktop/releases/tag/desktop-v0.5.0-beta.18).
 The app and DMG are Developer ID signed, hardened, notarized by Apple, and
 stapled for normal Gatekeeper opening on other Macs.
 
@@ -120,7 +120,7 @@ swift test --filter baiduUnlimitedOCREndToEndSimulationOnPDF
 ## Package a local beta
 
 ```bash
-./scripts/build-dmg.sh 0.5.0-beta.17
+./scripts/build-dmg.sh 0.5.0-beta.18
 ```
 
 The optional second argument is the integer `CFBundleVersion` build number
