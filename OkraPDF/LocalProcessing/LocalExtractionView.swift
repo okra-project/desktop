@@ -8,18 +8,28 @@ struct LocalExtractionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: WorkspaceTheme.sectionSpacing) {
-            ProviderPickerView(coordinator: coordinator)
-            ProviderStatusView(coordinator: coordinator)
+            WorkspaceInspectorSection(
+                "Configuration",
+                detail: "Choose the parser used for this document."
+            ) {
+                ProviderPickerView(coordinator: coordinator)
+                ProviderStatusView(coordinator: coordinator)
+            }
 
-            if document != nil {
-                Divider()
-                extractionControls
-            } else {
-                WorkspaceNoticeView(
-                    message: "Open a PDF to enable parsing.",
-                    systemImage: "info.circle",
-                    color: .secondary
-                )
+            Divider()
+            WorkspaceInspectorSection(
+                "Action",
+                detail: "Nothing runs until you start or resume a parse."
+            ) {
+                if document != nil {
+                    extractionControls
+                } else {
+                    WorkspaceNoticeView(
+                        message: "Open a PDF to enable parsing.",
+                        systemImage: "info.circle",
+                        color: .secondary
+                    )
+                }
             }
 
             if coordinator.outputText.isEmpty == false {

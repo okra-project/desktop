@@ -15,7 +15,8 @@ returns reviewable source-aligned output.
 ## Product gate
 
 - [x] Lightweight windowed SwiftUI PDF reader
-- [x] Three-pane local workspace with recent run history
+- [x] Three-pane local workspace with a left tool registry, center reader, and right tool inspector
+- [x] Run history remains available as a secondary section inside Extract
 - [x] Open and Finder drag-and-drop
 - [x] PDF selection and parsing are separate actions
 - [x] Original PDF remains in place

@@ -2,14 +2,17 @@
 
 ## Product boundary
 
-This app is a minimal macOS 13+ windowed PDF reader and local parser. Keep one
-reader window with one narrow parser inspector. Do not add tabs, remote control,
-chat, cloud upload, registries, or backoffice UI.
+This app is a minimal macOS 13+ windowed PDF reader and local document-tool
+workspace. Keep one reader window with a text-led local tool registry on the
+left and the selected tool's configuration/action inspector on the right. Do
+not add tabs, remote control, chat, cloud upload, marketplace/remote registries,
+or backoffice UI. The small built-in registry is only navigation and metadata
+for operations shipped in the app.
 
 The supported flow is:
 
 ```text
-open/drop PDF → read → choose local provider → explicit Parse → readable output
+open/drop PDF → choose local tool → configure locally → explicit action → review output
 ```
 
 ## Architecture
@@ -18,6 +21,7 @@ open/drop PDF → read → choose local provider → explicit Parse → readable
 - `OkraPDF/Support/SparkleUpdaterController.swift` — Sparkle in-app updates (signed appcast, Install and Relaunch)
 - `OkraPDF/AppState.swift` — open/drop state separated from explicit parsing
 - `OkraPDF/ContentView.swift` — PDF reader shell, drop target, and parser inspector
+- `OkraPDF/Workspace/` — three-pane shell, built-in tool registry, and selected-tool inspector
 - `OkraPDF/PDFReaderView.swift` — native PDFKit reader bridge
 - `OkraPDF/LocalProcessing/` — provider contracts, setup, coordinator, and output UI
 - `OkraPDF/ProviderScripts/` — bundled Docling/MLX setup and worker scripts
@@ -36,6 +40,7 @@ Do not start a dev server or watch process.
 - User-facing brand copy is always `okraPDF`.
 - Extraction is local. Only explicit provider setup may download dependencies.
 - Opening or replacing a PDF must never start parsing; only the Parse action may run a provider.
+- Tool selection is navigation only and must never start setup or processing.
 - Apple Vision remains the zero-setup default.
 - The source PDF remains in place; do not reintroduce a copied-file library.
 - Successful output is normalized to `result.md` beside a small `run.json` manifest.

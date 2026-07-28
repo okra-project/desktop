@@ -15,11 +15,12 @@ struct ContentView: View {
 
     private var workspaceContent: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            WorkspaceSidebarView(
+            WorkspaceToolRegistryView(
                 document: state.selectedDocument,
+                registry: state.workspaceTools,
+                selectedToolID: $state.selectedWorkspaceToolID,
                 coordinator: state.localProcessing,
-                openPDF: state.openPDFPicker,
-                openRun: state.openRun
+                openPDF: state.openPDFPicker
             )
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
         } content: {
@@ -32,14 +33,16 @@ struct ContentView: View {
             )
             .navigationSplitViewColumnWidth(min: 520, ideal: 720)
         } detail: {
-            ExtractionInspectorView(
+            WorkspaceToolInspectorView(
+                tool: selectedWorkspaceTool,
                 document: state.selectedDocument,
                 importError: state.importError,
                 coordinator: state.localProcessing,
                 parse: state.parseSelectedDocument,
+                openRun: state.openRun,
                 revealPDF: state.revealSelectedPDF
             )
-            .navigationSplitViewColumnWidth(min: 320, ideal: 370, max: 460)
+            .navigationSplitViewColumnWidth(min: 340, ideal: 400, max: 500)
         }
         .navigationSplitViewStyle(.balanced)
         .tint(WorkspaceTheme.brand)
@@ -55,6 +58,11 @@ struct ContentView: View {
             isTargeted: $isDropTargeted,
             perform: handleDrop
         )
+    }
+
+    private var selectedWorkspaceTool: WorkspaceToolDefinition {
+        state.workspaceTools.tool(withID: state.selectedWorkspaceToolID)
+            ?? state.workspaceTools.tools[0]
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {

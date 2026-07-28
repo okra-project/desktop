@@ -6,14 +6,20 @@ local parser, and explicitly click **Parse** when you want readable local output
 
 ## Flow
 
-1. Drop a PDF into the window, or choose **Open PDF…** from the workspace sidebar.
+1. Drop a PDF into the window, or choose **Open PDF…** from the tool sidebar.
 2. Read the original PDF in the native center preview. Opening it does not start a run.
-3. Choose a local provider in the Extract inspector and click **Parse**.
-4. Reopen a recent run from the sidebar; each run restores its status, progress, and output.
-5. Baidu Unlimited-OCR runs draw their detected layout boxes over the source
+3. Select **Extract** in the left tool registry.
+4. Choose a local provider and run it explicitly from the right inspector.
+5. Expand **Run history** in the Extract inspector to reopen a previous run; each run restores its status, progress, and output.
+6. Baidu Unlimited-OCR runs draw their detected layout boxes over the source
    PDF and offer a matching block preview, Markdown, and JSON.
-6. Cancel a long run without losing finished pages, then resume from its checkpoint.
-7. Copy, save, or reveal Markdown or JSON from the inspector.
+7. Cancel a long run without losing finished pages, then resume from its checkpoint.
+8. Copy, save, or reveal Markdown or JSON from the inspector.
+
+The workspace follows the same tool-centric hierarchy as okraPDF's web PDF
+Studio: tools on the left, the uninterrupted document in the center, and the
+selected tool's setup, configuration, action, result, and secondary history on
+the right. Selecting a tool never starts work.
 
 Nothing is uploaded. Run artifacts stay on the Mac under:
 
@@ -90,7 +96,8 @@ The desktop uses the same mark-only asset as the website and Storybook. App
 chrome renders the logo or the `Okra` name, never a logo-plus-wordmark lockup.
 
 The retained test surface covers the explicit read-before-parse contract, the
-explicit Parse action, run manifests and history, provider registration, setup
+tool-registry selection contract, explicit Parse action, run manifests and
+history, provider registration, setup
 progress/cancellation, pinned-model integrity metadata, Apple Vision Markdown
 output, Baidu output token/layout parsing, PDF bounding-box geometry and
 interaction, and a full Baidu Unlimited-OCR simulation through PDF page

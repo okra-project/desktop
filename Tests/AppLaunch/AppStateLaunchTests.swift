@@ -20,6 +20,8 @@ struct AppStateLaunchTests {
         )
         #expect(coordinator.selectedProviderID == .appleVision)
         #expect(state.selectedDocument == nil)
+        #expect(state.workspaceTools.tools.map(\.id) == [.extract])
+        #expect(state.selectedWorkspaceToolID == .extract)
     }
 
     @Test("Invalid stored provider falls back without terminating startup")

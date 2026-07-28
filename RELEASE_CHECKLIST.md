@@ -4,11 +4,14 @@ Current train: `desktop-v0.5.0-beta.N`
 
 Roadmap item: `D.6.11`
 
+Workspace information-architecture refinement: `D.6.3`
+
 ## Product contract
 
 - [x] Windowed app with native PDFKit preview
 - [x] Regular activation policy and Dock lifecycle
-- [x] Three-pane workspace with current document, recent runs, reader, and extraction inspector
+- [x] Three-pane workspace with tool registry, reader, and selected-tool inspector
+- [x] Tool selection is inert until the user invokes an explicit action
 - [x] PDF drag-and-drop
 - [x] **Open PDF…** picker
 - [x] Explicit Parse action; opening/replacing a PDF creates no run
@@ -44,7 +47,7 @@ Roadmap item: `D.6.11`
 - [x] Pollable progress snapshots and sequenced lifecycle stream persisted as `run.json` and `events.jsonl`
 - [x] Results stored beside each run manifest as `result.md`
 - [x] Baidu structured results stored beside each run manifest as `result.json`
-- [x] Recent local runs re-open from the workspace sidebar
+- [x] Recent local runs re-open from the secondary Run history section in Extract
 - [x] Docling inference forces Hugging Face/Transformers offline mode
 - [x] Baidu Unlimited-OCR inference forces Hugging Face/Transformers offline mode
 - [x] Provider setup is visibly distinct from offline extraction
@@ -60,12 +63,13 @@ Roadmap item: `D.6.11`
 - [x] Synthetic aToken fixture covers whitespace decoding, malformed markers, normalized boxes, HTML preservation, and repeated-tail suppression
 - [x] PDF overlay adapter, clipping, crop/rotation geometry, annotation ownership, and click-selection coverage
 - [x] Default app state constructs every bundled provider without terminating
+- [x] Built-in workspace registry ordering, uniqueness, and selection fallback coverage
 - [x] Packaged app starts with builder-only SwiftPM resources hidden
 - [x] Quarantined notarized beta.8 through beta.15 DMGs start through LaunchServices before publishing (2026-07-28)
-- [x] Remote-control, dispatch, registry, and model-catalog tests removed
+- [x] Remote-control, dispatch, agent-registry, and model-catalog tests removed
 - [x] `swift build` on an unrestricted macOS shell (2026-07-24)
 - [x] Canonical website mark checksum and packaged-resource coverage
-- [x] `swift test` on an unrestricted macOS shell (52 tests / 12 suites passed, 2026-07-28)
+- [x] `swift test` on an unrestricted macOS shell (56 tests / 13 suites passed, 2026-07-28)
 - [x] Python output-parser, resume, and appcast tests (9/9 passed, 2026-07-28)
 
 ## Manual smoke test
