@@ -11,13 +11,14 @@ struct okraPDFApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("okraPDF") {
+        WindowGroup("Okra") {
             ContentView()
                 .environmentObject(appState)
                 .frame(minWidth: 1_080, minHeight: 680)
                 .onOpenURL(perform: appState.openPDF)
         }
         .defaultSize(width: 1_320, height: 820)
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Open PDF…", action: appState.openPDFPicker)

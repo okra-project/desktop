@@ -62,8 +62,12 @@ The executable product is `Okra`. Package resources include the local
 ## Tests
 
 ```bash
+bash scripts/verify-brand-surface.sh
 swift test
 ```
+
+The desktop uses the same mark-only asset as the website and Storybook. App
+chrome renders the logo or the `Okra` name, never a logo-plus-wordmark lockup.
 
 The retained test surface covers the explicit read-before-parse contract, the
 explicit Parse action, run manifests and history, provider registration, setup

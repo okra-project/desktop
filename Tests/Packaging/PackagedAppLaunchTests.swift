@@ -147,10 +147,16 @@ struct PackagedAppLaunchTests {
             .appendingPathComponent("Resources", isDirectory: true)
             .appendingPathComponent("okraPDF_Okra.bundle", isDirectory: true)
             .appendingPathComponent("ProviderScripts", isDirectory: true)
+        let brandMarkURL = appURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("Resources", isDirectory: true)
+            .appendingPathComponent("okraPDF_Okra.bundle", isDirectory: true)
+            .appendingPathComponent("AppIcon.png")
         let bundle = try #require(Bundle(url: appURL))
 
         try #require(fileManager.isExecutableFile(atPath: executableURL.path))
         try #require(fileManager.fileExists(atPath: providerScriptsURL.path))
+        try #require(fileManager.fileExists(atPath: brandMarkURL.path))
         #expect(bundle.bundleIdentifier == "com.okrapdf.desktop")
         #expect(bundle.object(forInfoDictionaryKey: "LSUIElement") == nil)
     }
