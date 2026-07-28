@@ -39,6 +39,25 @@ struct StructuredExtractionPage: Codable, Equatable, Identifiable, Sendable {
     let plainText: String
     let blocks: [StructuredExtractionBlock]
     let diagnostics: StructuredExtractionDiagnostics
+    let provenance: String?
+
+    init(
+        pageNumber: Int,
+        imageFile: String,
+        markdown: String,
+        plainText: String,
+        blocks: [StructuredExtractionBlock],
+        diagnostics: StructuredExtractionDiagnostics,
+        provenance: String? = nil
+    ) {
+        self.pageNumber = pageNumber
+        self.imageFile = imageFile
+        self.markdown = markdown
+        self.plainText = plainText
+        self.blocks = blocks
+        self.diagnostics = diagnostics
+        self.provenance = provenance
+    }
 
     static func load(from url: URL) throws -> StructuredExtractionPage {
         try JSONDecoder().decode(
@@ -52,6 +71,33 @@ struct StructuredExtractionPage: Codable, Equatable, Identifiable, Sendable {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(self).write(to: url, options: .atomic)
     }
+
+    func routed(
+        to pageNumber: Int,
+        imageFile: String,
+        provenance: String?
+    ) -> StructuredExtractionPage {
+        StructuredExtractionPage(
+            pageNumber: pageNumber,
+            imageFile: imageFile,
+            markdown: markdown,
+            plainText: plainText,
+            blocks: blocks.enumerated().map { index, block in
+                StructuredExtractionBlock(
+                    id: "page-\(pageNumber)-block-\(index + 1)",
+                    type: block.type,
+                    sourceType: block.sourceType,
+                    text: block.text,
+                    html: block.html,
+                    bbox: block.bbox,
+                    sourceBbox: block.sourceBbox,
+                    sourceBboxScale: block.sourceBboxScale
+                )
+            },
+            diagnostics: diagnostics,
+            provenance: provenance
+        )
+    }
 }
 
 struct StructuredExtractionBlock: Codable, Equatable, Identifiable, Sendable {
@@ -59,9 +105,30 @@ struct StructuredExtractionBlock: Codable, Equatable, Identifiable, Sendable {
     let type: String
     let sourceType: String
     let text: String
+    let html: String?
     let bbox: StructuredExtractionBoundingBox?
     let sourceBbox: [Double]?
     let sourceBboxScale: Int?
+
+    init(
+        id: String,
+        type: String,
+        sourceType: String,
+        text: String,
+        html: String? = nil,
+        bbox: StructuredExtractionBoundingBox?,
+        sourceBbox: [Double]?,
+        sourceBboxScale: Int?
+    ) {
+        self.id = id
+        self.type = type
+        self.sourceType = sourceType
+        self.text = text
+        self.html = html
+        self.bbox = bbox
+        self.sourceBbox = sourceBbox
+        self.sourceBboxScale = sourceBboxScale
+    }
 
     var displayText: String {
         guard type == "table" else { return text }
@@ -105,4 +172,67 @@ struct StructuredExtractionDiagnostics: Codable, Equatable, Sendable {
     let duplicateBlockCount: Int
     let loopDetected: Bool
     let warnings: [String]
+    let blockCount: Int?
+
+    init(
+        rawCharacterCount: Int,
+        decodedCharacterCount: Int,
+        tokenArtifactCount: Int,
+        detectionCount: Int,
+        malformedDetectionCount: Int,
+        duplicateBlockCount: Int,
+        loopDetected: Bool,
+        warnings: [String],
+        blockCount: Int? = nil
+    ) {
+        self.rawCharacterCount = rawCharacterCount
+        self.decodedCharacterCount = decodedCharacterCount
+        self.tokenArtifactCount = tokenArtifactCount
+        self.detectionCount = detectionCount
+        self.malformedDetectionCount = malformedDetectionCount
+        self.duplicateBlockCount = duplicateBlockCount
+        self.loopDetected = loopDetected
+        self.warnings = warnings
+        self.blockCount = blockCount
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rawCharacterCount = try container.decodeIfPresent(
+            Int.self,
+            forKey: .rawCharacterCount
+        ) ?? 0
+        decodedCharacterCount = try container.decodeIfPresent(
+            Int.self,
+            forKey: .decodedCharacterCount
+        ) ?? 0
+        tokenArtifactCount = try container.decodeIfPresent(
+            Int.self,
+            forKey: .tokenArtifactCount
+        ) ?? 0
+        detectionCount = try container.decodeIfPresent(
+            Int.self,
+            forKey: .detectionCount
+        ) ?? 0
+        malformedDetectionCount = try container.decodeIfPresent(
+            Int.self,
+            forKey: .malformedDetectionCount
+        ) ?? 0
+        duplicateBlockCount = try container.decodeIfPresent(
+            Int.self,
+            forKey: .duplicateBlockCount
+        ) ?? 0
+        loopDetected = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .loopDetected
+        ) ?? false
+        warnings = try container.decodeIfPresent(
+            [String].self,
+            forKey: .warnings
+        ) ?? []
+        blockCount = try container.decodeIfPresent(
+            Int.self,
+            forKey: .blockCount
+        )
+    }
 }

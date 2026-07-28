@@ -7,6 +7,8 @@ struct LocalParserDefinitionTests {
     func providerContracts() {
         #expect(LocalParserCatalog.appleVision.runtime == .appleVision)
         #expect(LocalParserCatalog.appleVision.outputAdapter == .plainTextV1)
+        #expect(LocalParserCatalog.hybridAuto.runtime == .hybrid)
+        #expect(LocalParserCatalog.hybridAuto.outputAdapter == .hybridMarkdownV1)
         #expect(LocalParserCatalog.unlimitedOCR.runtime == .mlxVLM)
         #expect(LocalParserCatalog.unlimitedOCR.outputAdapter == .unlimitedOCRTokensV1)
     }
@@ -73,6 +75,7 @@ struct LocalParserDefinitionTests {
     func codableRoundTrip() throws {
         let definitions = [
             LocalParserCatalog.appleVision,
+            LocalParserCatalog.hybridAuto,
             LocalParserCatalog.unlimitedOCR,
         ]
         let data = try JSONEncoder().encode(definitions)
