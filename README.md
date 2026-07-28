@@ -9,7 +9,8 @@ local parser, and explicitly click **Parse** when you want readable local output
 1. Drop a PDF into the window, or choose **Open PDF…** from the workspace sidebar.
 2. Read the original PDF in the native center preview. Opening it does not start a run.
 3. Choose a local provider in the Extract inspector and click **Parse**.
-4. Reopen a recent run from the sidebar; each run restores its status, progress, and output.
+4. Watch each parser page move through **Not started**, **In progress**, **Done**,
+   **Needs attention**, or **Error**; reopen a recent run to restore the same state.
 5. Baidu Unlimited-OCR runs draw their detected layout boxes over the source
    PDF and offer a matching block preview, Markdown, and JSON.
 6. Cancel a long run without losing finished pages, then resume from its checkpoint.
@@ -29,13 +30,18 @@ Nothing is uploaded. Run artifacts stay on the Mac under:
 
 Apple Vision and Baidu Unlimited-OCR checkpoint each completed page to disk
 atomically. `run.json` is an atomically replaced, pollable snapshot containing
-status, fraction, message, page counts, update time, and event sequence.
+status, fraction, message, page counts, update time, event sequence, and a
+provider-neutral `pageLifecycles` matrix keyed by parser ID plus page number.
 `events.jsonl` is the append-only lifecycle stream for cursor-based inspection;
 it records start, progress, page checkpoints, cancel intent, interruption,
 resume, and terminal outcomes. If the app closes mid-run, the next launch marks
 the orphaned attempt interrupted instead of leaving it stuck in `running`.
 Resume reuses the same run directory and skips completed Apple Vision or Baidu
-page records. `result.md` is assembled from the page files in numeric order.
+page records. A canceled, stalled, or orphaned active page becomes
+`attention`; a parser failure becomes `error`; retry returns that page to
+`inProgress`; and only a durable page checkpoint becomes `done`. Merely viewing
+the run never changes these states. `result.md` is assembled from the page
+files in numeric order.
 
 ## Local providers
 
@@ -134,7 +140,8 @@ output, Baidu output token/layout parsing, PDF bounding-box geometry and
 interaction, and a full Baidu Unlimited-OCR simulation through PDF page
 rendering, the bundled Python worker, offline flags,
 page-level checkpoints, persisted Markdown plus JSON, durable cancel ordering,
-orphan recovery, same-run checkpoint resume, and provider-process termination.
+orphan recovery, same-run checkpoint resume, provider-process termination, and
+all five durable parser/page lifecycle states including multi-parser isolation.
 A large-document test verifies 120 independently readable page files.
 
 ## Simulate Baidu Unlimited-OCR end to end

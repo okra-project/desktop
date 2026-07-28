@@ -251,6 +251,7 @@ struct LocalProcessingProviderTests {
         #expect(resumedRun.status == "succeeded")
         #expect(resumedRun.resumeCount == 1)
         #expect(resumedRun.completedPageCount == 3)
+        #expect(reopened.pageLifecycles.allSatisfy { $0.state == .done })
         #expect(try Data(contentsOf: firstPageURL) == firstPageBeforeResume)
         #expect(
             try firstPageURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
@@ -354,6 +355,9 @@ struct LocalProcessingProviderTests {
         #expect(coordinator.progress == 1)
         #expect(coordinator.completedPageCount == expectedPageCount)
         #expect(coordinator.totalPageCount == expectedPageCount)
+        #expect(coordinator.pageLifecycles.count == expectedPageCount)
+        #expect(coordinator.pageLifecycles.allSatisfy { $0.state == .done })
+        #expect(coordinator.pageLifecycles.allSatisfy { $0.parserID == "unlimited-ocr" })
         #expect(coordinator.statusMessage == "Simulation complete · model weights were not loaded.")
         #expect(
             coordinator.outputText.contains(
@@ -425,6 +429,7 @@ struct LocalProcessingProviderTests {
         let persisted = try decoder.decode(LocalProcessingRun.self, from: manifestData)
         #expect(persisted.executionMode == "simulation")
         #expect(persisted.status == "succeeded")
+        #expect(persisted.pageLifecycles?.allSatisfy { $0.state == .done } == true)
         #expect(persisted.structuredOutputPath == runDirectory.appendingPathComponent("result.json").path)
 
         let reopened = LocalProcessingCoordinator(
@@ -434,6 +439,7 @@ struct LocalProcessingProviderTests {
         )
         reopened.load(document: document)
         #expect(reopened.latestRun?.id == run.id)
+        #expect(reopened.pageLifecycles.allSatisfy { $0.state == .done })
         #expect(reopened.pdfBoundingBoxOverlays.count == expectedPageCount)
         #expect(reopened.selectedStructuredBlockID == nil)
     }
@@ -461,6 +467,7 @@ struct LocalProcessingProviderTests {
 
         let result = try await AppleVisionProcessingProvider().process(
             request: LocalProcessingRequest(
+                parserID: .appleVision,
                 fileName: "sample.pdf",
                 sourceURL: pdfURL,
                 outputDirectory: workspace.root.appendingPathComponent("output", isDirectory: true),
@@ -538,6 +545,8 @@ struct LocalProcessingProviderTests {
         let overlay = try #require(coordinator.pdfBoundingBoxOverlays.first)
         #expect(coordinator.latestRun?.providerId == "apple-vision")
         #expect(coordinator.structuredOutput?.provider.id == "apple-vision")
+        #expect(coordinator.pageLifecycles.count == 1)
+        #expect(coordinator.pageLifecycles.first?.state == .done)
 
         coordinator.showsPDFBoundingBoxes = false
         coordinator.hoverStructuredBlock(overlay.id, isHovering: true)

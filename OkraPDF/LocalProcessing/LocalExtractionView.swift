@@ -12,6 +12,15 @@ struct LocalExtractionView: View {
             ProviderStatusView(coordinator: coordinator)
 
             if document != nil {
+                ForEach(coordinator.pageLifecycleGroups) { group in
+                    ParserPageLifecycleView(
+                        parserName: group.parserName,
+                        lifecycles: group.lifecycles
+                    )
+                }
+            }
+
+            if document != nil {
                 Divider()
                 extractionControls
             } else {

@@ -117,6 +117,8 @@ struct AppStateLaunchTests {
         #expect(coordinator.completedPageCount == 4)
         #expect(coordinator.totalPageCount == 10)
         #expect(coordinator.statusMessage.contains("interrupted"))
+        #expect(coordinator.pageLifecycles.prefix(4).allSatisfy { $0.state == .done })
+        #expect(coordinator.pageLifecycles[4].state == .attention)
         #expect(coordinator.canResumeLatestRun)
     }
 }

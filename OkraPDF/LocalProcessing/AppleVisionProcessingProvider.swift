@@ -43,9 +43,12 @@ final class AppleVisionProcessingProvider: LocalProcessingProvider, @unchecked S
                     let manifest = try pageStore.reconcileCompletedPages()
                     request.pageProgress(
                         LocalPageProgressUpdate(
+                            parserID: request.parserID,
                             pageNumber: pageNumber,
+                            state: .done,
                             completedPageCount: manifest.completedPageCount,
-                            totalPageCount: document.pageCount
+                            totalPageCount: document.pageCount,
+                            message: "Restored page \(pageNumber) of \(document.pageCount) from disk"
                         )
                     )
                     progress(
@@ -54,7 +57,18 @@ final class AppleVisionProcessingProvider: LocalProcessingProvider, @unchecked S
                     )
                     continue
                 }
+                let progressManifest = try pageStore.reconcileCompletedPages()
                 try pageStore.markProcessing(pageNumber: pageNumber)
+                request.pageProgress(
+                    LocalPageProgressUpdate(
+                        parserID: request.parserID,
+                        pageNumber: pageNumber,
+                        state: .inProgress,
+                        completedPageCount: progressManifest.completedPageCount,
+                        totalPageCount: document.pageCount,
+                        message: "Parsing page \(pageNumber) of \(document.pageCount)"
+                    )
+                )
 
                 do {
                     guard let page = document.page(at: index) else {
@@ -107,17 +121,44 @@ final class AppleVisionProcessingProvider: LocalProcessingProvider, @unchecked S
                     let manifest = try pageStore.reconcileCompletedPages()
                     request.pageProgress(
                         LocalPageProgressUpdate(
+                            parserID: request.parserID,
                             pageNumber: pageNumber,
+                            state: .done,
                             completedPageCount: manifest.completedPageCount,
-                            totalPageCount: document.pageCount
+                            totalPageCount: document.pageCount,
+                            message: "Saved page \(pageNumber) of \(document.pageCount)"
                         )
                     )
                     progress(
                         Double(pageNumber) / Double(document.pageCount),
                         "Saved page \(pageNumber) of \(document.pageCount)"
                     )
+                } catch is CancellationError {
+                    let completed = (try? pageStore.reconcileCompletedPages().completedPageCount) ?? 0
+                    request.pageProgress(
+                        LocalPageProgressUpdate(
+                            parserID: request.parserID,
+                            pageNumber: pageNumber,
+                            state: .attention,
+                            completedPageCount: completed,
+                            totalPageCount: document.pageCount,
+                            message: "Canceled. Resume to continue page \(pageNumber)."
+                        )
+                    )
+                    throw CancellationError()
                 } catch {
                     try? pageStore.markFailed(pageNumber: pageNumber, error: error)
+                    let completed = (try? pageStore.reconcileCompletedPages().completedPageCount) ?? 0
+                    request.pageProgress(
+                        LocalPageProgressUpdate(
+                            parserID: request.parserID,
+                            pageNumber: pageNumber,
+                            state: .error,
+                            completedPageCount: completed,
+                            totalPageCount: document.pageCount,
+                            message: error.localizedDescription
+                        )
+                    )
                     throw error
                 }
             }

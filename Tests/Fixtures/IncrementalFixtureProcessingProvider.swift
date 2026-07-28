@@ -32,15 +32,28 @@ final class IncrementalFixtureProcessingProvider: LocalProcessingProvider, @unch
 
         for pageNumber in 1...pageCount {
             try store.markProcessing(pageNumber: pageNumber)
+            request.pageProgress(
+                LocalPageProgressUpdate(
+                    parserID: request.parserID,
+                    pageNumber: pageNumber,
+                    state: .inProgress,
+                    completedPageCount: pageNumber - 1,
+                    totalPageCount: pageCount,
+                    message: "Parsing page \(pageNumber) of \(pageCount)"
+                )
+            )
             try store.writePage(
                 pageNumber: pageNumber,
                 markdown: "## Page \(pageNumber)\n\nFixture \(pageNumber)"
             )
             request.pageProgress(
                 LocalPageProgressUpdate(
+                    parserID: request.parserID,
                     pageNumber: pageNumber,
+                    state: .done,
                     completedPageCount: pageNumber,
-                    totalPageCount: pageCount
+                    totalPageCount: pageCount,
+                    message: "Saved page \(pageNumber) of \(pageCount)"
                 )
             )
             progress(

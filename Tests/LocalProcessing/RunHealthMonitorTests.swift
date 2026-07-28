@@ -48,6 +48,8 @@ struct RunHealthMonitorTests {
             return message.contains("Low on memory") && message.contains("no progress")
         }
         #expect(coordinator.isRunning)
+        #expect(coordinator.pageLifecycles.contains { $0.state == .attention })
+        #expect(coordinator.latestRun?.pageLifecycles?.contains { $0.state == .attention } == true)
 
         try await waitUntil("fixture parsing to finish") { coordinator.isRunning == false }
         #expect(coordinator.runHealthMessage == nil)

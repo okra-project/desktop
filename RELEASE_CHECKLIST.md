@@ -2,7 +2,7 @@
 
 Current train: `desktop-v0.5.0-beta.N`
 
-Roadmap item: `D.6.13`
+Roadmap item: `D.6.14`
 
 ## Product contract
 
@@ -19,6 +19,8 @@ Roadmap item: `D.6.13`
 - [x] Pinned Baidu model revision and SHA-256 verification before readiness
 - [x] Truthfully labeled Baidu Unlimited-OCR simulation mode
 - [x] Streaming progress and local errors
+- [x] Canonical per-parser page lifecycle (`idle`, `inProgress`, `done`, `attention`, `error`)
+- [x] Lazy page-state strip with parser name, visible text/symbol states, and complete VoiceOver labels
 - [x] Passive stall warning after 90 seconds without progress updates
 - [x] Low-memory warning while a local run is active
 - [x] Cross-instance Baidu Unlimited-OCR run queue with a visible waiting state
@@ -45,6 +47,7 @@ Roadmap item: `D.6.13`
 - [x] No account, library database, cloud metadata, policy, spend, or audit records
 - [x] Run lifecycle persisted as `run.json` under Application Support
 - [x] Pollable progress snapshots and sequenced lifecycle stream persisted as `run.json` and `events.jsonl`
+- [x] Parser/page lifecycle matrix persisted in `run.json` with legacy-manifest decoding
 - [x] Results stored beside each run manifest as `result.md`
 - [x] Apple Vision and Baidu structured results stored beside each run manifest as `result.json`
 - [x] Recent local runs re-open from the workspace sidebar
@@ -57,6 +60,7 @@ Roadmap item: `D.6.13`
 - [x] Simulated Baidu Unlimited-OCR PDF → pages → worker → Markdown + JSON → manifest E2E
 - [x] Mid-run `run.json` progress and 120-page checkpoint persistence coverage
 - [x] Cancel ordering, orphan recovery, checkpoint resume, and child-process termination coverage
+- [x] Lifecycle TDD for transitions, parser isolation, Codable round trips, health attention, cancellation, errors, and completion
 - [x] Run-health stall/memory decision logic and cross-process lock queue coverage
 - [x] Appcast item insertion, newest-first ordering, and re-run replacement coverage
 - [x] Synthetic aToken fixture covers whitespace decoding, malformed markers, normalized boxes, HTML preservation, and repeated-tail suppression

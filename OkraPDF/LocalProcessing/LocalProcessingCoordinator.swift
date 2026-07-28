@@ -15,6 +15,13 @@ final class LocalProcessingCoordinator: ObservableObject {
                 ? "\(selectedDescriptor.name) is ready offline."
                 : selectedAvailability.message
             progress = 0
+            if latestRun == nil, totalPageCount > 0 {
+                pageLifecycles = ParserPageLifecycle.idlePages(
+                    parserID: selectedProviderID.rawValue,
+                    pageCount: totalPageCount,
+                    at: .now
+                )
+            }
         }
     }
     @Published private(set) var availabilityByProvider: [LocalProviderID: LocalProviderAvailability] = [:]
@@ -36,6 +43,7 @@ final class LocalProcessingCoordinator: ObservableObject {
     @Published private(set) var progress = 0.0
     @Published private(set) var completedPageCount = 0
     @Published private(set) var totalPageCount = 0
+    @Published private(set) var pageLifecycles: [ParserPageLifecycle] = []
     @Published private(set) var statusMessage = "Choose a local parser and extract."
     @Published private(set) var isRunning = false
     @Published private(set) var isInstalling = false
@@ -144,6 +152,31 @@ final class LocalProcessingCoordinator: ObservableObject {
         return provider.availability().isReady
     }
 
+    var pageLifecycleRollup: ParserLifecycleState {
+        ParserLifecycleState.rollup(pageLifecycles.map(\.state))
+    }
+
+    var pageLifecycleGroups: [ParserPageLifecycleGroup] {
+        Dictionary(grouping: pageLifecycles, by: \.parserID)
+            .map { parserID, lifecycles in
+                let parserName: String
+                if latestRun?.providerId == parserID, let latestRun {
+                    parserName = latestRun.providerName
+                } else if let providerID = LocalProviderID(rawValue: parserID),
+                          let descriptor = provider(for: providerID)?.descriptor {
+                    parserName = descriptor.name
+                } else {
+                    parserName = parserID
+                }
+                return ParserPageLifecycleGroup(
+                    parserID: parserID,
+                    parserName: parserName,
+                    lifecycles: lifecycles.sorted { $0.pageNumber < $1.pageNumber }
+                )
+            }
+            .sorted { $0.parserName.localizedStandardCompare($1.parserName) == .orderedAscending }
+    }
+
     func load(document: LocalPDFDocument) {
         currentSourcePath = document.filePath
         currentFileName = document.fileName
@@ -165,6 +198,11 @@ final class LocalProcessingCoordinator: ObservableObject {
         progress = 0
         completedPageCount = 0
         totalPageCount = document.totalPages
+        pageLifecycles = ParserPageLifecycle.idlePages(
+            parserID: selectedProviderID.rawValue,
+            pageCount: document.totalPages,
+            at: .now
+        )
         statusMessage = selectedAvailability.isReady
             ? "Ready to parse with \(selectedDescriptor.name)."
             : selectedAvailability.message
@@ -260,7 +298,12 @@ final class LocalProcessingCoordinator: ObservableObject {
             statusMessage: "Starting \(provider.descriptor.name)…",
             updatedAt: Date(),
             resumeCount: 0,
-            eventSequence: 0
+            eventSequence: 0,
+            pageLifecycles: ParserPageLifecycle.idlePages(
+                parserID: provider.descriptor.id.rawValue,
+                pageCount: document.totalPages,
+                at: .now
+            )
         )
 
         do {
@@ -348,11 +391,13 @@ final class LocalProcessingCoordinator: ObservableObject {
         progress = run.progress ?? 0
         completedPageCount = run.completedPageCount ?? 0
         totalPageCount = run.totalPageCount ?? document.totalPages
+        pageLifecycles = resolvedPageLifecycles(for: run)
         isRunning = true
         statusMessage = run.statusMessage ?? "Starting \(provider.descriptor.name)…"
         startHealthMonitor()
 
         let request = LocalProcessingRequest(
+            parserID: provider.descriptor.id,
             fileName: document.fileName,
             sourceURL: document.fileURL,
             outputDirectory: runDirectory,
@@ -361,24 +406,38 @@ final class LocalProcessingCoordinator: ObservableObject {
                 Task { @MainActor in
                     guard let self,
                           var trackedRun = self.activeRun,
-                          trackedRun.id == runID,
-                          update.completedPageCount >= self.completedPageCount else {
+                          trackedRun.id == runID else {
                         return
                     }
                     self.noteProgressEvent()
-                    self.completedPageCount = update.completedPageCount
-                    self.totalPageCount = update.totalPageCount
+                    self.completedPageCount = max(
+                        self.completedPageCount,
+                        update.completedPageCount
+                    )
+                    self.totalPageCount = max(self.totalPageCount, update.totalPageCount)
                     self.progress = max(self.progress, update.fraction)
-                    self.statusMessage = "Saved page \(update.pageNumber) of \(update.totalPageCount) to disk"
+                    self.statusMessage = update.message
+                        ?? self.defaultPageStatusMessage(for: update)
 
-                    trackedRun.pageCount = update.completedPageCount
-                    trackedRun.completedPageCount = update.completedPageCount
-                    trackedRun.totalPageCount = update.totalPageCount
+                    trackedRun.pageCount = max(trackedRun.pageCount, update.completedPageCount)
+                    trackedRun.completedPageCount = max(
+                        trackedRun.completedPageCount ?? 0,
+                        update.completedPageCount
+                    )
+                    trackedRun.totalPageCount = max(
+                        trackedRun.totalPageCount ?? 0,
+                        update.totalPageCount
+                    )
                     trackedRun.progress = self.progress
                     trackedRun.statusMessage = self.statusMessage
+                    trackedRun.pageLifecycles = self.applying(
+                        update,
+                        to: trackedRun
+                    )
+                    self.pageLifecycles = trackedRun.pageLifecycles ?? []
                     try? self.recordTransition(
                         &trackedRun,
-                        type: "run.page_checkpoint",
+                        type: "run.page_lifecycle",
                         in: runDirectory
                     )
                     self.activeRun = trackedRun
@@ -423,6 +482,11 @@ final class LocalProcessingCoordinator: ObservableObject {
                 completedRun.pageCount = result.pageCount
                 completedRun.completedPageCount = result.pageCount
                 completedRun.totalPageCount = max(document.totalPages, result.pageCount)
+                completedRun.pageLifecycles = completedPageLifecycles(
+                    for: completedRun,
+                    pageCount: result.pageCount,
+                    message: "Saved by \(provider.descriptor.name)"
+                )
                 completedRun.progress = 1
                 completedRun.completedAt = Date()
                 completedRun.statusMessage = provider.availability().isSimulated
@@ -437,6 +501,7 @@ final class LocalProcessingCoordinator: ObservableObject {
                     progress = 1
                     completedPageCount = result.pageCount
                     totalPageCount = max(document.totalPages, result.pageCount)
+                    pageLifecycles = completedRun.pageLifecycles ?? []
                     statusMessage = completedRun.statusMessage ?? "Extraction complete."
                     loadOutputs()
                 }
@@ -449,6 +514,11 @@ final class LocalProcessingCoordinator: ObservableObject {
                     canceledRun.completedAt = Date()
                     canceledRun.progress = total > 0 ? Double(completed) / Double(total) : 0
                     canceledRun.statusMessage = "Canceled · \(completed) of \(total) pages saved."
+                    canceledRun.pageLifecycles = transitioningActivePages(
+                        in: canceledRun,
+                        to: .attention,
+                        detail: "Canceled. Resume to continue this page."
+                    )
                     try? recordTransition(&canceledRun, type: "run.canceled", in: runDirectory)
                     activeRun = canceledRun
                     upsertRecentRun(canceledRun)
@@ -457,6 +527,7 @@ final class LocalProcessingCoordinator: ObservableObject {
                         progress = canceledRun.progress ?? 0
                         completedPageCount = completed
                         totalPageCount = total
+                        pageLifecycles = canceledRun.pageLifecycles ?? []
                         statusMessage = canceledRun.statusMessage ?? "Canceled."
                     }
                 }
@@ -466,11 +537,18 @@ final class LocalProcessingCoordinator: ObservableObject {
                     failedRun.errorMessage = error.localizedDescription
                     failedRun.completedAt = Date()
                     failedRun.statusMessage = error.localizedDescription
+                    failedRun.pageLifecycles = transitioningActivePages(
+                        in: failedRun,
+                        to: .error,
+                        detail: error.localizedDescription,
+                        markFirstUnfinishedWhenNoActivePage: true
+                    )
                     try? recordTransition(&failedRun, type: "run.failed", in: runDirectory)
                     activeRun = failedRun
                     upsertRecentRun(failedRun)
                     if currentSourcePath == document.filePath {
                         latestRun = failedRun
+                        pageLifecycles = failedRun.pageLifecycles ?? []
                         statusMessage = error.localizedDescription
                     }
                 }
@@ -496,11 +574,40 @@ final class LocalProcessingCoordinator: ObservableObject {
                 try? await Task.sleep(for: .seconds(self?.healthPollInterval ?? 5))
                 guard let self, Task.isCancelled == false, self.isRunning else { return }
                 guard self.activeRun?.status == "running" else { continue }
-                self.runHealthMessage = LocalRunHealth.message(
+                let healthMessage = LocalRunHealth.message(
                     idleFor: Date().timeIntervalSince(self.lastProgressEventAt),
                     stallThreshold: self.stallThreshold,
                     memory: self.memorySampler()
                 )
+                let previousMessage = self.runHealthMessage
+                self.runHealthMessage = healthMessage
+
+                guard let healthMessage,
+                      healthMessage != previousMessage,
+                      var run = self.activeRun else {
+                    continue
+                }
+                run.pageLifecycles = self.transitioningActivePages(
+                    in: run,
+                    to: .attention,
+                    detail: healthMessage,
+                    markFirstUnfinishedWhenNoActivePage: true
+                )
+                let runDirectory = LocalProviderPaths.runDirectory(
+                    runsRoot: self.runsRoot,
+                    runID: run.id
+                )
+                try? self.recordTransition(
+                    &run,
+                    type: "run.page_attention",
+                    in: runDirectory
+                )
+                self.activeRun = run
+                self.upsertRecentRun(run)
+                if self.latestRun?.id == run.id {
+                    self.latestRun = run
+                    self.pageLifecycles = run.pageLifecycles ?? []
+                }
             }
         }
     }
@@ -551,6 +658,7 @@ final class LocalProcessingCoordinator: ObservableObject {
         completedPageCount = run.completedPageCount
             ?? (run.status == "succeeded" ? run.pageCount : 0)
         totalPageCount = run.totalPageCount ?? run.pageCount
+        pageLifecycles = resolvedPageLifecycles(for: run)
         progress = run.progress ?? (totalPageCount > 0
             ? Double(completedPageCount) / Double(totalPageCount)
             : (run.status == "succeeded" ? 1 : 0))
@@ -657,6 +765,11 @@ final class LocalProcessingCoordinator: ObservableObject {
             run.errorMessage = nil
             run.statusMessage = "Run interrupted when okraPDF closed · \(completed) of \(total) pages saved."
             run.progress = total > 0 ? Double(completed) / Double(total) : 0
+            run.pageLifecycles = transitioningActivePages(
+                in: run,
+                to: .attention,
+                detail: "The app closed during this page. Resume to continue."
+            )
             let runDirectory = LocalProviderPaths.runDirectory(runsRoot: runsRoot, runID: run.id)
             try? recordTransition(&run, type: "run.interrupted", in: runDirectory)
             recentRuns[index] = run
@@ -682,6 +795,131 @@ final class LocalProcessingCoordinator: ObservableObject {
             return "Extraction is running."
         default:
             return run.errorMessage ?? "This run did not finish."
+        }
+    }
+
+    private func defaultPageStatusMessage(for update: LocalPageProgressUpdate) -> String {
+        switch update.state {
+        case .idle:
+            return "Page \(update.pageNumber) is waiting."
+        case .inProgress:
+            return "Parsing page \(update.pageNumber) of \(update.totalPageCount)."
+        case .done:
+            return "Saved page \(update.pageNumber) of \(update.totalPageCount) to disk."
+        case .attention:
+            return "Page \(update.pageNumber) needs attention."
+        case .error:
+            return "Page \(update.pageNumber) failed."
+        }
+    }
+
+    private func applying(
+        _ update: LocalPageProgressUpdate,
+        to run: LocalProcessingRun
+    ) -> [ParserPageLifecycle] {
+        ParserPageLifecycle.applying(
+            parserID: update.parserID.rawValue,
+            pageNumber: update.pageNumber,
+            state: update.state,
+            totalPageCount: update.totalPageCount,
+            detail: update.message,
+            at: .now,
+            to: resolvedPageLifecycles(for: run)
+        )
+    }
+
+    private func completedPageLifecycles(
+        for run: LocalProcessingRun,
+        pageCount: Int,
+        message: String
+    ) -> [ParserPageLifecycle] {
+        var lifecycles = resolvedPageLifecycles(for: run)
+        guard pageCount > 0 else { return lifecycles }
+
+        for pageNumber in 1...pageCount {
+            lifecycles = ParserPageLifecycle.applying(
+                parserID: run.providerId,
+                pageNumber: pageNumber,
+                state: .done,
+                totalPageCount: pageCount,
+                detail: message,
+                at: .now,
+                to: lifecycles
+            )
+        }
+        return lifecycles
+    }
+
+    private func transitioningActivePages(
+        in run: LocalProcessingRun,
+        to state: ParserLifecycleState,
+        detail: String,
+        markFirstUnfinishedWhenNoActivePage: Bool = false
+    ) -> [ParserPageLifecycle] {
+        var lifecycles = resolvedPageLifecycles(for: run)
+        let timestamp = Date.now
+        var changed = false
+
+        for index in lifecycles.indices where lifecycles[index].state == .inProgress {
+            changed = lifecycles[index].transition(
+                to: state,
+                detail: detail,
+                at: timestamp
+            ) || changed
+        }
+
+        if changed == false,
+           markFirstUnfinishedWhenNoActivePage,
+           let index = lifecycles.firstIndex(where: { $0.state != .done }) {
+            _ = lifecycles[index].transition(to: state, detail: detail, at: timestamp)
+        }
+        return lifecycles
+    }
+
+    private func resolvedPageLifecycles(for run: LocalProcessingRun) -> [ParserPageLifecycle] {
+        if let lifecycles = run.pageLifecycles, lifecycles.isEmpty == false {
+            return lifecycles.sorted {
+                ($0.parserID, $0.pageNumber) < ($1.parserID, $1.pageNumber)
+            }
+        }
+
+        let total = max(run.totalPageCount ?? run.pageCount, 0)
+        guard total > 0 else { return [] }
+        let completed = min(run.completedPageCount ?? (run.status == "succeeded" ? total : 0), total)
+        let timestamp = run.updatedAt ?? run.completedAt ?? run.startedAt
+
+        return (1...total).map { pageNumber in
+            let state: ParserLifecycleState
+            let detail: String?
+            if pageNumber <= completed {
+                state = .done
+                detail = "Recovered from a durable page checkpoint."
+            } else if pageNumber == completed + 1 {
+                switch run.status {
+                case "running", "canceling":
+                    state = .inProgress
+                    detail = run.statusMessage
+                case "canceled", "interrupted":
+                    state = .attention
+                    detail = run.statusMessage
+                case "failed":
+                    state = .error
+                    detail = run.errorMessage ?? run.statusMessage
+                default:
+                    state = .idle
+                    detail = nil
+                }
+            } else {
+                state = .idle
+                detail = nil
+            }
+            return ParserPageLifecycle(
+                parserID: run.providerId,
+                pageNumber: pageNumber,
+                state: state,
+                detail: detail,
+                updatedAt: timestamp
+            )
         }
     }
 
