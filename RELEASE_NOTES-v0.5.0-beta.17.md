@@ -47,7 +47,8 @@ None. Existing runs remain compatible. Only successful Baidu Unlimited-OCR
 
 ## Rollout
 
-Merge the release PR, then publish tag `desktop-v0.5.0-beta.17`. The notarized
+Merge the release PR, confirm the `desktop-v0.5.0-beta.17` milestone has zero
+open items, close the milestone, then publish the matching tag. The notarized
 release workflow will publish the Apple-silicon DMG, checksum, and signed
 Sparkle appcast entry.
 
