@@ -41,6 +41,8 @@ returns Markdown.
 - [x] Hardened-runtime signing
 - [x] App and DMG notarization and stapling
 - [x] Re-downloaded app and DMG accepted by `spctl` as `Notarized Developer ID`
+- [x] Packaged app launch smoke test with builder-only resources hidden
+- [x] Quarantined DMG launch smoke gate through LaunchServices in release automation
 - [ ] Second-Mac clean-install verification
 - [ ] DMG Applications shortcut and window polish
 
@@ -54,7 +56,7 @@ is required by one of the supported local parsers.
 ```bash
 cd apps/desktop
 swift test
-./scripts/build-dmg.sh 0.5.0-beta.7
+./scripts/build-dmg.sh 0.5.0-beta.8
 ```
 
 Do not promote the parser to a stable release until the manual provider checks

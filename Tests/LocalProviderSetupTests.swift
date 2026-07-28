@@ -6,24 +6,15 @@ import Testing
 struct LocalProviderSetupTests {
     @Test("Setup publishes progress and finishes offline-ready")
     func setupLifecycle() async throws {
-        let fixtureRoot = TestPaths.temporaryDirectory
-            .appendingPathComponent("okra-setup-\(UUID().uuidString)", isDirectory: true)
-        let defaultsName = "okra-setup-defaults-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: defaultsName))
-        defer {
-            try? FileManager.default.removeItem(at: fixtureRoot)
-            defaults.removePersistentDomain(forName: defaultsName)
-        }
+        let workspace = try TestWorkspace(prefix: "okra-setup")
 
         let coordinator = LocalProcessingCoordinator(
             providers: [SetupFixtureProvider()],
-            runsRoot: fixtureRoot,
-            userDefaults: defaults
+            runsRoot: workspace.runsRoot,
+            userDefaults: workspace.defaults
         )
         coordinator.installSelectedProvider()
-        while coordinator.isInstalling {
-            await Task.yield()
-        }
+        try await waitUntil("provider setup to finish") { coordinator.isInstalling == false }
 
         #expect(coordinator.selectedAvailability == .ready)
         #expect(coordinator.setupProgress?.phase == .ready)
@@ -34,27 +25,20 @@ struct LocalProviderSetupTests {
 
     @Test("Canceled setup remains resumable")
     func canceledSetup() async throws {
-        let fixtureRoot = TestPaths.temporaryDirectory
-            .appendingPathComponent("okra-cancel-\(UUID().uuidString)", isDirectory: true)
-        let defaultsName = "okra-cancel-defaults-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: defaultsName))
-        defer {
-            try? FileManager.default.removeItem(at: fixtureRoot)
-            defaults.removePersistentDomain(forName: defaultsName)
-        }
+        let workspace = try TestWorkspace(prefix: "okra-cancel")
 
         let coordinator = LocalProcessingCoordinator(
             providers: [SetupFixtureProvider(suspendsDuringDownload: true)],
-            runsRoot: fixtureRoot,
-            userDefaults: defaults
+            runsRoot: workspace.runsRoot,
+            userDefaults: workspace.defaults
         )
         coordinator.installSelectedProvider()
-        while coordinator.setupProgress?.phase != .downloadingModel {
-            await Task.yield()
+        try await waitUntil("model download phase to begin") {
+            coordinator.setupProgress?.phase == .downloadingModel
         }
         coordinator.cancelInstallation()
-        while coordinator.isInstalling {
-            await Task.yield()
+        try await waitUntil("provider setup cancellation to finish") {
+            coordinator.isInstalling == false
         }
 
         #expect(coordinator.selectedAvailability.isReady == false)
@@ -65,25 +49,18 @@ struct LocalProviderSetupTests {
 
     @Test("Recent runs are loaded newest first")
     func recentRuns() throws {
-        let fixtureRoot = TestPaths.temporaryDirectory
-            .appendingPathComponent("okra-history-\(UUID().uuidString)", isDirectory: true)
-        let defaultsName = "okra-history-defaults-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: defaultsName))
-        defer {
-            try? FileManager.default.removeItem(at: fixtureRoot)
-            defaults.removePersistentDomain(forName: defaultsName)
-        }
-        try FileManager.default.createDirectory(at: fixtureRoot, withIntermediateDirectories: true)
+        let workspace = try TestWorkspace(prefix: "okra-history")
+        try FileManager.default.createDirectory(at: workspace.runsRoot, withIntermediateDirectories: true)
 
         let older = makeRun(id: "older", startedAt: Date(timeIntervalSince1970: 100))
         let newer = makeRun(id: "newer", startedAt: Date(timeIntervalSince1970: 200))
-        try write(older, to: fixtureRoot)
-        try write(newer, to: fixtureRoot)
+        try write(older, to: workspace.runsRoot)
+        try write(newer, to: workspace.runsRoot)
 
         let coordinator = LocalProcessingCoordinator(
             providers: [SetupFixtureProvider()],
-            runsRoot: fixtureRoot,
-            userDefaults: defaults
+            runsRoot: workspace.runsRoot,
+            userDefaults: workspace.defaults
         )
 
         #expect(coordinator.recentRuns.map(\.id) == ["newer", "older"])

@@ -35,7 +35,7 @@ does not make cloud or network calls.
 ## Download
 
 Download the Apple-silicon beta from the
-[`desktop-v0.5.0-beta.7` GitHub Release](https://github.com/steventsao/okrapdf-desktop/releases/tag/desktop-v0.5.0-beta.7).
+[`desktop-v0.5.0-beta.8` GitHub Release](https://github.com/steventsao/okrapdf-desktop/releases/tag/desktop-v0.5.0-beta.8).
 The app and DMG are Developer ID signed, hardened, notarized by Apple, and
 stapled for normal Gatekeeper opening on other Macs.
 
@@ -76,13 +76,13 @@ Unlimited-OCR** selected. Click **Parse with Baidu Unlimited-OCR** to exercise
 the same workflow visibly. You can also run only the built-in fixture check:
 
 ```bash
-swift test --filter testBaiduUnlimitedOCREndToEndSimulationOnPDF
+swift test --filter baiduUnlimitedOCREndToEndSimulationOnPDF
 ```
 
 ## Package a local beta
 
 ```bash
-./scripts/build-dmg.sh 0.5.0-beta.7
+./scripts/build-dmg.sh 0.5.0-beta.8
 ```
 
 The generated app is a normal windowed macOS application. Packaging must not
