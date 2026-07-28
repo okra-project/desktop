@@ -36,13 +36,10 @@ resume, and terminal outcomes. If the app closes mid-run, the next launch marks
 the orphaned attempt interrupted instead of leaving it stuck in `running`.
 Resume reuses the same run directory and skips completed Apple Vision or Baidu
 page records. `result.md` is assembled from the page files in numeric order.
-Docling cancellation terminates its local CLI, but Docling resume restarts the
-document because its CLI does not expose trustworthy per-page completion.
 
 ## Local providers
 
 - **Apple Vision** — built into macOS and selected by default.
-- **Docling** — optional one-time Python/model setup; extraction is forced offline.
 - **Baidu Unlimited-OCR** — optional 4-bit MLX setup for Apple silicon. The app
   downloads the pinned checkpoint with byte progress, keeps resume data when
   setup is canceled, and verifies every artifact with SHA-256 before marking it
@@ -64,9 +61,9 @@ Apple-silicon Mac with macOS 13 or later. Processing is local-only. For this
 round, use **Apple Vision**: it is built into macOS and requires no model or
 Python setup.
 
-Real Docling and Baidu Unlimited-OCR setup and inference are outside this
-testing round. Baidu simulation, if you encounter it in developer instructions,
-is internal workflow QA and is not evidence of OCR quality.
+Real Baidu Unlimited-OCR setup and inference are outside this testing round.
+Baidu simulation, if you encounter it in developer instructions, is internal
+workflow QA and is not evidence of OCR quality.
 
 ### Install
 
@@ -117,7 +114,7 @@ swift build
 ```
 
 The executable product is `Okra`. Package resources include the local
-`ProviderScripts/` installers and worker.
+`ProviderScripts/` installer and worker.
 
 ## Tests
 
@@ -173,7 +170,6 @@ set `LSUIElement`; the PDF reader belongs in the Dock while it is open.
 
 ## Remaining release checks
 
-- Dogfood Docling setup and extraction on a clean profile.
 - Dogfood the complete 2.4 GB Baidu Unlimited-OCR checkpoint download and
   extraction with the network disconnected after setup.
 - Dogfood the signed build on a second Mac.

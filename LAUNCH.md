@@ -1,6 +1,6 @@
 # okraPDF Desktop — Launch Checklist
 
-The supported desktop product is the `D.6.12` windowed macOS PDF reader and
+The supported desktop product is the `D.6.13` windowed macOS PDF reader and
 local parser. It opens a PDF in place, waits for an explicit Parse action, and
 returns reviewable source-aligned output.
 
@@ -20,7 +20,7 @@ returns reviewable source-aligned output.
 - [x] PDF selection and parsing are separate actions
 - [x] Original PDF remains in place
 - [x] Apple Vision zero-setup parser
-- [x] Optional offline Docling parser
+- [x] Docling provider removed for beta.20
 - [x] Optional offline Baidu Unlimited-OCR/MLX parser
 - [x] Resumable, byte-counted, SHA-256-verified Baidu model setup
 - [x] Truthfully labeled Baidu Unlimited-OCR end-to-end simulation mode
@@ -29,7 +29,6 @@ returns reviewable source-aligned output.
 - [x] Markdown copy, save, and reveal
 - [x] File-backed `run.json` and `result.md` artifacts
 - [x] No account, network workflow, SQLite, policy, agents, or sidecars
-- [ ] Clean-profile Docling dogfood with the network disconnected
 - [ ] Clean-profile Baidu Unlimited-OCR dogfood on Apple silicon
 - [ ] Manual large/scanned/malformed PDF regression pass
 

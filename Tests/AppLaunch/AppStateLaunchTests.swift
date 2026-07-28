@@ -16,24 +16,24 @@ struct AppStateLaunchTests {
 
         #expect(
             coordinator.descriptors.map(\.id)
-                == [.appleVision, .docling, .unlimitedOCR]
+                == [.appleVision, .unlimitedOCR]
         )
         #expect(coordinator.selectedProviderID == .appleVision)
         #expect(state.selectedDocument == nil)
     }
 
-    @Test("Invalid stored provider falls back without terminating startup")
-    func invalidStoredProviderFallsBack() throws {
-        let workspace = try TestWorkspace(prefix: "okra-invalid-provider")
-        workspace.defaults.set("removed-provider", forKey: "localProcessing.selectedProvider")
+    @Test("Stored Docling selection falls back to Apple Vision")
+    func storedDoclingSelectionFallsBack() throws {
+        let workspace = try TestWorkspace(prefix: "okra-removed-docling-provider")
+        workspace.defaults.set("docling", forKey: "localProcessing.selectedProvider")
 
         let coordinator = LocalProcessingCoordinator(
-            providers: [FixtureProcessingProvider()],
             runsRoot: workspace.runsRoot,
             userDefaults: workspace.defaults
         )
 
         #expect(coordinator.selectedProviderID == .appleVision)
+        #expect(coordinator.selectedDescriptor.id == .appleVision)
         #expect(coordinator.selectedAvailability == .ready)
     }
 

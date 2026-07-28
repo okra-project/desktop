@@ -5,7 +5,7 @@ extension LocalProviderDescriptor {
         switch id {
         case .unlimitedOCR:
             UnlimitedOCRModelManifest.totalBytes
-        case .appleVision, .docling:
+        case .appleVision:
             nil
         }
     }
@@ -14,8 +14,6 @@ extension LocalProviderDescriptor {
         switch id {
         case .appleVision:
             nil
-        case .docling:
-            "~/.okra/providers/docling"
         case .unlimitedOCR:
             "~/.okra/providers/unlimited-ocr"
         }

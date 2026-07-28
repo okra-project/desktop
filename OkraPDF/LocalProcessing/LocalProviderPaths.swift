@@ -13,25 +13,6 @@ enum LocalProviderPaths {
             .appendingPathComponent("providers", isDirectory: true)
     }
 
-    static var doclingRoot: URL {
-        providersRoot.appendingPathComponent("docling", isDirectory: true)
-    }
-
-    static var doclingExecutable: URL {
-        doclingRoot
-            .appendingPathComponent("venv", isDirectory: true)
-            .appendingPathComponent("bin", isDirectory: true)
-            .appendingPathComponent("docling")
-    }
-
-    static var doclingModels: URL {
-        doclingRoot.appendingPathComponent("models", isDirectory: true)
-    }
-
-    static var doclingReadyMarker: URL {
-        doclingRoot.appendingPathComponent(".ready")
-    }
-
     static var unlimitedOCRRoot: URL {
         providersRoot.appendingPathComponent("unlimited-ocr", isDirectory: true)
     }

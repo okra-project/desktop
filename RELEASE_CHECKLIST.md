@@ -2,7 +2,7 @@
 
 Current train: `desktop-v0.5.0-beta.N`
 
-Roadmap item: `D.6.12`
+Roadmap item: `D.6.13`
 
 ## Product contract
 
@@ -13,7 +13,7 @@ Roadmap item: `D.6.12`
 - [x] **Open PDF…** picker
 - [x] Explicit Parse action; opening/replacing a PDF creates no run
 - [x] Apple Vision default provider
-- [x] Docling setup/readiness state
+- [x] Docling provider removed for beta.20
 - [x] Baidu Unlimited-OCR setup/readiness state and lineage copy
 - [x] Native byte-counted Baidu model download with cancel/resume state
 - [x] Pinned Baidu model revision and SHA-256 verification before readiness
@@ -45,7 +45,6 @@ Roadmap item: `D.6.12`
 - [x] Results stored beside each run manifest as `result.md`
 - [x] Baidu structured results stored beside each run manifest as `result.json`
 - [x] Recent local runs re-open from the workspace sidebar
-- [x] Docling inference forces Hugging Face/Transformers offline mode
 - [x] Baidu Unlimited-OCR inference forces Hugging Face/Transformers offline mode
 - [x] Provider setup is visibly distinct from offline extraction
 
@@ -63,9 +62,10 @@ Roadmap item: `D.6.12`
 - [x] Packaged app starts with builder-only SwiftPM resources hidden
 - [x] Quarantined notarized beta.8 through beta.15 DMGs start through LaunchServices before publishing (2026-07-28)
 - [x] Remote-control, dispatch, registry, and model-catalog tests removed
-- [x] `swift build` on an unrestricted macOS shell (2026-07-24)
+- [x] Docling provider, tests, and Docling-only bundled resources removed for beta.20
+- [x] `swift build` on an unrestricted macOS shell (2026-07-28)
 - [x] Canonical website mark checksum and packaged-resource coverage
-- [x] `swift test` on an unrestricted macOS shell (52 tests / 12 suites passed, 2026-07-28)
+- [x] `swift test` on an unrestricted macOS shell (53 tests / 12 suites passed, 2026-07-28)
 - [x] Python output-parser, resume, and appcast tests (9/9 passed, 2026-07-28)
 
 ## Friend-core manual regression
@@ -87,7 +87,7 @@ candidate. Record evidence on issue #48; do not use a local build.
 
 These retained checks do not replace the friend-core lines above. Do not mark
 the real-provider checks complete from Baidu simulation, and do not block the
-friend round on real Docling or Baidu setup/inference.
+friend round on real Baidu setup/inference.
 
 - [x] Launch and confirm the reader window and canonical green Dock icon appear (2026-07-27)
 - [ ] Drop a one-page text PDF and confirm no extraction starts
@@ -97,7 +97,6 @@ friend round on real Docling or Baidu setup/inference.
 - [ ] Save the output to a chosen `.md` path
 - [ ] Reveal the stored output and source PDF in Finder
 - [ ] Switch provider, rerun, and confirm a new run folder and manifest are created
-- [ ] Set up Docling on a clean profile and extract with the network disconnected
 - [x] Run the labeled Baidu Unlimited-OCR simulation on a multi-page PDF (3 pages, 2026-07-27)
 - [ ] Select Baidu boxes from both the PDF and preview on a rotated/cropped dogfood PDF
 - [ ] Set up Baidu Unlimited-OCR on a 16 GB Apple-silicon Mac and extract offline

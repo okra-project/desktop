@@ -2,7 +2,6 @@ import Foundation
 
 enum LocalProviderID: String, CaseIterable, Codable, Hashable {
     case appleVision = "apple-vision"
-    case docling
     case unlimitedOCR = "unlimited-ocr"
 }
 

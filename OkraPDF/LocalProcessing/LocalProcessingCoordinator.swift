@@ -53,7 +53,6 @@ final class LocalProcessingCoordinator: ObservableObject {
     init(
         providers: [any LocalProcessingProvider] = [
             AppleVisionProcessingProvider(),
-            DoclingProcessingProvider(),
             UnlimitedOCRProcessingProvider(),
         ],
         runsRoot: URL = LocalProviderPaths.runsRoot,
@@ -69,14 +68,10 @@ final class LocalProcessingCoordinator: ObservableObject {
         self.stallThreshold = stallThreshold
         self.healthPollInterval = healthPollInterval
 
-        if providers.first(where: { $0.descriptor.id == .unlimitedOCR })?.availability().isSimulated == true {
-            selectedProviderID = .unlimitedOCR
-        } else if let stored = userDefaults.string(forKey: Self.providerDefaultsKey),
+        if let stored = userDefaults.string(forKey: Self.providerDefaultsKey),
            let providerID = LocalProviderID(rawValue: stored),
            providers.contains(where: { $0.descriptor.id == providerID }) {
             selectedProviderID = providerID
-        } else if providers.first(where: { $0.descriptor.id == .unlimitedOCR })?.availability().isReady == true {
-            selectedProviderID = .unlimitedOCR
         } else if providers.contains(where: { $0.descriptor.id == .appleVision }) {
             selectedProviderID = .appleVision
         } else if let firstProvider = providers.first {
