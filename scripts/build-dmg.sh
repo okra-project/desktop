@@ -109,14 +109,28 @@ PLIST
 
 # Local builds remain ad-hoc signed. Release automation provides a Developer ID
 # Application identity and enables the hardened runtime plus a secure timestamp.
-# Sparkle.framework is nested code and must be signed before the app bundle.
+# Sparkle ships its helper binaries (Autoupdate, Updater.app, XPC services)
+# unsigned: sign every component inside-out or notarization rejects the app.
+SPARKLE_FW="build/${APP_NAME}.app/Contents/Frameworks/Sparkle.framework"
+sign_sparkle_component() {
+  local component="$1"
+  shift
+  if [[ -e "${component}" ]]; then
+    codesign --force "$@" "${component}"
+  fi
+}
 if [[ -n "${SIGNING_IDENTITY}" ]]; then
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
-    --sign "${SIGNING_IDENTITY}" \
-    "build/${APP_NAME}.app/Contents/Frameworks/Sparkle.framework"
+  for component in \
+    "${SPARKLE_FW}/Versions/Current/XPCServices/Installer.xpc" \
+    "${SPARKLE_FW}/Versions/Current/XPCServices/Downloader.xpc" \
+    "${SPARKLE_FW}/Versions/Current/Autoupdate" \
+    "${SPARKLE_FW}/Versions/Current/Updater.app" \
+    "${SPARKLE_FW}"; do
+    sign_sparkle_component "${component}" \
+      --options runtime \
+      --timestamp \
+      --sign "${SIGNING_IDENTITY}"
+  done
   codesign \
     --force \
     --options runtime \
@@ -125,7 +139,14 @@ if [[ -n "${SIGNING_IDENTITY}" ]]; then
     --entitlements okraPDF.entitlements \
     "build/${APP_NAME}.app"
 else
-  codesign --force --sign - "build/${APP_NAME}.app/Contents/Frameworks/Sparkle.framework"
+  for component in \
+    "${SPARKLE_FW}/Versions/Current/XPCServices/Installer.xpc" \
+    "${SPARKLE_FW}/Versions/Current/XPCServices/Downloader.xpc" \
+    "${SPARKLE_FW}/Versions/Current/Autoupdate" \
+    "${SPARKLE_FW}/Versions/Current/Updater.app" \
+    "${SPARKLE_FW}"; do
+    sign_sparkle_component "${component}" --sign -
+  done
   codesign --force --sign - --entitlements okraPDF.entitlements "build/${APP_NAME}.app"
 fi
 
