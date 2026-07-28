@@ -9,7 +9,7 @@ chat, cloud upload, registries, or backoffice UI.
 The supported flow is:
 
 ```text
-open/drop PDF → read → choose local provider → explicit Parse → Markdown
+open/drop PDF → read → choose local provider → explicit Parse → readable output
 ```
 
 ## Architecture
@@ -38,5 +38,7 @@ Do not start a dev server or watch process.
 - Apple Vision remains the zero-setup default.
 - The source PDF remains in place; do not reintroduce a copied-file library.
 - Successful output is normalized to `result.md` beside a small `run.json` manifest.
+  Baidu Unlimited-OCR also writes `result.json` with typed blocks and normalized
+  layout boxes; do not expose raw tokenizer artifacts in the UI.
 - Do not add SQLite, cloud fields, policy/spend models, chat, or document agents.
 - Use system controls and accessible SF Symbols only for functional affordances.

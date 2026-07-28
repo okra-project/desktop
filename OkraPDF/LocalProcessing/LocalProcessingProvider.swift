@@ -81,6 +81,17 @@ struct LocalProcessingRequest: Sendable {
 struct LocalProcessingResult {
     let outputURL: URL
     let pageCount: Int
+    let structuredOutputURL: URL?
+
+    init(
+        outputURL: URL,
+        pageCount: Int,
+        structuredOutputURL: URL? = nil
+    ) {
+        self.outputURL = outputURL
+        self.pageCount = pageCount
+        self.structuredOutputURL = structuredOutputURL
+    }
 }
 
 struct LocalProcessingRun: Identifiable, Codable, Equatable {
@@ -92,6 +103,7 @@ struct LocalProcessingRun: Identifiable, Codable, Equatable {
     let executionMode: String?
     var status: String
     var outputPath: String?
+    var structuredOutputPath: String? = nil
     var errorMessage: String?
     var pageCount: Int
     var completedPageCount: Int? = nil

@@ -2,7 +2,7 @@
 
 Current train: `desktop-v0.5.0-beta.N`
 
-Roadmap item: `D.6.3`
+Roadmap item: `D.6.5`
 
 ## Product contract
 
@@ -20,8 +20,11 @@ Roadmap item: `D.6.3`
 - [x] Truthfully labeled Baidu Unlimited-OCR simulation mode
 - [x] Streaming progress and local errors
 - [x] Atomic page-level Markdown checkpoints for Apple Vision and Baidu Unlimited-OCR
-- [x] Selectable Markdown output
-- [x] Copy, Save As, and Reveal actions
+- [x] Baidu tokenizer-marker decoding and `<|det|>` layout parsing
+- [x] Typed normalized blocks in per-page and aggregate `result.json`
+- [x] Deterministic repeated-tail suppression with diagnostics
+- [x] Preview, Markdown, and JSON output modes for Baidu runs
+- [x] Copy, Save As, and Reveal actions for Markdown and JSON
 - [x] No cloud upload or remote-control surface
 
 ## Persistence and privacy
@@ -30,6 +33,7 @@ Roadmap item: `D.6.3`
 - [x] No account, library database, cloud metadata, policy, spend, or audit records
 - [x] Run lifecycle persisted as `run.json` under Application Support
 - [x] Results stored beside each run manifest as `result.md`
+- [x] Baidu structured results stored beside each run manifest as `result.json`
 - [x] Recent local runs re-open from the workspace sidebar
 - [x] Docling inference forces Hugging Face/Transformers offline mode
 - [x] Baidu Unlimited-OCR inference forces Hugging Face/Transformers offline mode
@@ -38,15 +42,17 @@ Roadmap item: `D.6.3`
 ## Automated verification
 
 - [x] Local-processing tests retained
-- [x] Simulated Baidu Unlimited-OCR PDF → pages → worker → Markdown → manifest E2E
+- [x] Simulated Baidu Unlimited-OCR PDF → pages → worker → Markdown + JSON → manifest E2E
 - [x] Mid-run `run.json` progress and 120-page checkpoint persistence coverage
+- [x] Synthetic aToken fixture covers whitespace decoding, malformed markers, normalized boxes, HTML preservation, and repeated-tail suppression
 - [x] Default app state constructs every bundled provider without terminating
 - [x] Packaged app starts with builder-only SwiftPM resources hidden
 - [x] Quarantined notarized beta.8 and beta.9 DMGs start through LaunchServices before publishing (2026-07-27)
 - [x] Remote-control, dispatch, registry, and model-catalog tests removed
 - [x] `swift build` on an unrestricted macOS shell (2026-07-24)
 - [x] Canonical website mark checksum and packaged-resource coverage
-- [x] `swift test` on an unrestricted macOS shell (28 tests / 6 suites passed, 2026-07-27)
+- [x] `swift test` on an unrestricted macOS shell (29 tests / 7 suites passed, 2026-07-27)
+- [x] Python output-parser tests (4/4 passed, 2026-07-27)
 
 ## Manual smoke test
 
@@ -69,6 +75,7 @@ Roadmap item: `D.6.3`
 - [x] GitHub prerelease `desktop-v0.5.0-beta.7` with DMG and SHA-256 asset (2026-07-27)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.8` with startup fix, DMG, and SHA-256 asset (2026-07-27)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.9` with canonical mark, page checkpoints, DMG, and SHA-256 asset (2026-07-27)
+- [ ] GitHub prerelease `desktop-v0.5.0-beta.10` with structured Baidu output, DMG, and SHA-256 asset
 - [x] Developer ID Application signature for team `449BD89VDV`
 - [x] Hardened runtime
 - [x] App and DMG accepted by Apple notarization and stapled

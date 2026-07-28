@@ -1,0 +1,73 @@
+import Foundation
+
+struct StructuredExtractionDocument: Codable, Equatable, Sendable {
+    let schemaVersion: Int
+    let object: String
+    let provider: StructuredExtractionProvider
+    let title: String
+    let pageCount: Int
+    let completedPageCount: Int
+    let complete: Bool
+    let simulation: Bool
+    let pages: [StructuredExtractionPage]
+
+    static func load(from url: URL) throws -> StructuredExtractionDocument {
+        try JSONDecoder().decode(
+            StructuredExtractionDocument.self,
+            from: Data(contentsOf: url)
+        )
+    }
+}
+
+struct StructuredExtractionProvider: Codable, Equatable, Sendable {
+    let id: String
+    let name: String
+}
+
+struct StructuredExtractionPage: Codable, Equatable, Identifiable, Sendable {
+    var id: Int { pageNumber }
+
+    let pageNumber: Int
+    let imageFile: String
+    let markdown: String
+    let plainText: String
+    let blocks: [StructuredExtractionBlock]
+    let diagnostics: StructuredExtractionDiagnostics
+}
+
+struct StructuredExtractionBlock: Codable, Equatable, Identifiable, Sendable {
+    let id: String
+    let type: String
+    let sourceType: String
+    let text: String
+    let bbox: StructuredExtractionBoundingBox?
+    let sourceBbox: [Double]?
+    let sourceBboxScale: Int?
+}
+
+struct StructuredExtractionBoundingBox: Codable, Equatable, Sendable {
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
+    let unit: String
+
+    var compactLabel: String {
+        let xPercent = Int((x * 100).rounded())
+        let yPercent = Int((y * 100).rounded())
+        let widthPercent = Int((width * 100).rounded())
+        let heightPercent = Int((height * 100).rounded())
+        return "x \(xPercent)% · y \(yPercent)% · \(widthPercent)% × \(heightPercent)%"
+    }
+}
+
+struct StructuredExtractionDiagnostics: Codable, Equatable, Sendable {
+    let rawCharacterCount: Int
+    let decodedCharacterCount: Int
+    let tokenArtifactCount: Int
+    let detectionCount: Int
+    let malformedDetectionCount: Int
+    let duplicateBlockCount: Int
+    let loopDetected: Bool
+    let warnings: [String]
+}

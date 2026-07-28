@@ -104,6 +104,9 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/verify-brand-surface.sh
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
+            -s scripts/tests \
+            -p '*_tests.py'
           swift test
           ./scripts/build-dmg.sh "${{ steps.release.outputs.version }}"
           codesign --verify --strict --deep "build/Okra.app"
