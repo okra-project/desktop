@@ -71,7 +71,8 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
             throw LocalProcessingError.missingResource("Baidu Unlimited-OCR worker")
         }
 
-        return try await Task.detached(priority: .userInitiated) { [runtime] in
+        let worker = Task.detached(priority: .userInitiated) { [runtime] in
+            try Task.checkCancellation()
             try FileManager.default.createDirectory(
                 at: request.outputDirectory,
                 withIntermediateDirectories: true
@@ -100,8 +101,13 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
                 totalPages: pageURLs.count,
                 documentHeader: documentHeader
             )
-            try pageStore.prepare()
-            try pageStore.markProcessing(pageNumber: 1)
+            let initialManifest = try pageStore.prepare()
+            if initialManifest.completedPageCount < pageURLs.count,
+               let nextPage = (1...pageURLs.count).first(where: {
+                   (try? pageStore.status(pageNumber: $0)) != .succeeded
+               }) {
+                try pageStore.markProcessing(pageNumber: nextPage)
+            }
             let outputURL = pageStore.resultURL
             progress(
                 0.22,
@@ -125,7 +131,7 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
             }
 
             let monitorTask = Task.detached(priority: .utility) {
-                var observedPageCount = 0
+                var observedPageCount = initialManifest.completedPageCount
                 while Task.isCancelled == false {
                     if let manifest = try? pageStore.loadManifest(),
                        manifest.completedPageCount > observedPageCount {
@@ -198,6 +204,12 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
                 pageCount: pageURLs.count,
                 structuredOutputURL: structuredOutputURL
             )
-        }.value
+        }
+
+        return try await withTaskCancellationHandler {
+            try await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
     }
 }

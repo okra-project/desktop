@@ -34,6 +34,25 @@ struct LocalExtractionView: View {
             ProviderSetupView(coordinator: coordinator)
         } else if coordinator.isRunning {
             RunProgressView(coordinator: coordinator)
+        } else if coordinator.canResumeLatestRun, let document {
+            VStack(alignment: .leading, spacing: WorkspaceTheme.standardSpacing) {
+                Text(coordinator.statusMessage)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    coordinator.resume(document: document)
+                } label: {
+                    Text(resumeButtonTitle)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityHint("Continues this run using pages already saved on this Mac")
+
+                Button("Start New Run", action: parse)
+                    .buttonStyle(.bordered)
+            }
         } else if coordinator.selectedAvailability.isReady {
             VStack(alignment: .leading, spacing: WorkspaceTheme.standardSpacing) {
                 Text(coordinator.statusMessage)
@@ -51,5 +70,12 @@ struct LocalExtractionView: View {
         } else {
             ProviderSetupView(coordinator: coordinator)
         }
+    }
+
+    private var resumeButtonTitle: String {
+        let completed = coordinator.completedPageCount
+        let total = coordinator.totalPageCount
+        guard completed > 0, total > completed else { return "Resume Run" }
+        return "Resume from Page \(completed + 1)"
     }
 }

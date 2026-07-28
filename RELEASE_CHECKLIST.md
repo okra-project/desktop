@@ -2,7 +2,7 @@
 
 Current train: `desktop-v0.5.0-beta.N`
 
-Roadmap item: `D.6.5`
+Roadmap item: `D.6.6`
 
 ## Product contract
 
@@ -19,6 +19,8 @@ Roadmap item: `D.6.5`
 - [x] Pinned Baidu model revision and SHA-256 verification before readiness
 - [x] Truthfully labeled Baidu Unlimited-OCR simulation mode
 - [x] Streaming progress and local errors
+- [x] Cancel Run action with persisted cancel intent and terminal canceled state
+- [x] Interrupted-run recovery and same-run Resume action
 - [x] Atomic page-level Markdown checkpoints for Apple Vision and Baidu Unlimited-OCR
 - [x] Baidu tokenizer-marker decoding and `<|det|>` layout parsing
 - [x] Typed normalized blocks in per-page and aggregate `result.json`
@@ -32,6 +34,7 @@ Roadmap item: `D.6.5`
 - [x] Source PDFs remain in place
 - [x] No account, library database, cloud metadata, policy, spend, or audit records
 - [x] Run lifecycle persisted as `run.json` under Application Support
+- [x] Pollable progress snapshots and sequenced lifecycle stream persisted as `run.json` and `events.jsonl`
 - [x] Results stored beside each run manifest as `result.md`
 - [x] Baidu structured results stored beside each run manifest as `result.json`
 - [x] Recent local runs re-open from the workspace sidebar
@@ -44,6 +47,7 @@ Roadmap item: `D.6.5`
 - [x] Local-processing tests retained
 - [x] Simulated Baidu Unlimited-OCR PDF → pages → worker → Markdown + JSON → manifest E2E
 - [x] Mid-run `run.json` progress and 120-page checkpoint persistence coverage
+- [x] Cancel ordering, orphan recovery, checkpoint resume, and child-process termination coverage
 - [x] Synthetic aToken fixture covers whitespace decoding, malformed markers, normalized boxes, HTML preservation, and repeated-tail suppression
 - [x] Default app state constructs every bundled provider without terminating
 - [x] Packaged app starts with builder-only SwiftPM resources hidden
@@ -51,8 +55,8 @@ Roadmap item: `D.6.5`
 - [x] Remote-control, dispatch, registry, and model-catalog tests removed
 - [x] `swift build` on an unrestricted macOS shell (2026-07-24)
 - [x] Canonical website mark checksum and packaged-resource coverage
-- [x] `swift test` on an unrestricted macOS shell (30 tests / 7 suites passed, 2026-07-27)
-- [x] Python output-parser tests (4/4 passed, 2026-07-27)
+- [x] `swift test` on an unrestricted macOS shell (33 tests / 8 suites passed, 2026-07-27)
+- [x] Python output-parser and resume tests (5/5 passed, 2026-07-27)
 
 ## Manual smoke test
 
@@ -76,6 +80,7 @@ Roadmap item: `D.6.5`
 - [x] GitHub prerelease `desktop-v0.5.0-beta.8` with startup fix, DMG, and SHA-256 asset (2026-07-27)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.9` with canonical mark, page checkpoints, DMG, and SHA-256 asset (2026-07-27)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.10` with structured Baidu output, DMG, and SHA-256 asset (2026-07-27)
+- [ ] GitHub prerelease `desktop-v0.5.0-beta.11` with durable cancel/resume, DMG, and SHA-256 asset
 - [x] Developer ID Application signature for team `449BD89VDV`
 - [x] Hardened runtime
 - [x] App and DMG accepted by Apple notarization and stapled

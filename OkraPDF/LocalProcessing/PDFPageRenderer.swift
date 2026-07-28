@@ -45,12 +45,18 @@ enum PDFPageRenderer {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         return try (0..<document.pageCount).map { index in
+            try Task.checkCancellation()
+            let url = directory.appendingPathComponent(String(format: "page-%04d.png", index + 1))
+            if FileManager.default.fileExists(atPath: url.path) {
+                let fraction = Double(index + 1) / Double(document.pageCount)
+                progress(fraction * 0.2, "Using prepared page \(index + 1) of \(document.pageCount)")
+                return url
+            }
             let image = try pageImage(from: document, at: index, maxDimension: maxDimension)
             let bitmap = NSBitmapImageRep(cgImage: image)
             guard let data = bitmap.representation(using: .png, properties: [:]) else {
                 throw LocalProcessingError.invalidPDF
             }
-            let url = directory.appendingPathComponent(String(format: "page-%04d.png", index + 1))
             try data.write(to: url, options: .atomic)
             let fraction = Double(index + 1) / Double(document.pageCount)
             progress(fraction * 0.2, "Preparing page \(index + 1) of \(document.pageCount)")

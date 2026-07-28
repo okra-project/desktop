@@ -50,7 +50,7 @@ final class DoclingProcessingProvider: LocalProcessingProvider, @unchecked Senda
             throw LocalProcessingError.providerUnavailable("Set up Docling before extracting.")
         }
 
-        return try await Task.detached(priority: .userInitiated) {
+        let worker = Task.detached(priority: .userInitiated) {
             try FileManager.default.createDirectory(
                 at: request.outputDirectory,
                 withIntermediateDirectories: true
@@ -59,7 +59,7 @@ final class DoclingProcessingProvider: LocalProcessingProvider, @unchecked Senda
             try FileManager.default.createDirectory(at: rawDirectory, withIntermediateDirectories: true)
             progress(0.05, "Docling is parsing the document")
 
-            _ = try LocalCommandRunner.run(
+            _ = try await LocalCommandRunner.runAsync(
                 executableURL: runtime.executableURL,
                 arguments: [
                     "convert", request.sourceURL.path,
@@ -90,7 +90,13 @@ final class DoclingProcessingProvider: LocalProcessingProvider, @unchecked Senda
                 outputURL: outputURL,
                 pageCount: max(request.expectedPageCount, 0)
             )
-        }.value
+        }
+
+        return try await withTaskCancellationHandler {
+            try await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
     }
 
     private func runtime() -> (executableURL: URL, modelsURL: URL)? {

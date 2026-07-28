@@ -158,6 +158,86 @@ struct LocalProcessingProviderTests {
         #expect(coordinator.progress == 1)
     }
 
+    @Test(
+        "Cancel intent is durable and the same run resumes from its page checkpoint",
+        .timeLimit(.minutes(1))
+    )
+    func cancelAndResumeRunFromCheckpoint() async throws {
+        let workspace = try TestWorkspace(prefix: "okra-cancel-resume")
+        try FileManager.default.createDirectory(at: workspace.root, withIntermediateDirectories: true)
+        let sourceURL = workspace.root.appendingPathComponent("large.pdf")
+        try Data("pdf".utf8).write(to: sourceURL)
+        let document = LocalPDFDocument(
+            id: sourceURL.path,
+            fileName: sourceURL.lastPathComponent,
+            filePath: sourceURL.path,
+            totalPages: 3
+        )
+        let coordinator = LocalProcessingCoordinator(
+            providers: [ResumableFixtureProcessingProvider(pageCount: 3)],
+            runsRoot: workspace.runsRoot,
+            userDefaults: workspace.defaults
+        )
+
+        coordinator.load(document: document)
+        coordinator.run(document: document)
+        try await waitUntil("first durable page") {
+            coordinator.completedPageCount == 1
+        }
+
+        let activeRun = try #require(coordinator.latestRun)
+        let runDirectory = workspace.runsRoot.appendingPathComponent(activeRun.id, isDirectory: true)
+        let firstPageURL = runDirectory.appendingPathComponent("page-results/page-0001.md")
+        let firstPageBeforeResume = try Data(contentsOf: firstPageURL)
+        let firstPageModifiedAt = try #require(
+            try firstPageURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        )
+
+        coordinator.cancelRun()
+        try await waitUntil("run cancellation") { coordinator.isRunning == false }
+
+        let canceledRun = try #require(coordinator.latestRun)
+        #expect(canceledRun.status == "canceled")
+        #expect(canceledRun.cancelRequestedAt != nil)
+        #expect(canceledRun.completedPageCount == 1)
+        #expect(canceledRun.progress == 1.0 / 3.0)
+        let eventLines = try String(
+            contentsOf: runDirectory.appendingPathComponent("events.jsonl"),
+            encoding: .utf8
+        ).split(separator: "\n")
+        let cancelRequestedIndex = try #require(
+            eventLines.firstIndex { $0.contains("run.cancel_requested") }
+        )
+        let canceledIndex = try #require(
+            eventLines.firstIndex { $0.contains("run.canceled") }
+        )
+        #expect(cancelRequestedIndex < canceledIndex)
+
+        let reopened = LocalProcessingCoordinator(
+            providers: [ResumableFixtureProcessingProvider(pageCount: 3, pauseAfterPage: .milliseconds(10))],
+            runsRoot: workspace.runsRoot,
+            userDefaults: workspace.defaults
+        )
+        reopened.load(document: document)
+        #expect(reopened.latestRun?.id == canceledRun.id)
+        #expect(reopened.latestRun?.status == "canceled")
+        #expect(reopened.canResumeLatestRun)
+
+        reopened.resume(document: document)
+        try await waitUntil("resumed extraction") { reopened.isRunning == false }
+
+        let resumedRun = try #require(reopened.latestRun)
+        #expect(resumedRun.id == canceledRun.id)
+        #expect(resumedRun.status == "succeeded")
+        #expect(resumedRun.resumeCount == 1)
+        #expect(resumedRun.completedPageCount == 3)
+        #expect(try Data(contentsOf: firstPageURL) == firstPageBeforeResume)
+        #expect(
+            try firstPageURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+                == firstPageModifiedAt
+        )
+    }
+
     @Test("Opening a PDF does not start extraction")
     func openingPDFDoesNotStartExtraction() throws {
         let workspace = try TestWorkspace(prefix: "okra-open")

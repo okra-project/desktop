@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 final class LocalCommandProcessBox: @unchecked Sendable {
@@ -11,8 +12,8 @@ final class LocalCommandProcessBox: @unchecked Sendable {
         let shouldTerminate = isCancelled
         lock.unlock()
 
-        if shouldTerminate, process.isRunning {
-            process.terminate()
+        if shouldTerminate {
+            requestTermination(of: process)
         }
     }
 
@@ -22,8 +23,8 @@ final class LocalCommandProcessBox: @unchecked Sendable {
         let process = process
         lock.unlock()
 
-        if let process, process.isRunning {
-            process.terminate()
+        if let process {
+            requestTermination(of: process)
         }
     }
 
@@ -31,5 +32,23 @@ final class LocalCommandProcessBox: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return isCancelled
+    }
+
+    private func requestTermination(of process: Process) {
+        guard process.isRunning else { return }
+        process.terminate()
+
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1) { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            let shouldForceKill = self.isCancelled
+                && self.process === process
+                && process.isRunning
+            self.lock.unlock()
+
+            if shouldForceKill {
+                Darwin.kill(process.processIdentifier, SIGKILL)
+            }
+        }
     }
 }

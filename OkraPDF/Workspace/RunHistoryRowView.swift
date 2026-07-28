@@ -6,7 +6,7 @@ struct RunHistoryRowView: View {
     var body: some View {
         HStack(alignment: .top, spacing: WorkspaceTheme.standardSpacing) {
             Image(systemName: statusIcon)
-                .foregroundStyle(run.status == "succeeded" ? WorkspaceTheme.brand : .orange)
+                .foregroundStyle(statusColor)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
@@ -36,8 +36,25 @@ struct RunHistoryRowView: View {
             return "checkmark.circle.fill"
         case "running":
             return "clock.arrow.circlepath"
+        case "canceling":
+            return "stop.circle"
+        case "canceled":
+            return "stop.circle.fill"
+        case "interrupted":
+            return "arrow.clockwise.circle.fill"
         default:
             return "exclamationmark.circle.fill"
+        }
+    }
+
+    private var statusColor: Color {
+        switch run.status {
+        case "succeeded":
+            return WorkspaceTheme.brand
+        case "canceled":
+            return .secondary
+        default:
+            return .orange
         }
     }
 

@@ -9,14 +9,16 @@ local parser, and explicitly click **Parse** when you want readable local output
 1. Drop a PDF into the window, or choose **Open PDF…** from the workspace sidebar.
 2. Read the original PDF in the native center preview. Opening it does not start a run.
 3. Choose a local provider in the Extract inspector and click **Parse**.
-4. Reopen a recent run from the sidebar; each run keeps its local manifest and output.
+4. Reopen a recent run from the sidebar; each run restores its status, progress, and output.
 5. Baidu Unlimited-OCR runs offer a rendered block preview, Markdown, and JSON.
-6. Copy, save, or reveal Markdown or JSON from the inspector.
+6. Cancel a long run without losing finished pages, then resume from its checkpoint.
+7. Copy, save, or reveal Markdown or JSON from the inspector.
 
 Nothing is uploaded. Run artifacts stay on the Mac under:
 
 ```text
 ~/Library/Application Support/okraPDF/Runs/{runId}/run.json
+~/Library/Application Support/okraPDF/Runs/{runId}/events.jsonl
 ~/Library/Application Support/okraPDF/Runs/{runId}/result.md
 ~/Library/Application Support/okraPDF/Runs/{runId}/result.json  # Baidu Unlimited-OCR
 ~/Library/Application Support/okraPDF/Runs/{runId}/page-progress.json
@@ -25,12 +27,16 @@ Nothing is uploaded. Run artifacts stay on the Mac under:
 ```
 
 Apple Vision and Baidu Unlimited-OCR checkpoint each completed page to disk
-atomically. `run.json` and `page-progress.json` record the completed/total page
-counts while a parse is still running, so a large-document failure preserves
-every finished page and exposes the exact restart boundary. `result.md` is
-assembled from the page files in numeric order. Docling currently remains a
-document-level operation because its CLI does not expose trustworthy per-page
-completion callbacks.
+atomically. `run.json` is an atomically replaced, pollable snapshot containing
+status, fraction, message, page counts, update time, and event sequence.
+`events.jsonl` is the append-only lifecycle stream for cursor-based inspection;
+it records start, progress, page checkpoints, cancel intent, interruption,
+resume, and terminal outcomes. If the app closes mid-run, the next launch marks
+the orphaned attempt interrupted instead of leaving it stuck in `running`.
+Resume reuses the same run directory and skips completed Apple Vision or Baidu
+page records. `result.md` is assembled from the page files in numeric order.
+Docling cancellation terminates its local CLI, but Docling resume restarts the
+document because its CLI does not expose trustworthy per-page completion.
 
 ## Local providers
 
@@ -51,7 +57,7 @@ does not make cloud or network calls.
 ## Download
 
 Download the Apple-silicon beta from the
-[`desktop-v0.5.0-beta.10` GitHub Release](https://github.com/steventsao/okrapdf-desktop/releases/tag/desktop-v0.5.0-beta.10).
+[`desktop-v0.5.0-beta.11` GitHub Release](https://github.com/steventsao/okrapdf-desktop/releases/tag/desktop-v0.5.0-beta.11).
 The app and DMG are Developer ID signed, hardened, notarized by Apple, and
 stapled for normal Gatekeeper opening on other Macs.
 
@@ -81,8 +87,9 @@ explicit Parse action, run manifests and history, provider registration, setup
 progress/cancellation, pinned-model integrity metadata, Apple Vision Markdown
 output, Baidu output token/layout parsing, and a full Baidu Unlimited-OCR
 simulation through PDF page rendering, the bundled Python worker, offline flags,
-page-level checkpoints, and persisted Markdown plus JSON. A large-document test
-verifies 120 independently readable page files.
+page-level checkpoints, persisted Markdown plus JSON, durable cancel ordering,
+orphan recovery, same-run checkpoint resume, and provider-process termination.
+A large-document test verifies 120 independently readable page files.
 
 ## Simulate Baidu Unlimited-OCR end to end
 
@@ -105,7 +112,7 @@ swift test --filter baiduUnlimitedOCREndToEndSimulationOnPDF
 ## Package a local beta
 
 ```bash
-./scripts/build-dmg.sh 0.5.0-beta.10
+./scripts/build-dmg.sh 0.5.0-beta.11
 ```
 
 The generated app is a normal windowed macOS application. Packaging must not

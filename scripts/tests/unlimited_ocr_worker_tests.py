@@ -114,6 +114,41 @@ class UnlimitedOCROutputParserTests(unittest.TestCase):
         self.assertTrue(decoded["complete"])
         self.assertEqual(decoded["pages"][0]["blocks"][0]["bbox"]["width"], 0.999)
 
+    def test_persisted_page_rebuilds_outputs_without_running_model(self):
+        page = worker.parse_model_output(
+            "<|det|>text [0, 0, 999, 999]<|/det|>Already parsed",
+            page_number=1,
+            image_file="page-0001.png",
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pages = root / "page-results"
+            worker.persist_page(
+                pages,
+                page_number=1,
+                markdown="## Page 1\n\nAlready parsed",
+                structured_page=page,
+            )
+
+            restored = worker.load_persisted_page(pages, page_number=1)
+            self.assertEqual(restored, page)
+            worker.persist_document_outputs(
+                root / "result.md",
+                root / "result.json",
+                pages,
+                "# sample.pdf",
+                "sample.pdf",
+                total_page_count=1,
+                pages=[restored],
+                simulation=False,
+            )
+
+            self.assertIn("Already parsed", (root / "result.md").read_text())
+            payload = json.loads((root / "result.json").read_text())
+            self.assertTrue(payload["complete"])
+            self.assertEqual(payload["completedPageCount"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
