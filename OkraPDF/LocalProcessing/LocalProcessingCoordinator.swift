@@ -70,6 +70,7 @@ final class LocalProcessingCoordinator: ObservableObject {
         providers: [any LocalProcessingProvider] = [
             AppleVisionProcessingProvider(),
             UnlimitedOCRProcessingProvider(),
+            ChandraProcessingProvider(),
         ],
         runsRoot: URL = LocalProviderPaths.runsRoot,
         userDefaults: UserDefaults = .standard,

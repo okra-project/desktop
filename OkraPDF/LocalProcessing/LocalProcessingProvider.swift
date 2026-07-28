@@ -3,6 +3,7 @@ import Foundation
 enum LocalProviderID: String, CaseIterable, Codable, Hashable, Sendable {
     case appleVision = "apple-vision"
     case unlimitedOCR = "unlimited-ocr"
+    case chandra
 }
 
 struct LocalProviderDescriptor: Identifiable, Equatable {
