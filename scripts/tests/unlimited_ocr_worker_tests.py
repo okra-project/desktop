@@ -72,6 +72,27 @@ class UnlimitedOCROutputParserTests(unittest.TestCase):
         self.assertEqual(page["plainText"], "First line\nSecond line")
         self.assertEqual(page["markdown"], "First line\nSecond line")
 
+    def test_preserves_already_normalized_layout_coordinates(self):
+        page = worker.parse_model_output(
+            "<|det|>text [0.1, 0.2, 0.7, 0.4]<|/det|>Normalized box",
+            page_number=1,
+            image_file="page-0001.png",
+        )
+
+        block = page["blocks"][0]
+        self.assertEqual(block["sourceBboxScale"], 1)
+        self.assertEqual(
+            block["bbox"],
+            {
+                "x": 0.1,
+                "y": 0.2,
+                "width": 0.6,
+                "height": 0.2,
+                "unit": "normalized",
+                "origin": "top-left",
+            },
+        )
+
     def test_parses_ollama_style_layout_lines_without_control_tags(self):
         page = worker.parse_model_output(
             "title [6, 17, 991, 82]Model request\n"

@@ -2,6 +2,7 @@ import Foundation
 
 struct PDFBoundingBoxOverlay: Equatable, Identifiable, Sendable {
     let id: String
+    let providerName: String
     let pageNumber: Int
     let label: String
     let text: String

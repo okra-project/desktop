@@ -24,7 +24,15 @@ final class LocalProcessingCoordinator: ObservableObject {
     @Published private(set) var structuredOutputText = ""
     @Published private(set) var structuredOutput: StructuredExtractionDocument?
     @Published private(set) var selectedStructuredBlockID: String?
-    @Published var showsPDFBoundingBoxes = true
+    @Published private(set) var hoveredStructuredBlockID: String?
+    @Published private(set) var structuredBlockHoverSource: StructuredBlockHoverSource?
+    @Published var showsPDFBoundingBoxes = true {
+        didSet {
+            if showsPDFBoundingBoxes == false {
+                clearStructuredBlockHover(source: .pdf)
+            }
+        }
+    }
     @Published private(set) var progress = 0.0
     @Published private(set) var completedPageCount = 0
     @Published private(set) var totalPageCount = 0
@@ -57,7 +65,9 @@ final class LocalProcessingCoordinator: ObservableObject {
         ],
         runsRoot: URL = LocalProviderPaths.runsRoot,
         userDefaults: UserDefaults = .standard,
-        memorySampler: @escaping @Sendable () -> SystemMemoryStatus = SystemMemorySampler.sample,
+        memorySampler: @escaping @Sendable () -> SystemMemoryStatus = {
+            SystemMemorySampler.sample()
+        },
         stallThreshold: TimeInterval = 90,
         healthPollInterval: TimeInterval = 5
     ) {
@@ -108,11 +118,17 @@ final class LocalProcessingCoordinator: ObservableObject {
     }
 
     var pdfBoundingBoxOverlays: [PDFBoundingBoxOverlay] {
-        guard latestRun?.providerId == LocalProviderID.unlimitedOCR.rawValue,
-              latestRun?.status == "succeeded" else {
+        guard let run = latestRun,
+              run.status == "succeeded",
+              let structuredOutput,
+              structuredOutput.provider.id == run.providerId else {
             return []
         }
-        return structuredOutput?.unlimitedOCRPDFOverlays ?? []
+        return structuredOutput.pdfBoundingBoxOverlays
+    }
+
+    var previewHoveredStructuredBlockID: String? {
+        structuredBlockHoverSource == .preview ? hoveredStructuredBlockID : nil
     }
 
     var canResumeLatestRun: Bool {
@@ -145,6 +161,7 @@ final class LocalProcessingCoordinator: ObservableObject {
         structuredOutputText = ""
         structuredOutput = nil
         selectedStructuredBlockID = nil
+        clearStructuredBlockHover()
         progress = 0
         completedPageCount = 0
         totalPageCount = document.totalPages
@@ -326,6 +343,7 @@ final class LocalProcessingCoordinator: ObservableObject {
         activeRun = run
         latestRun = run
         selectedStructuredBlockID = nil
+        clearStructuredBlockHover()
         upsertRecentRun(run)
         progress = run.progress ?? 0
         completedPageCount = run.completedPageCount ?? 0
@@ -510,9 +528,26 @@ final class LocalProcessingCoordinator: ObservableObject {
         selectedStructuredBlockID = id
     }
 
+    func hoverStructuredBlock(_ id: String, isHovering: Bool) {
+        if isHovering {
+            setHoveredStructuredBlock(id, source: .preview)
+        } else {
+            clearStructuredBlockHover(source: .preview, matching: id)
+        }
+    }
+
+    func hoverPDFOverlay(_ id: String?) {
+        if let id {
+            setHoveredStructuredBlock(id, source: .pdf)
+        } else {
+            clearStructuredBlockHover(source: .pdf)
+        }
+    }
+
     private func display(run: LocalProcessingRun) {
         latestRun = run
         selectedStructuredBlockID = nil
+        clearStructuredBlockHover()
         completedPageCount = run.completedPageCount
             ?? (run.status == "succeeded" ? run.pageCount : 0)
         totalPageCount = run.totalPageCount ?? run.pageCount
@@ -717,6 +752,7 @@ final class LocalProcessingCoordinator: ObservableObject {
             structuredOutputText = ""
             structuredOutput = nil
             selectedStructuredBlockID = nil
+            clearStructuredBlockHover()
             return
         }
         outputText = (try? String(contentsOf: outputURL, encoding: .utf8)) ?? ""
@@ -725,6 +761,7 @@ final class LocalProcessingCoordinator: ObservableObject {
             structuredOutputText = ""
             structuredOutput = nil
             selectedStructuredBlockID = nil
+            clearStructuredBlockHover()
             return
         }
         structuredOutputText = (try? String(contentsOf: structuredOutputURL, encoding: .utf8)) ?? ""
@@ -733,5 +770,30 @@ final class LocalProcessingCoordinator: ObservableObject {
            pdfBoundingBoxOverlays.contains(where: { $0.id == selectedStructuredBlockID }) == false {
             self.selectedStructuredBlockID = nil
         }
+        if let hoveredStructuredBlockID,
+           pdfBoundingBoxOverlays.contains(where: { $0.id == hoveredStructuredBlockID }) == false {
+            clearStructuredBlockHover()
+        }
+    }
+
+    private func setHoveredStructuredBlock(
+        _ id: String,
+        source: StructuredBlockHoverSource
+    ) {
+        guard pdfBoundingBoxOverlays.contains(where: { $0.id == id }) else { return }
+        structuredBlockHoverSource = source
+        hoveredStructuredBlockID = id
+    }
+
+    private func clearStructuredBlockHover(
+        source: StructuredBlockHoverSource? = nil,
+        matching id: String? = nil
+    ) {
+        guard source == nil || structuredBlockHoverSource == source,
+              id == nil || hoveredStructuredBlockID == id else {
+            return
+        }
+        hoveredStructuredBlockID = nil
+        structuredBlockHoverSource = nil
     }
 }
