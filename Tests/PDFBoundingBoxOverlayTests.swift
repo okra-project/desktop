@@ -68,11 +68,11 @@ struct PDFBoundingBoxOverlayTests {
     @Test("Only Baidu structured output becomes PDF overlays")
     func onlyBaiduOutputBecomesOverlays() throws {
         let baidu = try structuredDocument(providerID: "unlimited-ocr")
-        let docling = try structuredDocument(providerID: "docling")
+        let appleVision = try structuredDocument(providerID: "apple-vision")
 
         #expect(baidu.unlimitedOCRPDFOverlays.map(\.id) == ["title", "clipped"])
         #expect(baidu.unlimitedOCRPDFOverlays.map(\.label) == ["Title", "Table"])
-        #expect(docling.unlimitedOCRPDFOverlays.isEmpty)
+        #expect(appleVision.unlimitedOCRPDFOverlays.isEmpty)
     }
 
     @Test("Top-left normalized geometry maps through crop offsets and page rotation")

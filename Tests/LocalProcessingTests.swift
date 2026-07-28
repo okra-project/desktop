@@ -24,9 +24,29 @@ struct LocalProcessingProviderTests {
         #expect(provider.availability() == .simulated("Simulation ready"))
     }
 
-    @Test("Simulation mode selects the Baidu provider")
-    func simulationModeSelectsBaiduProvider() throws {
+    @Test("Apple Vision remains selected when Baidu simulation is ready")
+    func simulationModeDefaultsToAppleVision() throws {
         let workspace = try TestWorkspace(prefix: "okra-simulation-selection")
+        let simulatedProvider = UnlimitedOCRProcessingProvider(
+            environment: ["OKRA_DESKTOP_SIMULATE_UNLIMITED_OCR": "1"]
+        )
+        let coordinator = LocalProcessingCoordinator(
+            providers: [FixtureProcessingProvider(), simulatedProvider],
+            runsRoot: workspace.runsRoot,
+            userDefaults: workspace.defaults
+        )
+
+        #expect(coordinator.selectedProviderID == .appleVision)
+        #expect(coordinator.selectedAvailability == .ready)
+    }
+
+    @Test("A stored Baidu provider choice remains selected")
+    func storedBaiduProviderRemainsSelected() throws {
+        let workspace = try TestWorkspace(prefix: "okra-stored-baidu-selection")
+        workspace.defaults.set(
+            LocalProviderID.unlimitedOCR.rawValue,
+            forKey: "localProcessing.selectedProvider"
+        )
         let simulatedProvider = UnlimitedOCRProcessingProvider(
             environment: ["OKRA_DESKTOP_SIMULATE_UNLIMITED_OCR": "1"]
         )

@@ -20,7 +20,7 @@ open/drop PDF → read → choose local provider → explicit Parse → readable
 - `OkraPDF/ContentView.swift` — PDF reader shell, drop target, and parser inspector
 - `OkraPDF/PDFReaderView.swift` — native PDFKit reader bridge
 - `OkraPDF/LocalProcessing/` — provider contracts, setup, coordinator, and output UI
-- `OkraPDF/ProviderScripts/` — bundled Docling/MLX setup and worker scripts
+- `OkraPDF/ProviderScripts/` — bundled Baidu Unlimited-OCR setup and worker scripts
 
 ## Build and test
 
