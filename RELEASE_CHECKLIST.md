@@ -40,7 +40,7 @@ Roadmap item: `D.6.3`
 - [x] Simulated Baidu Unlimited-OCR PDF → pages → worker → Markdown → manifest E2E
 - [x] Default app state constructs every bundled provider without terminating
 - [x] Packaged app starts with builder-only SwiftPM resources hidden
-- [ ] Quarantined notarized beta.8 DMG starts through LaunchServices before publishing
+- [x] Quarantined notarized beta.8 DMG starts through LaunchServices before publishing (2026-07-27)
 - [x] Remote-control, dispatch, registry, and model-catalog tests removed
 - [x] `swift build` on an unrestricted macOS shell (2026-07-24)
 - [x] `swift test` on an unrestricted macOS shell (19 tests / 4 suites passed, 2026-07-27)
@@ -64,7 +64,7 @@ Roadmap item: `D.6.3`
 - [x] GitHub prerelease `desktop-v0.5.0-beta.5` with DMG and SHA-256 asset (2026-07-24)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.6` with DMG and SHA-256 asset (2026-07-27)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.7` with DMG and SHA-256 asset (2026-07-27)
-- [ ] GitHub prerelease `desktop-v0.5.0-beta.8` with startup fix, DMG, and SHA-256 asset
+- [x] GitHub prerelease `desktop-v0.5.0-beta.8` with startup fix, DMG, and SHA-256 asset (2026-07-27)
 - [x] Developer ID Application signature for team `449BD89VDV`
 - [x] Hardened runtime
 - [x] App and DMG accepted by Apple notarization and stapled
