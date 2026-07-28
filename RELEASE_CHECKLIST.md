@@ -45,11 +45,12 @@ Roadmap item: `D.6.3`
 - [x] Quarantined notarized beta.8 DMG starts through LaunchServices before publishing (2026-07-27)
 - [x] Remote-control, dispatch, registry, and model-catalog tests removed
 - [x] `swift build` on an unrestricted macOS shell (2026-07-24)
-- [x] `swift test` on an unrestricted macOS shell (19 tests / 4 suites passed, 2026-07-27)
+- [x] Canonical website mark checksum and packaged-resource coverage
+- [x] `swift test` on an unrestricted macOS shell (28 tests / 6 suites passed, 2026-07-27)
 
 ## Manual smoke test
 
-- [x] Launch and confirm the reader window and Dock icon appear (2026-07-27)
+- [x] Launch and confirm the reader window and canonical green Dock icon appear (2026-07-27)
 - [ ] Drop a one-page text PDF and confirm no extraction starts
 - [ ] Click Parse and confirm Apple Vision starts
 - [ ] Drop a multi-page scanned PDF and confirm progress updates by page
@@ -67,6 +68,7 @@ Roadmap item: `D.6.3`
 - [x] GitHub prerelease `desktop-v0.5.0-beta.6` with DMG and SHA-256 asset (2026-07-27)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.7` with DMG and SHA-256 asset (2026-07-27)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.8` with startup fix, DMG, and SHA-256 asset (2026-07-27)
+- [ ] GitHub prerelease `desktop-v0.5.0-beta.9` with canonical mark, page checkpoints, DMG, and SHA-256 asset
 - [x] Developer ID Application signature for team `449BD89VDV`
 - [x] Hardened runtime
 - [x] App and DMG accepted by Apple notarization and stapled
