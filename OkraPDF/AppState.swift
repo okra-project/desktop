@@ -45,7 +45,7 @@ final class AppState: ObservableObject {
         guard FileManager.default.fileExists(atPath: normalizedURL.path),
               let pdf = PDFDocument(url: normalizedURL),
               pdf.pageCount > 0 else {
-            importError = "okraPDF could not open \(url.lastPathComponent)."
+            importError = "Could not open \(url.lastPathComponent)."
             return
         }
 

@@ -17,10 +17,7 @@ struct WorkspaceSidebarView: View {
                 .disabled(coordinator.isRunning || coordinator.isInstalling)
             } header: {
                 VStack(alignment: .leading, spacing: WorkspaceTheme.compactSpacing) {
-                    Text("okraPDF")
-                        .font(.title2)
-                        .bold()
-                        .foregroundStyle(.primary)
+                    BrandMarkView()
                     Text("Private document workspace")
                         .font(.callout)
                         .foregroundStyle(.secondary)

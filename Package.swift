@@ -8,10 +8,8 @@ let package = Package(
         .executableTarget(
             name: "Okra",
             path: "OkraPDF",
-            exclude: [
-                "AppIcon.png"
-            ],
             resources: [
+                .copy("AppIcon.png"),
                 .copy("ProviderScripts")
             ]
         ),

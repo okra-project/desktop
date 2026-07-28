@@ -91,6 +91,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          bash scripts/verify-brand-surface.sh
           swift test
           ./scripts/build-dmg.sh "${{ steps.release.outputs.version }}"
           codesign --verify --strict --deep "build/Okra.app"

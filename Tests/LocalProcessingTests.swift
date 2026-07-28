@@ -310,7 +310,7 @@ struct LocalProcessingProviderTests {
         try FileManager.default.createDirectory(at: workspace.root, withIntermediateDirectories: true)
 
         let page = NSView(frame: NSRect(x: 0, y: 0, width: 612, height: 792))
-        let label = NSTextField(labelWithString: "okraPDF local extraction")
+        let label = NSTextField(labelWithString: "Local extraction sample")
         label.font = .systemFont(ofSize: 32)
         label.frame = NSRect(x: 72, y: 640, width: 468, height: 60)
         page.addSubview(label)
@@ -332,7 +332,7 @@ struct LocalProcessingProviderTests {
         #expect(result.pageCount == 1)
         #expect(markdown.contains("# sample.pdf"))
         #expect(markdown.contains("## Page 1"))
-        #expect(markdown.contains("okraPDF local extraction"))
+        #expect(markdown.contains("Local extraction sample"))
         let pageStore = LocalPageCheckpointStore(
             outputDirectory: workspace.root.appendingPathComponent("output", isDirectory: true),
             totalPages: 1,
