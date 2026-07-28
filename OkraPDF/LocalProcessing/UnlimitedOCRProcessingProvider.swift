@@ -5,7 +5,8 @@ final class UnlimitedOCRProcessingProvider: LocalProcessingProvider, @unchecked 
         id: .unlimitedOCR,
         name: "Baidu Unlimited-OCR",
         summary: "Baidu's document parser, quantized to 4-bit MLX for Apple silicon.",
-        setupNote: "One-time ~2.4 GB model download. Real extraction is forced offline after setup."
+        setupNote: "One-time ~2.4 GB model download. Real extraction is forced offline after setup.",
+        parserDefinition: LocalParserCatalog.unlimitedOCR
     )
 
     private let runtime: UnlimitedOCRRuntime

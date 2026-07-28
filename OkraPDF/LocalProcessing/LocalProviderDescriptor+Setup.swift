@@ -2,12 +2,7 @@ import Foundation
 
 extension LocalProviderDescriptor {
     var downloadSizeBytes: Int64? {
-        switch id {
-        case .unlimitedOCR:
-            UnlimitedOCRModelManifest.totalBytes
-        case .appleVision:
-            nil
-        }
+        parserDefinition?.modelDelivery.pinnedPackage?.totalBytes
     }
 
     var installLocation: String? {

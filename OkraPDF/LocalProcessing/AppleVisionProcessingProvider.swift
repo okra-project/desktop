@@ -6,7 +6,8 @@ final class AppleVisionProcessingProvider: LocalProcessingProvider, @unchecked S
         id: .appleVision,
         name: "Apple Vision",
         summary: "Reads native PDF text first, then uses built-in OCR for scanned pages.",
-        setupNote: nil
+        setupNote: nil,
+        parserDefinition: LocalParserCatalog.appleVision
     )
 
     func availability() -> LocalProviderAvailability { .ready }

@@ -10,6 +10,21 @@ struct LocalProviderDescriptor: Identifiable, Equatable {
     let name: String
     let summary: String
     let setupNote: String?
+    let parserDefinition: LocalParserDefinition?
+
+    init(
+        id: LocalProviderID,
+        name: String,
+        summary: String,
+        setupNote: String?,
+        parserDefinition: LocalParserDefinition? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.summary = summary
+        self.setupNote = setupNote
+        self.parserDefinition = parserDefinition
+    }
 }
 
 enum LocalProviderAvailability: Equatable {
