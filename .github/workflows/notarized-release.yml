@@ -28,6 +28,7 @@ jobs:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       CSC_LINK: ${{ secrets.CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
       GH_TOKEN: ${{ github.token }}
 
     steps:
@@ -44,6 +45,8 @@ jobs:
           VERSION="${TAG#desktop-v}"
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          # Monotonic integer CFBundleVersion / sparkle:version for Sparkle.
+          echo "build_number=$(date -u +%Y%m%d%H%M)" >> "${GITHUB_OUTPUT}"
 
       - uses: actions/checkout@v4
         with:
@@ -108,7 +111,7 @@ jobs:
             -s scripts/tests \
             -p '*_tests.py'
           swift test
-          ./scripts/build-dmg.sh "${{ steps.release.outputs.version }}"
+          ./scripts/build-dmg.sh "${{ steps.release.outputs.version }}" "${{ steps.release.outputs.build_number }}"
           codesign --verify --strict --deep "build/Okra.app"
           codesign --display --verbose=4 "build/Okra.app" 2>&1 | grep -E 'Authority=Developer ID Application|TeamIdentifier=|Runtime Version='
           [[ "$(lipo -archs build/Okra.app/Contents/MacOS/Okra)" == "arm64" ]]
@@ -192,6 +195,56 @@ jobs:
               --latest=false \
               --verify-tag
           fi
+
+      - name: Sign update and publish appcast
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.release.outputs.tag }}"
+          VERSION="${{ steps.release.outputs.version }}"
+          BUILD_NUMBER="${{ steps.release.outputs.build_number }}"
+          DMG="${{ steps.artifact.outputs.dmg }}"
+
+          SPARKLE_TOOLS="${RUNNER_TEMP}/sparkle-tools"
+          mkdir -p "${SPARKLE_TOOLS}"
+          curl --fail --silent --show-error --location \
+            "https://github.com/sparkle-project/Sparkle/releases/download/2.9.4/Sparkle-2.9.4.tar.xz" \
+            | tar -xJ -C "${SPARKLE_TOOLS}"
+
+          ED_SIGNATURE="$(printf '%s' "${SPARKLE_EDDSA_PRIVATE_KEY}" \
+            | "${SPARKLE_TOOLS}/bin/sign_update" --ed-key-file - -p "${DMG}")"
+          DMG_LENGTH="$(stat -f%z "${DMG}")"
+          PUB_DATE="$(date -u '+%a, %d %b %Y %H:%M:%S +0000')"
+          ENCLOSURE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/Okra-${VERSION}.dmg"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --depth=50 origin main
+          git checkout -B main FETCH_HEAD
+
+          python3 scripts/insert-appcast-item.py \
+            --appcast appcast.xml \
+            --version "${VERSION}" \
+            --build-number "${BUILD_NUMBER}" \
+            --tag "${TAG}" \
+            --pub-date "${PUB_DATE}" \
+            --enclosure-url "${ENCLOSURE_URL}" \
+            --ed-signature "${ED_SIGNATURE}" \
+            --length "${DMG_LENGTH}"
+          plutil -lint appcast.xml
+
+          git add appcast.xml
+          git commit -m "appcast: publish desktop-v${VERSION} (build ${BUILD_NUMBER})"
+          for attempt in 1 2 3; do
+            if git push origin main; then
+              break
+            fi
+            if [[ "${attempt}" == "3" ]]; then
+              echo "Failed to push appcast update after 3 attempts" >&2
+              exit 1
+            fi
+            git pull --rebase origin main
+          done
 
       - name: Remove temporary signing keychain
         if: always()

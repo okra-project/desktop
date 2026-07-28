@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>okraPDF Desktop Updates</title>
+    <link>https://raw.githubusercontent.com/okra-project/desktop/main/appcast.xml</link>
+    <description>In-app beta updates for the okraPDF desktop app.</description>
+    <language>en</language>
+  </channel>
+</rss>

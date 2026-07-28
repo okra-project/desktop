@@ -9,23 +9,7 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let update = state.visibleUpdate {
-                UpdateBannerView(
-                    update: update,
-                    openRelease: state.openUpdateRelease,
-                    dismiss: state.dismissUpdateBanner
-                )
-            } else if let notice = state.manualUpdateCheckNotice {
-                WorkspaceNoticeView(
-                    message: notice,
-                    systemImage: "checkmark.circle",
-                    color: WorkspaceTheme.brand
-                )
-            }
             workspaceContent
-        }
-        .task {
-            await state.checkForUpdatesIfDue()
         }
     }
 

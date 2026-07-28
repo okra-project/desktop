@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct okraPDFApp: App {
     @StateObject private var appState = AppState()
+    @StateObject private var updaterController = SparkleUpdaterController()
 
     init() {
         NSApplication.shared.setActivationPolicy(.regular)
@@ -25,9 +26,7 @@ struct okraPDFApp: App {
                     .keyboardShortcut("o", modifiers: .command)
             }
             CommandGroup(after: .appInfo) {
-                Button("Check for Updates…") {
-                    Task { await appState.checkForUpdates(manual: true) }
-                }
+                Button("Check for Updates…", action: updaterController.checkForUpdates)
             }
         }
     }

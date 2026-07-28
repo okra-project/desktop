@@ -4,9 +4,16 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 VERSION="${1:-0.1.0}"
+# CFBundleVersion must be a monotonically increasing integer for Sparkle
+# (sparkle:version). Default: UTC timestamp to the minute; release automation
+# passes the same value it records in appcast.xml.
+BUILD_NUMBER="${2:-$(date -u +%Y%m%d%H%M)}"
 APP_NAME="Okra"
 SIGNING_IDENTITY="${APPLE_SIGNING_IDENTITY:-}"
 APP_DIR="build/${APP_NAME}.app/Contents"
+SPARKLE_FRAMEWORK_SOURCE=".build/release/Sparkle.framework"
+SPARKLE_FEED_URL="https://raw.githubusercontent.com/okra-project/desktop/main/appcast.xml"
+SPARKLE_PUBLIC_ED_KEY="boNvfEtcUxucfd8O1dSCbf5ovggYVAGzgF03Ou4LBBs="
 ICON_SOURCE="OkraPDF/AppIcon.png"
 ICON_NAME="AppIcon.icns"
 ICON_TMP_ROOT="$(mktemp -d /private/tmp/okra-icon.XXXXXX)"
@@ -23,9 +30,17 @@ echo "Building ${APP_NAME} v${VERSION}..."
 swift build -c release 2>&1 | tail -3
 
 rm -rf "build/${APP_NAME}.app"
-mkdir -p "$APP_DIR/MacOS" "$APP_DIR/Resources"
+mkdir -p "$APP_DIR/MacOS" "$APP_DIR/Resources" "$APP_DIR/Frameworks"
 cp .build/release/Okra "$APP_DIR/MacOS/${APP_NAME}"
 cp -R .build/release/okraPDF_Okra.bundle "$APP_DIR/Resources/"
+
+# Embed Sparkle (in-app updater) and point the loader at Contents/Frameworks.
+if [[ ! -d "${SPARKLE_FRAMEWORK_SOURCE}" ]]; then
+  echo "Missing Sparkle framework: ${SPARKLE_FRAMEWORK_SOURCE}" >&2
+  exit 1
+fi
+ditto "${SPARKLE_FRAMEWORK_SOURCE}" "$APP_DIR/Frameworks/Sparkle.framework"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP_DIR/MacOS/${APP_NAME}" 2>/dev/null || true
 
 # Normalize the source asset to a real PNG before building the icns.
 if [[ ! -f "${ICON_SOURCE}" ]]; then
@@ -62,9 +77,15 @@ cat > "$APP_DIR/Info.plist" << PLIST
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>
-    <string>${VERSION}</string>
+    <string>${BUILD_NUMBER}</string>
     <key>CFBundleShortVersionString</key>
     <string>${VERSION}</string>
+    <key>SUFeedURL</key>
+    <string>${SPARKLE_FEED_URL}</string>
+    <key>SUPublicEDKey</key>
+    <string>${SPARKLE_PUBLIC_ED_KEY}</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>CFBundleDocumentTypes</key>
@@ -88,7 +109,14 @@ PLIST
 
 # Local builds remain ad-hoc signed. Release automation provides a Developer ID
 # Application identity and enables the hardened runtime plus a secure timestamp.
+# Sparkle.framework is nested code and must be signed before the app bundle.
 if [[ -n "${SIGNING_IDENTITY}" ]]; then
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --sign "${SIGNING_IDENTITY}" \
+    "build/${APP_NAME}.app/Contents/Frameworks/Sparkle.framework"
   codesign \
     --force \
     --options runtime \
@@ -97,6 +125,7 @@ if [[ -n "${SIGNING_IDENTITY}" ]]; then
     --entitlements okraPDF.entitlements \
     "build/${APP_NAME}.app"
 else
+  codesign --force --sign - "build/${APP_NAME}.app/Contents/Frameworks/Sparkle.framework"
   codesign --force --sign - --entitlements okraPDF.entitlements "build/${APP_NAME}.app"
 fi
 

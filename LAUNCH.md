@@ -42,6 +42,7 @@ returns Markdown.
 - [x] App and DMG notarization and stapling
 - [x] Re-downloaded app and DMG accepted by `spctl` as `Notarized Developer ID`
 - [x] Packaged app launch smoke test with builder-only resources hidden
+- [x] Sparkle 2 in-app updates: signed `appcast.xml` feed, EdDSA keypair (secret-only private key), Install and Relaunch flow
 - [x] Quarantined DMG launch smoke gate through LaunchServices in release automation
 - [ ] Second-Mac clean-install verification
 - [ ] DMG Applications shortcut and window polish

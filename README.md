@@ -57,9 +57,13 @@ does not make cloud or network calls.
 ## Download
 
 Download the Apple-silicon beta from the
-[`desktop-v0.5.0-beta.15` GitHub Release](https://github.com/okra-project/desktop/releases/tag/desktop-v0.5.0-beta.15).
+[`desktop-v0.5.0-beta.16` GitHub Release](https://github.com/okra-project/desktop/releases/tag/desktop-v0.5.0-beta.16).
 The app and DMG are Developer ID signed, hardened, notarized by Apple, and
 stapled for normal Gatekeeper opening on other Macs.
+
+From beta.16 on, the app updates itself: it checks a signed update feed daily
+and **Check for Updates…** downloads, verifies, and relaunches into the newest
+beta without another manual DMG download.
 
 ## Build
 
@@ -112,8 +116,12 @@ swift test --filter baiduUnlimitedOCREndToEndSimulationOnPDF
 ## Package a local beta
 
 ```bash
-./scripts/build-dmg.sh 0.5.0-beta.11
+./scripts/build-dmg.sh 0.5.0-beta.16
 ```
+
+The optional second argument is the integer `CFBundleVersion` build number
+Sparkle compares (default: UTC minute). Release automation passes the same
+build number it records in `appcast.xml`.
 
 The generated app is a normal windowed macOS application. Packaging must not
 set `LSUIElement`; the PDF reader belongs in the Dock while it is open.

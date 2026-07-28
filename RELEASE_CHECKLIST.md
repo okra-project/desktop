@@ -22,8 +22,7 @@ Roadmap item: `D.6.8`
 - [x] Passive stall warning after 90 seconds without progress updates
 - [x] Low-memory warning while a local run is active
 - [x] Cross-instance Baidu Unlimited-OCR run queue with a visible waiting state
-- [x] Throttled launch check plus manual Check for Updates against the newest desktop GitHub prerelease
-- [x] Dismissible per-release update banner with a View Release action
+- [x] In-app Sparkle auto-update: Check for Updates… downloads, verifies, and relaunches into the newest signed beta
 - [x] Cancel Run action with persisted cancel intent and terminal canceled state
 - [x] Interrupted-run recovery and same-run Resume action
 - [x] Atomic page-level Markdown checkpoints for Apple Vision and Baidu Unlimited-OCR
@@ -54,7 +53,7 @@ Roadmap item: `D.6.8`
 - [x] Mid-run `run.json` progress and 120-page checkpoint persistence coverage
 - [x] Cancel ordering, orphan recovery, checkpoint resume, and child-process termination coverage
 - [x] Run-health stall/memory decision logic and cross-process lock queue coverage
-- [x] Update version ordering, release selection, dismissal, and throttle coverage
+- [x] Appcast item insertion, newest-first ordering, and re-run replacement coverage
 - [x] Synthetic aToken fixture covers whitespace decoding, malformed markers, normalized boxes, HTML preservation, and repeated-tail suppression
 - [x] Default app state constructs every bundled provider without terminating
 - [x] Packaged app starts with builder-only SwiftPM resources hidden
@@ -92,6 +91,9 @@ Roadmap item: `D.6.8`
 - [x] GitHub prerelease `desktop-v0.5.0-beta.13` with beta update awareness, DMG, and SHA-256 asset (2026-07-28)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.14` on the public okra-project org with DMG and SHA-256 asset (2026-07-28)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.15` under the permanent `okra-project/desktop` name with DMG and SHA-256 asset (2026-07-28)
+- [x] GitHub prerelease `desktop-v0.5.0-beta.16` with Sparkle in-app updates, signed appcast feed, DMG, and SHA-256 asset (2026-07-28)
+- [x] Sparkle.framework embedded, Developer ID signed, notarized, and stapled with the app
+- [x] EdDSA update signing: private key in repo secrets only, public key in the bundle
 - [x] Developer ID Application signature for team `449BD89VDV`
 - [x] Hardened runtime
 - [x] App and DMG accepted by Apple notarization and stapled

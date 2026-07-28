@@ -15,6 +15,7 @@ open/drop PDF → read → choose local provider → explicit Parse → readable
 ## Architecture
 
 - `OkraPDF/App.swift` — normal windowed app lifecycle and File menu command
+- `OkraPDF/Support/SparkleUpdaterController.swift` — Sparkle in-app updates (signed appcast, Install and Relaunch)
 - `OkraPDF/AppState.swift` — open/drop state separated from explicit parsing
 - `OkraPDF/ContentView.swift` — PDF reader shell, drop target, and parser inspector
 - `OkraPDF/PDFReaderView.swift` — native PDFKit reader bridge
