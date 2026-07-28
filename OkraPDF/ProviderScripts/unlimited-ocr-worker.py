@@ -422,7 +422,10 @@ def main() -> None:
                 "processing",
                 page_number - 1,
             )
-            simulated_text = f"Simulated local OCR for `{Path(image_path).name}`."
+            simulated_text = (
+                "<|det|>text [80, 100, 920, 220]<|/det|>"
+                f"Simulated local OCR for `{Path(image_path).name}`."
+            )
             structured_page = parse_model_output(
                 simulated_text,
                 page_number=page_number,

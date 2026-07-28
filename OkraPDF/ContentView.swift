@@ -26,6 +26,7 @@ struct ContentView: View {
             DocumentWorkspaceView(
                 document: state.selectedDocument,
                 isDropTargeted: isDropTargeted,
+                coordinator: state.localProcessing,
                 openPDF: state.openPDFPicker,
                 revealPDF: state.revealSelectedPDF
             )

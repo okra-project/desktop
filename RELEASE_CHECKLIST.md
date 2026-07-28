@@ -2,7 +2,7 @@
 
 Current train: `desktop-v0.5.0-beta.N`
 
-Roadmap item: `D.6.8`
+Roadmap item: `D.6.11`
 
 ## Product contract
 
@@ -30,6 +30,9 @@ Roadmap item: `D.6.8`
 - [x] Typed normalized blocks in per-page and aggregate `result.json`
 - [x] Deterministic repeated-tail suppression with diagnostics
 - [x] Preview, Markdown, and JSON output modes for Baidu runs
+- [x] Source-PDF bounding boxes for valid Baidu normalized layout blocks
+- [x] Two-way source-box and preview-card selection across zoom, scroll, crop, and rotation
+- [x] Accessible Show boxes toolbar toggle; overlays remain screen-only and never mutate the source PDF
 - [x] Copy, Save As, and Reveal actions for Markdown and JSON
 - [x] No cloud upload or remote-control surface
 
@@ -55,14 +58,15 @@ Roadmap item: `D.6.8`
 - [x] Run-health stall/memory decision logic and cross-process lock queue coverage
 - [x] Appcast item insertion, newest-first ordering, and re-run replacement coverage
 - [x] Synthetic aToken fixture covers whitespace decoding, malformed markers, normalized boxes, HTML preservation, and repeated-tail suppression
+- [x] PDF overlay adapter, clipping, crop/rotation geometry, annotation ownership, and click-selection coverage
 - [x] Default app state constructs every bundled provider without terminating
 - [x] Packaged app starts with builder-only SwiftPM resources hidden
 - [x] Quarantined notarized beta.8 through beta.15 DMGs start through LaunchServices before publishing (2026-07-28)
 - [x] Remote-control, dispatch, registry, and model-catalog tests removed
 - [x] `swift build` on an unrestricted macOS shell (2026-07-24)
 - [x] Canonical website mark checksum and packaged-resource coverage
-- [x] `swift test` on an unrestricted macOS shell (55 tests / 13 suites passed, 2026-07-28)
-- [x] Python output-parser and resume tests (5/5 passed, 2026-07-27)
+- [x] `swift test` on an unrestricted macOS shell (52 tests / 12 suites passed, 2026-07-28)
+- [x] Python output-parser, resume, and appcast tests (9/9 passed, 2026-07-28)
 
 ## Manual smoke test
 
@@ -76,6 +80,7 @@ Roadmap item: `D.6.8`
 - [ ] Switch provider, rerun, and confirm a new run folder and manifest are created
 - [ ] Set up Docling on a clean profile and extract with the network disconnected
 - [x] Run the labeled Baidu Unlimited-OCR simulation on a multi-page PDF (3 pages, 2026-07-27)
+- [ ] Select Baidu boxes from both the PDF and preview on a rotated/cropped dogfood PDF
 - [ ] Set up Baidu Unlimited-OCR on a 16 GB Apple-silicon Mac and extract offline
 
 ## Distribution
@@ -92,6 +97,8 @@ Roadmap item: `D.6.8`
 - [x] GitHub prerelease `desktop-v0.5.0-beta.14` on the public okra-project org with DMG and SHA-256 asset (2026-07-28)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.15` under the permanent `okra-project/desktop` name with DMG and SHA-256 asset (2026-07-28)
 - [x] GitHub prerelease `desktop-v0.5.0-beta.16` with Sparkle in-app updates, signed appcast feed, DMG, and SHA-256 asset (2026-07-28)
+- [x] GitHub prerelease `desktop-v0.5.0-beta.17` with Sparkle click-to-restart E2E proof, DMG, SHA-256 asset, and appcast update (2026-07-28)
+- [ ] GitHub prerelease `desktop-v0.5.0-beta.18` with Baidu source-PDF bounding boxes, DMG, SHA-256 asset, and appcast update
 - [x] Sparkle.framework embedded, Developer ID signed, notarized, and stapled with the app
 - [x] EdDSA update signing: private key in repo secrets only, public key in the bundle
 - [x] Developer ID Application signature for team `449BD89VDV`

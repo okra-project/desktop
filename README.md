@@ -10,7 +10,8 @@ local parser, and explicitly click **Parse** when you want readable local output
 2. Read the original PDF in the native center preview. Opening it does not start a run.
 3. Choose a local provider in the Extract inspector and click **Parse**.
 4. Reopen a recent run from the sidebar; each run restores its status, progress, and output.
-5. Baidu Unlimited-OCR runs offer a rendered block preview, Markdown, and JSON.
+5. Baidu Unlimited-OCR runs draw their detected layout boxes over the source
+   PDF and offer a matching block preview, Markdown, and JSON.
 6. Cancel a long run without losing finished pages, then resume from its checkpoint.
 7. Copy, save, or reveal Markdown or JSON from the inspector.
 
@@ -49,7 +50,9 @@ document because its CLI does not expose trustworthy per-page completion.
   quantization of `baidu/Unlimited-OCR`. Its output parser decodes tokenizer
   whitespace, converts `<|det|>` spans into typed normalized layout blocks,
   preserves HTML tables and LaTeX, and removes repeated generation tails before
-  the result is displayed.
+  the result is displayed. Valid boxes are rendered as screen-only PDFKit
+  annotations: click a source box or its preview card to select both views, and
+  use the toolbar toggle to hide or restore the overlay.
 
 Provider setup may download dependencies and model artifacts once. Extraction
 does not make cloud or network calls.
@@ -57,7 +60,7 @@ does not make cloud or network calls.
 ## Download
 
 Download the Apple-silicon beta from the
-[`desktop-v0.5.0-beta.16` GitHub Release](https://github.com/okra-project/desktop/releases/tag/desktop-v0.5.0-beta.16).
+[`desktop-v0.5.0-beta.18` GitHub Release](https://github.com/okra-project/desktop/releases/tag/desktop-v0.5.0-beta.18).
 The app and DMG are Developer ID signed, hardened, notarized by Apple, and
 stapled for normal Gatekeeper opening on other Macs.
 
@@ -89,8 +92,9 @@ chrome renders the logo or the `Okra` name, never a logo-plus-wordmark lockup.
 The retained test surface covers the explicit read-before-parse contract, the
 explicit Parse action, run manifests and history, provider registration, setup
 progress/cancellation, pinned-model integrity metadata, Apple Vision Markdown
-output, Baidu output token/layout parsing, and a full Baidu Unlimited-OCR
-simulation through PDF page rendering, the bundled Python worker, offline flags,
+output, Baidu output token/layout parsing, PDF bounding-box geometry and
+interaction, and a full Baidu Unlimited-OCR simulation through PDF page
+rendering, the bundled Python worker, offline flags,
 page-level checkpoints, persisted Markdown plus JSON, durable cancel ordering,
 orphan recovery, same-run checkpoint resume, and provider-process termination.
 A large-document test verifies 120 independently readable page files.
@@ -116,7 +120,7 @@ swift test --filter baiduUnlimitedOCREndToEndSimulationOnPDF
 ## Package a local beta
 
 ```bash
-./scripts/build-dmg.sh 0.5.0-beta.16
+./scripts/build-dmg.sh 0.5.0-beta.18
 ```
 
 The optional second argument is the integer `CFBundleVersion` build number
