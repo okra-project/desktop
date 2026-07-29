@@ -2,6 +2,7 @@ import Foundation
 
 enum LocalParserRuntimeID: String, Codable, CaseIterable, Sendable {
     case appleVision = "apple-vision"
+    case hybrid
     case mlxVLM = "mlx-vlm"
     /// A VLM served over an OpenAI-compatible /v1/chat/completions endpoint
     /// (Ollama, LM Studio, vLLM, LiteLLM). Shape mirrors Docling's ApiVlmOptions.
@@ -10,6 +11,7 @@ enum LocalParserRuntimeID: String, Codable, CaseIterable, Sendable {
 
 enum LocalParserOutputAdapterID: String, Codable, CaseIterable, Sendable {
     case plainTextV1 = "plain-text-v1"
+    case hybridMarkdownV1 = "hybrid-markdown-v1"
     case unlimitedOCRTokensV1 = "unlimited-ocr-tokens-v1"
     /// Chandra layout HTML (`<div data-bbox data-label>` with inline tables/math).
     case chandraHTMLV1 = "chandra-html-v1"
@@ -258,5 +260,13 @@ enum LocalParserCatalog {
             recommendedUnifiedMemoryGB: 16,
             minimumFreeDiskBytes: 5_000_000_000
         )
+    )
+
+    static let hybridAuto = LocalParserDefinition(
+        runtime: .hybrid,
+        modelDelivery: chandra.modelDelivery,
+        outputAdapter: .hybridMarkdownV1,
+        capabilities: chandra.capabilities.union([.nativeText]),
+        requirements: chandra.requirements
     )
 }

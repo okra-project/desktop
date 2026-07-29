@@ -10,6 +10,8 @@ extension LocalProviderDescriptor {
         switch id {
         case .appleVision:
             nil
+        case .hybridAuto:
+            "Ollama · okra-chandra:q4"
         case .unlimitedOCR:
             "~/.okra/providers/unlimited-ocr"
         case .chandra:

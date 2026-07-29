@@ -8,7 +8,7 @@ import Foundation
 /// num_ctx, and a page image's vision tokens overflow the default window). Parsing
 /// shells the shared `chandra-worker.py` in `--endpoint` mode — the same worker,
 /// projection, and checkpoint contract as the mlx path, just a different backend.
-final class ChandraProcessingProvider: LocalProcessingProvider, @unchecked Sendable {
+final class ChandraProcessingProvider: LocalProcessingProvider, ChandraPageParsing, @unchecked Sendable {
     let descriptor = LocalProviderDescriptor(
         id: .chandra,
         name: "Chandra OCR 2",
@@ -102,27 +102,15 @@ final class ChandraProcessingProvider: LocalProcessingProvider, @unchecked Senda
         request: LocalProcessingRequest,
         progress: @escaping LocalProcessingProgress
     ) async throws -> LocalProcessingResult {
-        guard availability().isReady else {
-            throw LocalProcessingError.providerUnavailable("Set up Chandra OCR 2 before extracting.")
-        }
-        guard let workerURL else {
-            throw LocalProcessingError.missingResource("Chandra worker")
-        }
-        // The endpoint probe is async, so it lives here rather than in availability().
-        guard await OllamaClient.listModels(baseURL: endpoint.baseURL) != nil else {
-            throw LocalProcessingError.providerUnavailable(
-                "Ollama server is not running. Start Ollama and try again."
-            )
-        }
-
-        let endpoint = self.endpoint
-        let pythonURL = self.pythonURL
-        let lockRoot = self.lockRoot
+        try await prepareForParsing()
 
         let worker = Task.detached(priority: .userInitiated) {
             try Task.checkCancellation()
             try FileManager.default.createDirectory(at: request.outputDirectory, withIntermediateDirectories: true)
-            let pagesDirectory = request.outputDirectory.appendingPathComponent("pages", isDirectory: true)
+            let pagesDirectory = request.outputDirectory.appendingPathComponent(
+                "pages",
+                isDirectory: true
+            )
             let pageURLs = try PDFPageRenderer.writePagePNGs(
                 from: request.sourceURL,
                 to: pagesDirectory,
@@ -134,136 +122,140 @@ final class ChandraProcessingProvider: LocalProcessingProvider, @unchecked Senda
                 totalPages: pageURLs.count,
                 documentHeader: "# \(request.fileName)"
             )
-            let initialManifest = try pageStore.prepare()
-            if initialManifest.completedPageCount < pageURLs.count,
-               let nextPage = (1...pageURLs.count).first(where: {
-                   (try? pageStore.status(pageNumber: $0)) != .succeeded
-               }) {
-                try pageStore.markProcessing(pageNumber: nextPage)
-                request.pageProgress(
-                    LocalPageProgressUpdate(
-                        parserID: request.parserID,
-                        pageNumber: nextPage,
-                        state: .inProgress,
-                        completedPageCount: initialManifest.completedPageCount,
-                        totalPageCount: pageURLs.count,
-                        message: "Parsing page \(nextPage) of \(pageURLs.count)"
-                    )
-                )
-            }
-            let outputURL = pageStore.resultURL
-            progress(0.22, "Sending pages to Chandra via Ollama")
+            try pageStore.prepare()
+            var structuredPages: [StructuredExtractionPage] = []
 
-            var arguments = [
-                workerURL.path,
-                "--endpoint", endpoint.baseURL,
-                "--model", endpoint.model,
-                "--output", outputURL.path,
-                "--page-output-directory", pageStore.pagesDirectory.path,
-                "--page-progress", pageStore.manifestURL.path,
-                "--title", request.fileName,
-                "--images",
-            ]
-            arguments.append(contentsOf: pageURLs.map(\.path))
-
-            // Serialize this app's own Chandra runs; Ollama also queues internally.
-            try FileManager.default.createDirectory(at: lockRoot, withIntermediateDirectories: true)
-            let runGate = LocalExclusiveFileLock(url: lockRoot.appendingPathComponent("worker.lock"))
-            try await runGate.acquire {
-                progress(0.22, "Waiting for another Chandra run to finish…")
-            }
-            defer { runGate.release() }
-
-            let monitorTask = Task.detached(priority: .utility) {
-                var observedPageCount = initialManifest.completedPageCount
-                while Task.isCancelled == false {
-                    if let manifest = try? pageStore.loadManifest(),
-                       manifest.completedPageCount > observedPageCount {
-                        let newCompletedPageCount = manifest.completedPageCount
-                        for completedPageCount in (observedPageCount + 1)...newCompletedPageCount {
-                            request.pageProgress(
-                                LocalPageProgressUpdate(
-                                    parserID: request.parserID,
-                                    pageNumber: completedPageCount,
-                                    state: .done,
-                                    completedPageCount: completedPageCount,
-                                    totalPageCount: pageURLs.count,
-                                    message: "Saved page \(completedPageCount) of \(pageURLs.count)"
-                                )
-                            )
-                            if completedPageCount < pageURLs.count {
-                                request.pageProgress(
-                                    LocalPageProgressUpdate(
-                                        parserID: request.parserID,
-                                        pageNumber: completedPageCount + 1,
-                                        state: .inProgress,
-                                        completedPageCount: completedPageCount,
-                                        totalPageCount: pageURLs.count,
-                                        message: "Parsing page \(completedPageCount + 1) of \(pageURLs.count)"
-                                    )
-                                )
-                            }
-                            progress(
-                                0.2 + (0.8 * Double(completedPageCount) / Double(pageURLs.count)),
-                                "Saved page \(completedPageCount) of \(pageURLs.count)"
-                            )
-                        }
-                        observedPageCount = newCompletedPageCount
-                    }
-                    guard observedPageCount < pageURLs.count else { return }
-                    try? await Task.sleep(for: .milliseconds(100))
-                }
-            }
-
-            do {
-                _ = try await LocalCommandRunner.runAsync(
-                    executableURL: pythonURL,
-                    arguments: arguments
-                )
-            } catch {
-                monitorTask.cancel()
-                await monitorTask.value
-                let completedPages = (try? pageStore.reconcileCompletedPages().completedPageCount) ?? 0
-                if completedPages < pageURLs.count, !(error is CancellationError) {
-                    try? pageStore.markFailed(pageNumber: completedPages + 1, error: error)
-                }
-                if completedPages < pageURLs.count {
+            for (index, pageURL) in pageURLs.enumerated() {
+                try Task.checkCancellation()
+                let pageNumber = index + 1
+                if try pageStore.status(pageNumber: pageNumber) == .succeeded,
+                   let page = try? StructuredExtractionPersistence.loadPage(
+                       from: pageStore.pagesDirectory,
+                       pageNumber: pageNumber
+                   ) {
+                    structuredPages.append(page)
+                    let manifest = try pageStore.reconcileCompletedPages()
                     request.pageProgress(
                         LocalPageProgressUpdate(
                             parserID: request.parserID,
-                            pageNumber: completedPages + 1,
-                            state: error is CancellationError ? .attention : .error,
-                            completedPageCount: completedPages,
+                            pageNumber: pageNumber,
+                            state: .done,
+                            completedPageCount: manifest.completedPageCount,
                             totalPageCount: pageURLs.count,
-                            message: error is CancellationError
-                                ? "Canceled. Resume to continue page \(completedPages + 1)."
-                                : error.localizedDescription
+                            message: "Restored page \(pageNumber) of \(pageURLs.count) from disk"
                         )
                     )
+                    progress(
+                        Double(manifest.completedPageCount) / Double(pageURLs.count),
+                        "Restored page \(pageNumber) of \(pageURLs.count) from disk"
+                    )
+                    continue
                 }
-                throw error
-            }
 
-            monitorTask.cancel()
-            await monitorTask.value
-            let manifest = try pageStore.reconcileCompletedPages()
-            if manifest.completedPageCount > 0 {
+                let progressManifest = try pageStore.reconcileCompletedPages()
+                try pageStore.markProcessing(pageNumber: pageNumber)
                 request.pageProgress(
                     LocalPageProgressUpdate(
                         parserID: request.parserID,
-                        pageNumber: manifest.lastCompletedPageNumber ?? manifest.completedPageCount,
-                        state: .done,
-                        completedPageCount: manifest.completedPageCount,
+                        pageNumber: pageNumber,
+                        state: .inProgress,
+                        completedPageCount: progressManifest.completedPageCount,
                         totalPageCount: pageURLs.count,
-                        message: "Saved page \(manifest.lastCompletedPageNumber ?? manifest.completedPageCount) of \(pageURLs.count)"
+                        message: "Parsing page \(pageNumber) of \(pageURLs.count) with Chandra"
                     )
                 )
+                do {
+                    progress(
+                        Double(index) / Double(pageURLs.count),
+                        "Sending page \(pageNumber) of \(pageURLs.count) to Chandra via Ollama"
+                    )
+                    let parsed = try await self.parsePage(
+                        request: ChandraPageParsingRequest(
+                            pageNumber: pageNumber,
+                            imageURL: pageURL
+                        ),
+                        progress: { _, message in
+                            progress(
+                                Double(index) / Double(pageURLs.count),
+                                message
+                            )
+                        }
+                    )
+                    try StructuredExtractionPersistence.write(
+                        page: parsed.structuredPage,
+                        to: pageStore.pagesDirectory
+                    )
+                    try pageStore.writePage(
+                        pageNumber: pageNumber,
+                        markdown: "## Page \(pageNumber)\n\n\(parsed.markdown)"
+                    )
+                    structuredPages.append(parsed.structuredPage)
+                    let manifest = try pageStore.reconcileCompletedPages()
+                    request.pageProgress(
+                        LocalPageProgressUpdate(
+                            parserID: request.parserID,
+                            pageNumber: pageNumber,
+                            state: .done,
+                            completedPageCount: manifest.completedPageCount,
+                            totalPageCount: pageURLs.count,
+                            message: "Saved page \(pageNumber) of \(pageURLs.count)"
+                        )
+                    )
+                    progress(
+                        Double(manifest.completedPageCount) / Double(pageURLs.count),
+                        "Saved page \(pageNumber) of \(pageURLs.count)"
+                    )
+                } catch is CancellationError {
+                    let completed = (try? pageStore.reconcileCompletedPages().completedPageCount) ?? 0
+                    request.pageProgress(
+                        LocalPageProgressUpdate(
+                            parserID: request.parserID,
+                            pageNumber: pageNumber,
+                            state: .attention,
+                            completedPageCount: completed,
+                            totalPageCount: pageURLs.count,
+                            message: "Canceled. Resume to continue page \(pageNumber)."
+                        )
+                    )
+                    throw CancellationError()
+                } catch {
+                    try? pageStore.markFailed(pageNumber: pageNumber, error: error)
+                    let completed = (try? pageStore.reconcileCompletedPages().completedPageCount) ?? 0
+                    request.pageProgress(
+                        LocalPageProgressUpdate(
+                            parserID: request.parserID,
+                            pageNumber: pageNumber,
+                            state: .error,
+                            completedPageCount: completed,
+                            totalPageCount: pageURLs.count,
+                            message: error.localizedDescription
+                        )
+                    )
+                    throw error
+                }
             }
-            _ = try pageStore.assembleResult()
-            let structuredOutputURL = outputURL.deletingPathExtension().appendingPathExtension("json")
-            guard FileManager.default.fileExists(atPath: structuredOutputURL.path) else {
-                throw LocalProcessingError.missingOutput("Chandra OCR 2 structured JSON")
-            }
+
+            let outputURL = try pageStore.assembleResult()
+            let structuredOutputURL = outputURL
+                .deletingPathExtension()
+                .appendingPathExtension("json")
+            try StructuredExtractionPersistence.write(
+                document: StructuredExtractionDocument(
+                    schemaVersion: 1,
+                    object: "local_extraction",
+                    provider: StructuredExtractionProvider(
+                        id: "chandra",
+                        name: "Chandra OCR 2"
+                    ),
+                    title: request.fileName,
+                    pageCount: pageURLs.count,
+                    completedPageCount: structuredPages.count,
+                    complete: structuredPages.count == pageURLs.count,
+                    simulation: false,
+                    pages: structuredPages.sorted { $0.pageNumber < $1.pageNumber }
+                ),
+                to: structuredOutputURL
+            )
             progress(1, "Extraction complete")
             return LocalProcessingResult(
                 outputURL: outputURL,
@@ -277,5 +269,77 @@ final class ChandraProcessingProvider: LocalProcessingProvider, @unchecked Senda
         } onCancel: {
             worker.cancel()
         }
+    }
+
+    func prepareForParsing() async throws {
+        guard availability().isReady else {
+            throw LocalProcessingError.providerUnavailable(
+                "Set up Chandra OCR 2 before extracting."
+            )
+        }
+        guard await OllamaClient.listModels(baseURL: endpoint.baseURL) != nil else {
+            throw LocalProcessingError.providerUnavailable(
+                "Ollama server is not running. Start Ollama and try again."
+            )
+        }
+    }
+
+    func parsePage(
+        request: ChandraPageParsingRequest,
+        progress: @escaping LocalProcessingProgress
+    ) async throws -> ChandraPageParsingResult {
+        guard let workerURL else {
+            throw LocalProcessingError.missingResource("Chandra worker")
+        }
+        let scratchDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("okra-chandra-page-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: scratchDirectory) }
+
+        let scratchStore = LocalPageCheckpointStore(
+            outputDirectory: scratchDirectory,
+            totalPages: 1,
+            documentHeader: "# Page \(request.pageNumber)"
+        )
+        try scratchStore.prepare()
+
+        let arguments = [
+            workerURL.path,
+            "--endpoint", endpoint.baseURL,
+            "--model", endpoint.model,
+            "--output", scratchStore.resultURL.path,
+            "--page-output-directory", scratchStore.pagesDirectory.path,
+            "--page-progress", scratchStore.manifestURL.path,
+            "--title", "Page \(request.pageNumber)",
+            "--images", request.imageURL.path,
+        ]
+
+        try FileManager.default.createDirectory(
+            at: lockRoot,
+            withIntermediateDirectories: true
+        )
+        let runGate = LocalExclusiveFileLock(
+            url: lockRoot.appendingPathComponent("worker.lock")
+        )
+        try await runGate.acquire {
+            progress(0, "Waiting for another Chandra run to finish…")
+        }
+        defer { runGate.release() }
+
+        _ = try await LocalCommandRunner.runAsync(
+            executableURL: pythonURL,
+            arguments: arguments
+        )
+        let parsedPage = try StructuredExtractionPersistence.loadPage(
+            from: scratchStore.pagesDirectory,
+            pageNumber: 1
+        ).routed(
+            to: request.pageNumber,
+            imageFile: request.imageURL.lastPathComponent,
+            provenance: nil
+        )
+        return ChandraPageParsingResult(
+            markdown: parsedPage.markdown,
+            structuredPage: parsedPage
+        )
     }
 }

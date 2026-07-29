@@ -52,15 +52,36 @@ enum PDFPageRenderer {
                 progress(fraction * 0.2, "Using prepared page \(index + 1) of \(document.pageCount)")
                 return url
             }
-            let image = try pageImage(from: document, at: index, maxDimension: maxDimension)
-            let bitmap = NSBitmapImageRep(cgImage: image)
-            guard let data = bitmap.representation(using: .png, properties: [:]) else {
-                throw LocalProcessingError.invalidPDF
-            }
-            try data.write(to: url, options: .atomic)
+            try writePagePNG(
+                from: document,
+                at: index,
+                to: url,
+                maxDimension: maxDimension
+            )
             let fraction = Double(index + 1) / Double(document.pageCount)
             progress(fraction * 0.2, "Preparing page \(index + 1) of \(document.pageCount)")
             return url
         }
+    }
+
+    static func writePagePNG(
+        from document: PDFDocument,
+        at index: Int,
+        to url: URL,
+        maxDimension: CGFloat
+    ) throws {
+        if FileManager.default.fileExists(atPath: url.path) {
+            return
+        }
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let image = try pageImage(from: document, at: index, maxDimension: maxDimension)
+        let bitmap = NSBitmapImageRep(cgImage: image)
+        guard let data = bitmap.representation(using: .png, properties: [:]) else {
+            throw LocalProcessingError.invalidPDF
+        }
+        try data.write(to: url, options: .atomic)
     }
 }

@@ -48,4 +48,34 @@ struct ChandraParserDefinitionTests {
         let decoded = try JSONDecoder().decode(LocalParserDefinition.self, from: data)
         #expect(decoded == LocalParserCatalog.chandra)
     }
+
+    @Test("Chandra page JSON decodes through the shared page-scoped contract")
+    func pageOutputDecodes() throws {
+        let data = try #require(
+            """
+            {
+              "pageNumber": 1,
+              "imageFile": "page-0001.png",
+              "markdown": "Parsed by Chandra",
+              "plainText": "Parsed by Chandra",
+              "blocks": [],
+              "diagnostics": {
+                "rawCharacterCount": 42,
+                "blockCount": 1,
+                "duplicateBlockCount": 0,
+                "loopDetected": false,
+                "warnings": []
+              }
+            }
+            """.data(using: .utf8)
+        )
+
+        let page = try JSONDecoder().decode(StructuredExtractionPage.self, from: data)
+
+        #expect(page.markdown == "Parsed by Chandra")
+        #expect(page.diagnostics.rawCharacterCount == 42)
+        #expect(page.diagnostics.decodedCharacterCount == 0)
+        #expect(page.diagnostics.blockCount == 1)
+        #expect(page.provenance == nil)
+    }
 }

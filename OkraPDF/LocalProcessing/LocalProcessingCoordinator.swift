@@ -69,6 +69,7 @@ final class LocalProcessingCoordinator: ObservableObject {
     init(
         providers: [any LocalProcessingProvider] = [
             AppleVisionProcessingProvider(),
+            HybridAutoProcessingProvider(),
             UnlimitedOCRProcessingProvider(),
             ChandraProcessingProvider(),
         ],
