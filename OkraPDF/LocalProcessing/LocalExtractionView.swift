@@ -10,6 +10,9 @@ struct LocalExtractionView: View {
         VStack(alignment: .leading, spacing: WorkspaceTheme.sectionSpacing) {
             ProviderPickerView(coordinator: coordinator)
             ProviderStatusView(coordinator: coordinator)
+            if coordinator.selectedProviderUsesOllama {
+                OllamaIntegrationView(coordinator: coordinator)
+            }
 
             if document != nil {
                 ForEach(coordinator.pageLifecycleGroups) { group in
@@ -77,7 +80,14 @@ struct LocalExtractionView: View {
                 .accessibilityHint("Extracts on this Mac without uploading the PDF")
             }
         } else {
-            ProviderSetupView(coordinator: coordinator)
+            if coordinator.selectedProviderUsesOllama {
+                Text(coordinator.statusMessage)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ProviderSetupView(coordinator: coordinator)
+            }
         }
     }
 

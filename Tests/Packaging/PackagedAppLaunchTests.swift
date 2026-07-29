@@ -51,7 +51,9 @@ struct PackagedAppLaunchTests {
                 decoding: outputPipe.fileHandleForReading.readDataToEndOfFile(),
                 as: UTF8.self
             )
+            #if compiler(>=6.2)
             Attachment.record(output, named: "Packaged app launch output")
+            #endif
         }
 
         #expect(
@@ -199,7 +201,9 @@ struct PackagedAppLaunchTests {
         guard let reportURL, let report = try? String(contentsOf: reportURL, encoding: .utf8) else {
             return
         }
+        #if compiler(>=6.2)
         Attachment.record(report, named: reportURL.lastPathComponent)
+        #endif
     }
 
     @discardableResult

@@ -14,7 +14,7 @@ struct ExtractionInspectorView: View {
                     Text("Extract")
                         .font(.title2)
                         .bold()
-                    Text("Choose a local parser, set it up once, then parse only when you are ready.")
+                    Text("Choose a local parser, then parse only when you are ready.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

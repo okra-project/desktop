@@ -212,7 +212,8 @@ jobs:
               --verify-tag
           fi
 
-      - name: Sign update and publish appcast
+      - name: Sign update and publish appcast branch
+        id: appcast
         shell: bash
         run: |
           set -euo pipefail
@@ -251,16 +252,15 @@ jobs:
 
           git add appcast.xml
           git commit -m "appcast: publish desktop-v${VERSION} (build ${BUILD_NUMBER})"
-          for attempt in 1 2 3; do
-            if git push origin main; then
-              break
-            fi
-            if [[ "${attempt}" == "3" ]]; then
-              echo "Failed to push appcast update after 3 attempts" >&2
-              exit 1
-            fi
-            git pull --rebase origin main
-          done
+          APPCAST_BRANCH="automation/appcast-${TAG}-${BUILD_NUMBER}-${GITHUB_RUN_ID}"
+          git push origin "HEAD:refs/heads/${APPCAST_BRANCH}"
+          echo "branch=${APPCAST_BRANCH}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "### Signed appcast ready"
+            echo
+            echo "Open a pull request from \`${APPCAST_BRANCH}\` to \`main\`."
+            echo "The normal \`macos-checks\` branch-protection gate must pass before merge."
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Remove temporary signing keychain
         if: always()

@@ -58,9 +58,9 @@ struct ProviderSetupView: View {
 
     private var setupSummary: some View {
         VStack(alignment: .leading, spacing: WorkspaceTheme.compactSpacing) {
-            Text("One-time local setup")
+            Text("One-time local model setup")
                 .font(.headline)
-            Text("The model is downloaded to this Mac. After setup, PDF extraction runs with network access disabled.")
+            Text("Okra downloads and verifies this first-party model on this Mac. After setup, PDF extraction runs locally.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
