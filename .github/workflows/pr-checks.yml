@@ -1,0 +1,44 @@
+name: PR Checks
+
+# Secretless pre-merge gate for the desktop stable track (#15).
+# Runs the same code checks as the release job without any signing,
+# notarization, or Sparkle credentials. Publishing stays exclusive to
+# notarized-release.yml on desktop-v* tags.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Cancel superseded runs for the same PR/branch so the constrained
+  # self-hosted macOS lane is not wasted on stale commits.
+  group: pr-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-checks:
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run brand, unit, and build checks
+        shell: bash
+        env:
+          # Keep test workspaces and UserDefaults suites out of the
+          # runner's real application-support state.
+          OKRA_DESKTOP_TEST_TMPDIR: ${{ runner.temp }}/okra-test-workspaces
+        run: |
+          set -euo pipefail
+          mkdir -p "${OKRA_DESKTOP_TEST_TMPDIR}"
+          bash scripts/verify-brand-surface.sh
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
+            -s scripts/tests \
+            -p '*_tests.py'
+          swift test
+          swift build -c release
