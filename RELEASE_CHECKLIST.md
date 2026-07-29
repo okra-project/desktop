@@ -1,8 +1,8 @@
 # okraPDF Desktop — Release Checklist
 
-Current train: `desktop-v0.5.0-beta.N`
+Current train: `desktop-v1.0.0-rc.1`
 
-Roadmap item: `D.6.14`
+Roadmap items: `Stable #15`, `D.6.9`, `D.6.14`
 
 ## Product contract
 
@@ -13,6 +13,8 @@ Roadmap item: `D.6.14`
 - [x] **Open PDF…** picker
 - [x] Explicit Parse action; opening/replacing a PDF creates no run
 - [x] Apple Vision default provider
+- [x] Auto (Hybrid) native-text reuse with page-local Chandra fallback
+- [x] Chandra OCR 2 local parser through the managed Ollama setup path
 - [x] Docling provider removed for beta.20
 - [x] Baidu Unlimited-OCR setup/readiness state and lineage copy
 - [x] Native byte-counted Baidu model download with cancel/resume state
@@ -169,8 +171,8 @@ friend round on real Baidu setup/inference.
 - [x] Hardened runtime
 - [x] App and DMG accepted by Apple notarization and stapled
 - [x] Re-downloaded app and DMG accepted by `spctl` as `Notarized Developer ID`
-- [ ] Second-Mac clean-install DMG pass
-- [ ] Exact beta.19 candidate DMG and SHA-256 assets published as an unannounced prerelease
-- [ ] Exact candidate passes the automated signing, notarization, Gatekeeper, DMG, quarantine-launch, and appcast gates
+- [ ] Public `desktop-v1.0.0-rc.1` prerelease with DMG and SHA-256 assets
+- [ ] Exact RC passes automated signing, notarization, Gatekeeper, DMG, quarantine-launch, and appcast gates
+- [ ] Exact RC is re-downloaded and passes the clean second-Mac install
 - [ ] Friend-equivalent clean-Mac install and Apple Vision extraction recorded on issue #47
 - [ ] Signed in-place **Install and Relaunch** update evidence recorded on issue #39
