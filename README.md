@@ -36,8 +36,8 @@ provider-neutral `pageLifecycles` matrix keyed by parser ID plus page number.
 it records start, progress, page checkpoints, cancel intent, interruption,
 resume, and terminal outcomes. If the app closes mid-run, the next launch marks
 the orphaned attempt interrupted instead of leaving it stuck in `running`.
-Resume reuses the same run directory and skips completed Apple Vision or Baidu
-page records. A canceled, stalled, or orphaned active page becomes
+Resume reuses the same run directory and skips completed page records for the
+selected resumable parser. A canceled, stalled, or orphaned active page becomes
 `attention`; a parser failure becomes `error`; retry returns that page to
 `inProgress`; and only a durable page checkpoint becomes `done`. Merely viewing
 the run never changes these states. `result.md` is assembled from the page
@@ -46,6 +46,12 @@ files in numeric order.
 ## Local providers
 
 - **Apple Vision** — built into macOS and selected by default.
+- **Auto (Hybrid)** — reuses acceptable native PDF text per page and sends
+  scanned or broken-text pages to Chandra OCR 2. Output keeps page-level source
+  provenance. It shares Chandra's one-time Ollama setup.
+- **Chandra OCR 2** — optional document VLM served locally through Ollama. The
+  app pulls the model during explicit setup, configures its local parser
+  variant, and calls only Ollama's localhost endpoint during extraction.
 - **Baidu Unlimited-OCR** — optional 4-bit MLX setup for Apple silicon. The app
   downloads the pinned checkpoint with byte progress, keeps resume data when
   setup is canceled, and verifies every artifact with SHA-256 before marking it
@@ -60,23 +66,25 @@ files in numeric order.
 Provider setup may download dependencies and model artifacts once. Extraction
 does not make cloud or network calls.
 
-## Friends beta
+## Public v1 release candidate
 
-`desktop-v0.5.0-beta.19` is a prerelease for selected testers using an
-Apple-silicon Mac with macOS 13 or later. Processing is local-only. For this
-round, use **Apple Vision**: it is built into macOS and requires no model or
-Python setup.
+`desktop-v1.0.0-rc.1` is the first public v1 release candidate for
+Apple-silicon Macs running macOS 13 or later. Processing is local-only. Use
+**Apple Vision** for the zero-setup path; use **Auto (Hybrid)** or standalone
+**Chandra OCR 2** after installing Ollama and completing the app's one-time
+Chandra setup.
 
-Real Baidu Unlimited-OCR setup and inference are outside this testing round.
-Baidu simulation, if you encounter it in developer instructions, is internal
+Auto and Chandra need at least 8 GB of unified memory, recommend 16 GB, reserve
+5 GB of free disk, and download about 3.4 GB of model data. Real Baidu
+Unlimited-OCR remains an advanced validation path. Baidu simulation is internal
 workflow QA and is not evidence of OCR quality.
 
 ### Install
 
-1. Download `Okra-0.5.0-beta.19.dmg` from the
-   [`desktop-v0.5.0-beta.19` GitHub prerelease](https://github.com/okra-project/desktop/releases/tag/desktop-v0.5.0-beta.19).
+1. Download `Okra-1.0.0-rc.1.dmg` from the
+   [`desktop-v1.0.0-rc.1` GitHub prerelease](https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.1).
 2. Optionally download the adjacent `.sha256` file and, from the Downloads
-   folder, run `shasum -a 256 -c Okra-0.5.0-beta.19.dmg.sha256`.
+   folder, run `shasum -a 256 -c Okra-1.0.0-rc.1.dmg.sha256`.
 3. Open the DMG, drag **Okra** to **Applications**, and eject the DMG.
 4. Open **Okra** from Finder's Applications folder. The app and DMG are
    Developer ID signed, hardened, notarized by Apple, and stapled for normal
@@ -93,7 +101,7 @@ workflow QA and is not evidence of OCR quality.
 
 The app checks its signed update feed daily. You can also choose **Check for
 Updates…** in the app menu to download, verify, install, and relaunch into the
-newest beta. If in-app updating fails, download the newer DMG from the
+newest prerelease. If in-app updating fails, download the newer DMG from the
 [GitHub Releases page](https://github.com/okra-project/desktop/releases) and
 repeat the installation steps above.
 
@@ -162,10 +170,10 @@ the same workflow visibly. You can also run only the built-in fixture check:
 swift test --filter baiduUnlimitedOCREndToEndSimulationOnPDF
 ```
 
-## Package a local beta
+## Package a local candidate
 
 ```bash
-./scripts/build-dmg.sh 0.5.0-beta.19
+./scripts/build-dmg.sh 1.0.0-rc.1
 ```
 
 The optional second argument is the integer `CFBundleVersion` build number
