@@ -76,6 +76,44 @@ Roadmap item: `D.6.14`
 - [x] `swift test` on an unrestricted macOS shell (55 tests / 12 suites passed, 2026-07-28)
 - [x] Python output-parser, resume, and appcast tests (10/10 passed, 2026-07-28)
 
+### Pre-merge CI gate (stable #15)
+
+`.github/workflows/pr-checks.yml` runs on every pull request and push to
+`main` so code checks no longer happen only inside the credentialed release
+job.
+
+- Secretless: `permissions: contents: read`; no Developer ID, notarization,
+  or Sparkle keys are imported. Signing, notarization, stapling, quarantine,
+  packaged-launch, appcast signing, and publishing stay exclusive to
+  `notarized-release.yml` on `desktop-v*` tags, and a green PR check never
+  publishes or mutates `main`.
+- Concurrency cancels superseded runs for the same PR/branch ref so the
+  constrained self-hosted macOS lane is not wasted on stale commits.
+- Each run executes `scripts/verify-brand-surface.sh`, the Python unit suite
+  (`scripts/tests`), `swift test`, and `swift build -c release`.
+- Tests stay hermetic: `OKRA_DESKTOP_TEST_TMPDIR` routes test workspaces to
+  the runner-temporary root, `TestWorkspace` already isolates `UserDefaults`
+  suites per test, and no live provider credentials or network inference are
+  required.
+
+#### macOS lane maintenance and recovery
+
+- Lane: self-hosted runner `stevens-mac-mini-okrapdf-desktop` on the Mac
+  mini, labels `self-hosted, macOS, ARM64, okrapdf-desktop-release`. PR
+  checks match on the base labels only; the release job alone claims the
+  `okrapdf-desktop-release` label.
+- Required toolchains on the lane: Xcode/Swift 5.9+, `rg`, `python3`.
+- Inspect runner health: `gh api repos/okra-project/desktop/actions/runners`
+  (status should be `online`), or the repo's Settings → Actions → Runners
+  page. Failed runs list their logs under the PR Checks workflow.
+- Recover an offline runner: on the Mac mini, restart the runner service from
+  its install directory (`./svc.sh stop && ./svc.sh start`, or the LaunchDaemon
+  equivalent used at install time), then re-check the runners API. If the
+  runner needs re-registration, replace it under Settings → Actions → Runners
+  with a fresh registration token and the same labels.
+- Branch protection: the `macos-checks` job is the required pre-merge check
+  for `main`.
+
 ## Friend-core manual regression
 
 Run every line below against the exact downloadable beta.19 prerelease
