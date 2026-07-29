@@ -1,6 +1,6 @@
 # okraPDF Desktop — Release Checklist
 
-Current train: `desktop-v1.0.0-rc.1`
+Current train: `desktop-v1.0.0-rc.2`
 
 Roadmap items: `Stable #15`, `D.6.9`, `D.6.14`
 
@@ -13,8 +13,9 @@ Roadmap items: `Stable #15`, `D.6.9`, `D.6.14`
 - [x] **Open PDF…** picker
 - [x] Explicit Parse action; opening/replacing a PDF creates no run
 - [x] Apple Vision default provider
-- [x] Auto (Hybrid) native-text reuse with page-local Chandra fallback
-- [x] Chandra OCR 2 local parser through the managed Ollama setup path
+- [x] Auto (Hybrid) native-text reuse with page-local Ollama vision fallback
+- [x] Generic Ollama provider with HTTP model discovery and vision-capability filtering
+- [x] Ollama model selection persists without inspecting its model directory or invoking its CLI
 - [x] Docling provider removed for beta.20
 - [x] Baidu Unlimited-OCR setup/readiness state and lineage copy
 - [x] Native byte-counted Baidu model download with cancel/resume state
@@ -55,6 +56,7 @@ Roadmap items: `Stable #15`, `D.6.9`, `D.6.14`
 - [x] Recent local runs re-open from the workspace sidebar
 - [x] Baidu Unlimited-OCR inference forces Hugging Face/Transformers offline mode
 - [x] Provider setup is visibly distinct from offline extraction
+- [x] Ollama is represented as a loopback HTTP integration, separate from Okra-managed Baidu setup
 
 ## Automated verification
 
@@ -69,14 +71,15 @@ Roadmap items: `Stable #15`, `D.6.9`, `D.6.14`
 - [x] Provider-neutral PDF overlay adapter, clipping, fixed crop/rotation geometry, annotation ownership, click-selection, and hover-state coverage
 - [x] Apple Vision native-text and scanned-observation structured-output coverage
 - [x] Default app state constructs every bundled provider without terminating
+- [x] Ollama `/api/tags`, `/api/show`, and `/api/chat` request contracts have hermetic unit coverage
 - [x] Packaged app starts with builder-only SwiftPM resources hidden
 - [x] Quarantined notarized beta.8 through beta.15 DMGs start through LaunchServices before publishing (2026-07-28)
 - [x] Remote-control, dispatch, registry, and model-catalog tests removed
 - [x] Docling provider, tests, and Docling-only bundled resources removed for beta.20
 - [x] `swift build` on an unrestricted macOS shell (2026-07-28)
 - [x] Canonical website mark checksum and packaged-resource coverage
-- [x] `swift test` on an unrestricted macOS shell (55 tests / 12 suites passed, 2026-07-28)
-- [x] Python output-parser, resume, and appcast tests (10/10 passed, 2026-07-28)
+- [x] `swift test` on an unrestricted macOS shell (93 tests passed, 2026-07-29)
+- [x] Python output-parser, resume, appcast, and protected-release tests (12/12 passed, 2026-07-29)
 
 ### Pre-merge CI gate (stable #15)
 
@@ -115,6 +118,9 @@ job.
   with a fresh registration token and the same labels.
 - Branch protection: the `macos-checks` job is the required pre-merge check
   for `main`.
+- Release appcasts are pushed to a dedicated `automation/appcast-*` branch.
+  A maintainer opens that branch as a normal pull request so `macos-checks`
+  runs before the signed feed update reaches protected `main`.
 
 ## Friend-core manual regression
 
@@ -171,8 +177,11 @@ friend round on real Baidu setup/inference.
 - [x] Hardened runtime
 - [x] App and DMG accepted by Apple notarization and stapled
 - [x] Re-downloaded app and DMG accepted by `spctl` as `Notarized Developer ID`
-- [ ] Public `desktop-v1.0.0-rc.1` prerelease with DMG and SHA-256 assets
-- [ ] Exact RC passes automated signing, notarization, Gatekeeper, DMG, quarantine-launch, and appcast gates
-- [ ] Exact RC is re-downloaded and passes the clean second-Mac install
+- [x] Public `desktop-v1.0.0-rc.1` prerelease with DMG and SHA-256 assets (2026-07-29)
+- [x] Exact RC.1 passes automated signing, notarization, Gatekeeper, DMG, and quarantine-launch gates (2026-07-29)
+- [x] Exact RC.1 is re-downloaded, verified, and installed on this MacBook (2026-07-29)
+- [ ] Public `desktop-v1.0.0-rc.2` prerelease with generic Ollama HTTP integration
+- [ ] RC.2 appcast branch passes `macos-checks` and merges to protected `main`
+- [ ] Exact RC.2 is re-downloaded, verified, installed, and dogfooded against local Ollama
 - [ ] Friend-equivalent clean-Mac install and Apple Vision extraction recorded on issue #47
 - [ ] Signed in-place **Install and Relaunch** update evidence recorded on issue #39

@@ -9,11 +9,11 @@ struct HybridAutoProcessingProviderTests {
     func durablePageLifecycleProgress() async throws {
         let fixture = try HybridProviderFixture(
             pageTexts: [
-                "This native PDF paragraph is long enough to pass the quality gate without invoking Chandra."
+                "This native PDF paragraph is long enough to pass the quality gate without invoking Ollama."
             ]
         )
         let recorder = PageProgressRecorder()
-        let provider = HybridAutoProcessingProvider(chandra: FakeChandraPageParser())
+        let provider = HybridAutoProcessingProvider(ollama: FakeOllamaPageParser())
 
         _ = try await provider.process(
             request: fixture.requestWithProgress { recorder.record($0) },
@@ -25,15 +25,15 @@ struct HybridAutoProcessingProviderTests {
         #expect(recorder.updates.map(\.pageNumber) == [1, 1])
     }
 
-    @Test("Native-text pages bypass Chandra and record native provenance")
-    func nativeTextBypassesChandra() async throws {
+    @Test("Native-text pages bypass Ollama and record native provenance")
+    func nativeTextBypassesOllama() async throws {
         let fixture = try HybridProviderFixture(
             pageTexts: [
                 "This native PDF paragraph is long enough to be plausible and must remain byte-for-byte intact."
             ]
         )
-        let chandra = FakeChandraPageParser()
-        let provider = HybridAutoProcessingProvider(chandra: chandra)
+        let ollama = FakeOllamaPageParser()
+        let provider = HybridAutoProcessingProvider(ollama: ollama)
 
         let result = try await provider.process(request: fixture.request, progress: { _, _ in })
         let markdown = try String(contentsOf: result.outputURL, encoding: .utf8)
@@ -42,18 +42,18 @@ struct HybridAutoProcessingProviderTests {
         )
         let nativeText = try fixture.nativeText(pageNumber: 1)
 
-        #expect(chandra.parsedPageNumbers == [])
+        #expect(ollama.parsedPageNumbers == [])
         #expect(markdown.contains(nativeText))
         #expect(markdown.contains("<!-- okra-page-source: native-text -->"))
         #expect(structured.pages.map(\.provenance) == ["native-text"])
         #expect(structured.pages[0].markdown == nativeText)
     }
 
-    @Test("Scanned pages all route to Chandra")
-    func scannedPagesRouteToChandra() async throws {
+    @Test("Scanned pages all route to Ollama")
+    func scannedPagesRouteToOllama() async throws {
         let fixture = try HybridProviderFixture(pageTexts: ["", ""])
-        let chandra = FakeChandraPageParser()
-        let provider = HybridAutoProcessingProvider(chandra: chandra)
+        let ollama = FakeOllamaPageParser()
+        let provider = HybridAutoProcessingProvider(ollama: ollama)
 
         let result = try await provider.process(request: fixture.request, progress: { _, _ in })
         let markdown = try String(contentsOf: result.outputURL, encoding: .utf8)
@@ -61,14 +61,14 @@ struct HybridAutoProcessingProviderTests {
             from: try #require(result.structuredOutputURL)
         )
 
-        #expect(chandra.parsedPageNumbers == [1, 2])
-        #expect(markdown.contains("Chandra page 1"))
-        #expect(markdown.contains("Chandra page 2"))
-        #expect(markdown.components(separatedBy: "<!-- okra-page-source: chandra -->").count - 1 == 2)
-        #expect(structured.pages.map(\.provenance) == ["chandra", "chandra"])
+        #expect(ollama.parsedPageNumbers == [1, 2])
+        #expect(markdown.contains("Ollama page 1"))
+        #expect(markdown.contains("Ollama page 2"))
+        #expect(markdown.components(separatedBy: "<!-- okra-page-source: ollama -->").count - 1 == 2)
+        #expect(structured.pages.map(\.provenance) == ["ollama", "ollama"])
     }
 
-    @Test("Mixed PDFs route only rejected pages to Chandra")
+    @Test("Mixed PDFs route only rejected pages to Ollama")
     func mixedPDFRoutesPageLocally() async throws {
         let fixture = try HybridProviderFixture(
             pageTexts: [
@@ -77,8 +77,8 @@ struct HybridAutoProcessingProviderTests {
                 "Third native page is also readable, plausible, and should never be sent through the VLM.",
             ]
         )
-        let chandra = FakeChandraPageParser()
-        let provider = HybridAutoProcessingProvider(chandra: chandra)
+        let ollama = FakeOllamaPageParser()
+        let provider = HybridAutoProcessingProvider(ollama: ollama)
 
         let result = try await provider.process(request: fixture.request, progress: { _, _ in })
         let structured = try StructuredExtractionDocument.load(
@@ -87,8 +87,8 @@ struct HybridAutoProcessingProviderTests {
         let firstNativeText = try fixture.nativeText(pageNumber: 1)
         let thirdNativeText = try fixture.nativeText(pageNumber: 3)
 
-        #expect(chandra.parsedPageNumbers == [2])
-        #expect(structured.pages.map(\.provenance) == ["native-text", "chandra", "native-text"])
+        #expect(ollama.parsedPageNumbers == [2])
+        #expect(structured.pages.map(\.provenance) == ["native-text", "ollama", "native-text"])
         #expect(structured.pages[0].markdown == firstNativeText)
         #expect(structured.pages[2].markdown == thirdNativeText)
     }
@@ -99,8 +99,8 @@ struct HybridAutoProcessingProviderTests {
     )
     func cancellationAndResume() async throws {
         let fixture = try HybridProviderFixture(pageTexts: ["", "", ""])
-        let chandra = FakeChandraPageParser()
-        let provider = HybridAutoProcessingProvider(chandra: chandra)
+        let ollama = FakeOllamaPageParser()
+        let provider = HybridAutoProcessingProvider(ollama: ollama)
         let pageSaved = DispatchSemaphore(value: 0)
         let continueAfterCancel = DispatchSemaphore(value: 0)
         let request = fixture.requestWithProgress { update in
@@ -130,25 +130,19 @@ struct HybridAutoProcessingProviderTests {
 
         _ = try await provider.process(request: fixture.request, progress: { _, _ in })
 
-        #expect(chandra.parsedPageNumbers.filter { $0 == 1 }.count == 1)
-        #expect(chandra.parsedPageNumbers == [1, 2, 3])
+        #expect(ollama.parsedPageNumbers.filter { $0 == 1 }.count == 1)
+        #expect(ollama.parsedPageNumbers == [1, 2, 3])
         #expect(try store.loadManifest().completedPageCount == 3)
     }
 
-    @Test("Unavailable Chandra requires setup and install delegates")
-    func availabilityAndInstallDelegate() async throws {
-        let chandra = FakeChandraPageParser(
-            availability: .setupRequired("Chandra is not installed")
+    @Test("Hybrid reflects Ollama integration availability")
+    func availabilityDelegate() {
+        let ollama = FakeOllamaPageParser(
+            availability: .setupRequired("Ollama is not connected")
         )
-        let provider = HybridAutoProcessingProvider(chandra: chandra)
+        let provider = HybridAutoProcessingProvider(ollama: ollama)
 
-        #expect(
-            provider.availability()
-                == .setupRequired("Set up Chandra OCR 2 via Ollama to parse scanned pages.")
-        )
-
-        try await provider.install(progress: { _ in })
-        #expect(chandra.installCallCount == 1)
+        #expect(provider.availability() == .setupRequired("Ollama is not connected"))
     }
 
     @Test("Hybrid provider is in the default picker and parser catalog")
@@ -166,7 +160,7 @@ struct HybridAutoProcessingProviderTests {
         #expect(LocalParserCatalog.hybridAuto.capabilities.contains(.structuredOutput))
         #expect(
             LocalParserCatalog.hybridAuto.modelDelivery.apiVlmEndpoint
-                == LocalParserCatalog.chandra.modelDelivery.apiVlmEndpoint
+                == LocalParserCatalog.ollama.modelDelivery.apiVlmEndpoint
         )
     }
 }
@@ -184,11 +178,10 @@ private final class PageProgressRecorder: @unchecked Sendable {
     }
 }
 
-private final class FakeChandraPageParser: ChandraPageParsing, @unchecked Sendable {
+private final class FakeOllamaPageParser: OllamaPageParsing, @unchecked Sendable {
     private let lock = NSLock()
     private let availabilityValue: LocalProviderAvailability
     private var parsedPages: [Int] = []
-    private var installs = 0
 
     init(availability: LocalProviderAvailability = .ready) {
         availabilityValue = availability
@@ -198,30 +191,20 @@ private final class FakeChandraPageParser: ChandraPageParsing, @unchecked Sendab
         lock.withLock { parsedPages }
     }
 
-    var installCallCount: Int {
-        lock.withLock { installs }
-    }
-
     func availability() -> LocalProviderAvailability {
         availabilityValue
-    }
-
-    func install(
-        progress: @escaping @Sendable (LocalProviderSetupProgress) -> Void
-    ) async throws {
-        lock.withLock { installs += 1 }
     }
 
     func prepareForParsing() async throws {}
 
     func parsePage(
-        request: ChandraPageParsingRequest,
+        request: OllamaPageParsingRequest,
         progress: @escaping LocalProcessingProgress
-    ) async throws -> ChandraPageParsingResult {
+    ) async throws -> OllamaPageParsingResult {
         try Task.checkCancellation()
         lock.withLock { parsedPages.append(request.pageNumber) }
-        let text = "Chandra page \(request.pageNumber)"
-        return ChandraPageParsingResult(
+        let text = "Ollama page \(request.pageNumber)"
+        return OllamaPageParsingResult(
             markdown: text,
             structuredPage: StructuredExtractionPage(
                 pageNumber: request.pageNumber,

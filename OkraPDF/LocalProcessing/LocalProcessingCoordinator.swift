@@ -22,6 +22,9 @@ final class LocalProcessingCoordinator: ObservableObject {
                     at: .now
                 )
             }
+            if selectedProviderUsesOllama {
+                refreshOllamaModels()
+            }
         }
     }
     @Published private(set) var availabilityByProvider: [LocalProviderID: LocalProviderAvailability] = [:]
@@ -50,9 +53,31 @@ final class LocalProcessingCoordinator: ObservableObject {
     @Published private(set) var setupProgress: LocalProviderSetupProgress?
     @Published private(set) var setupErrorMessage: String?
     @Published private(set) var runHealthMessage: String?
+    @Published private(set) var ollamaModels: [OllamaModel] = []
+    @Published private(set) var isRefreshingOllamaModels = false
+    @Published private(set) var ollamaErrorMessage: String?
+    @Published var selectedOllamaModelName: String? {
+        didSet {
+            if let selectedOllamaModelName {
+                userDefaults.set(selectedOllamaModelName, forKey: Self.ollamaModelDefaultsKey)
+            } else {
+                userDefaults.removeObject(forKey: Self.ollamaModelDefaultsKey)
+            }
+            ollamaIntegration.select(modelName: selectedOllamaModelName)
+            refreshAvailability()
+            if selectedProviderUsesOllama {
+                statusMessage = selectedAvailability.isReady
+                    ? "\(selectedDescriptor.name) is ready with \(selectedOllamaModelName ?? "Ollama")."
+                    : selectedAvailability.message
+            }
+        }
+    }
 
     private static let providerDefaultsKey = "localProcessing.selectedProvider"
+    private static let ollamaModelDefaultsKey = "localProcessing.ollama.selectedModel"
     private let providers: [any LocalProcessingProvider]
+    private let ollamaClient: OllamaClient
+    private let ollamaIntegration: OllamaIntegrationState
     private let runsRoot: URL
     private let userDefaults: UserDefaults
     private let memorySampler: @Sendable () -> SystemMemoryStatus
@@ -61,40 +86,55 @@ final class LocalProcessingCoordinator: ObservableObject {
     private var currentSourcePath: String?
     private var currentFileName = "extraction.pdf"
     private var installationTask: Task<Void, Never>?
+    private var ollamaRefreshTask: Task<Void, Never>?
     private var processingTask: Task<Void, Never>?
     private var healthMonitorTask: Task<Void, Never>?
     private var activeRun: LocalProcessingRun?
     private var lastProgressEventAt = Date()
 
     init(
-        providers: [any LocalProcessingProvider] = [
-            AppleVisionProcessingProvider(),
-            HybridAutoProcessingProvider(),
-            UnlimitedOCRProcessingProvider(),
-            ChandraProcessingProvider(),
-        ],
+        providers: [any LocalProcessingProvider]? = nil,
         runsRoot: URL = LocalProviderPaths.runsRoot,
         userDefaults: UserDefaults = .standard,
+        ollamaClient: OllamaClient = OllamaClient(),
         memorySampler: @escaping @Sendable () -> SystemMemoryStatus = {
             SystemMemorySampler.sample()
         },
         stallThreshold: TimeInterval = 90,
         healthPollInterval: TimeInterval = 5
     ) {
-        self.providers = providers
         self.runsRoot = runsRoot
         self.userDefaults = userDefaults
+        self.ollamaClient = ollamaClient
+        let storedOllamaModel = userDefaults.string(forKey: Self.ollamaModelDefaultsKey)
+        selectedOllamaModelName = storedOllamaModel
+        let ollamaIntegration = OllamaIntegrationState(selectedModelName: storedOllamaModel)
+        self.ollamaIntegration = ollamaIntegration
+        if let providers {
+            self.providers = providers
+        } else {
+            let ollamaProvider = OllamaProcessingProvider(
+                client: ollamaClient,
+                integration: ollamaIntegration
+            )
+            self.providers = [
+                AppleVisionProcessingProvider(),
+                HybridAutoProcessingProvider(ollama: ollamaProvider),
+                UnlimitedOCRProcessingProvider(),
+                ollamaProvider,
+            ]
+        }
         self.memorySampler = memorySampler
         self.stallThreshold = stallThreshold
         self.healthPollInterval = healthPollInterval
 
         if let stored = userDefaults.string(forKey: Self.providerDefaultsKey),
-           let providerID = LocalProviderID(rawValue: stored),
-           providers.contains(where: { $0.descriptor.id == providerID }) {
+           let providerID = LocalProviderID.persisted(rawValue: stored),
+           self.providers.contains(where: { $0.descriptor.id == providerID }) {
             selectedProviderID = providerID
-        } else if providers.contains(where: { $0.descriptor.id == .appleVision }) {
+        } else if self.providers.contains(where: { $0.descriptor.id == .appleVision }) {
             selectedProviderID = .appleVision
-        } else if let firstProvider = providers.first {
+        } else if let firstProvider = self.providers.first {
             selectedProviderID = firstProvider.descriptor.id
         } else {
             preconditionFailure("LocalProcessingCoordinator requires at least one provider.")
@@ -103,6 +143,9 @@ final class LocalProcessingCoordinator: ObservableObject {
         refreshAvailability()
         refreshRecentRuns()
         recoverOrphanedRuns()
+        if self.providers.contains(where: { $0.descriptor.id == .ollama }) {
+            refreshOllamaModels()
+        }
     }
 
     var descriptors: [LocalProviderDescriptor] {
@@ -115,6 +158,14 @@ final class LocalProcessingCoordinator: ObservableObject {
 
     var selectedAvailability: LocalProviderAvailability {
         availabilityByProvider[selectedProviderID] ?? .unavailable("Unavailable")
+    }
+
+    var selectedProviderUsesOllama: Bool {
+        selectedProviderID == .ollama || selectedProviderID == .hybridAuto
+    }
+
+    var ollamaVisionModels: [OllamaModel] {
+        ollamaModels.filter(\.supportsVision)
     }
 
     var outputURL: URL? {
@@ -147,7 +198,7 @@ final class LocalProcessingCoordinator: ObservableObject {
               let run = latestRun,
               ["canceled", "failed", "interrupted"].contains(run.status),
               FileManager.default.fileExists(atPath: run.sourcePath),
-              let providerID = LocalProviderID(rawValue: run.providerId),
+              let providerID = LocalProviderID.persisted(rawValue: run.providerId),
               let provider = provider(for: providerID) else {
             return false
         }
@@ -164,7 +215,7 @@ final class LocalProcessingCoordinator: ObservableObject {
                 let parserName: String
                 if latestRun?.providerId == parserID, let latestRun {
                     parserName = latestRun.providerName
-                } else if let providerID = LocalProviderID(rawValue: parserID),
+                } else if let providerID = LocalProviderID.persisted(rawValue: parserID),
                           let descriptor = provider(for: providerID)?.descriptor {
                     parserName = descriptor.name
                 } else {
@@ -214,6 +265,47 @@ final class LocalProcessingCoordinator: ObservableObject {
         availabilityByProvider = Dictionary(
             uniqueKeysWithValues: providers.map { ($0.descriptor.id, $0.availability()) }
         )
+    }
+
+    func refreshOllamaModels() {
+        guard isRefreshingOllamaModels == false else { return }
+        isRefreshingOllamaModels = true
+        ollamaErrorMessage = nil
+        ollamaIntegration.beginRefresh()
+        refreshAvailability()
+
+        ollamaRefreshTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                isRefreshingOllamaModels = false
+                ollamaRefreshTask = nil
+            }
+            do {
+                let models = try await ollamaClient.listModels()
+                let visionModels = models.filter(\.supportsVision)
+                let selected = selectedOllamaModelName.flatMap { stored in
+                    visionModels.contains(where: { $0.name == stored }) ? stored : nil
+                } ?? visionModels.first?.name
+                ollamaIntegration.connect(models: models, selectedModelName: selected)
+                ollamaModels = models
+                selectedOllamaModelName = selected
+                if selectedProviderUsesOllama {
+                    statusMessage = selectedAvailability.isReady
+                        ? "\(selectedDescriptor.name) is ready with \(selected ?? "Ollama")."
+                        : selectedAvailability.message
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                let message = error.localizedDescription
+                ollamaIntegration.fail(message: message)
+                ollamaErrorMessage = message
+                refreshAvailability()
+                if selectedProviderUsesOllama {
+                    statusMessage = message
+                }
+            }
+        }
     }
 
     func installSelectedProvider() {
@@ -346,7 +438,7 @@ final class LocalProcessingCoordinator: ObservableObject {
         guard canResumeLatestRun,
               var run = latestRun,
               run.sourcePath == document.filePath,
-              let providerID = LocalProviderID(rawValue: run.providerId),
+              let providerID = LocalProviderID.persisted(rawValue: run.providerId),
               let provider = provider(for: providerID) else {
             return
         }

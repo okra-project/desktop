@@ -16,7 +16,7 @@ struct AppStateLaunchTests {
 
         #expect(
             coordinator.descriptors.map(\.id)
-                == [.appleVision, .hybridAuto, .unlimitedOCR, .chandra]
+                == [.appleVision, .hybridAuto, .unlimitedOCR, .ollama]
         )
         #expect(coordinator.selectedProviderID == .appleVision)
         #expect(state.selectedDocument == nil)

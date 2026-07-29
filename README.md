@@ -47,11 +47,13 @@ files in numeric order.
 
 - **Apple Vision** — built into macOS and selected by default.
 - **Auto (Hybrid)** — reuses acceptable native PDF text per page and sends
-  scanned or broken-text pages to Chandra OCR 2. Output keeps page-level source
-  provenance. It shares Chandra's one-time Ollama setup.
-- **Chandra OCR 2** — optional document VLM served locally through Ollama. The
-  app pulls the model during explicit setup, configures its local parser
-  variant, and calls only Ollama's localhost endpoint during extraction.
+  scanned or broken-text pages to the selected Ollama vision model. Output
+  keeps page-level source provenance.
+- **Ollama** — connects to the local service at `http://localhost:11434`, lists
+  installed models with Ollama's HTTP API, checks their declared capabilities,
+  and lets you choose any model that reports vision support. Ollama owns model
+  installation and storage: Okra does not inspect `~/.ollama`, run the Ollama
+  CLI, create a model variant, or download Ollama models.
 - **Baidu Unlimited-OCR** — optional 4-bit MLX setup for Apple silicon. The app
   downloads the pinned checkpoint with byte progress, keeps resume data when
   setup is canceled, and verifies every artifact with SHA-256 before marking it
@@ -63,28 +65,29 @@ files in numeric order.
   annotations: click a source box or its preview card to select both views, and
   use the toolbar toggle to hide or restore the overlay.
 
-Provider setup may download dependencies and model artifacts once. Extraction
-does not make cloud or network calls.
+Baidu setup may download its pinned model artifacts once. Extraction does not
+make cloud calls. Apple Vision and Baidu run in-process; Ollama extraction uses
+the loopback HTTP service on this Mac.
 
 ## Public v1 release candidate
 
-`desktop-v1.0.0-rc.1` is the first public v1 release candidate for
+`desktop-v1.0.0-rc.2` is the current public v1 release candidate for
 Apple-silicon Macs running macOS 13 or later. Processing is local-only. Use
 **Apple Vision** for the zero-setup path; use **Auto (Hybrid)** or standalone
-**Chandra OCR 2** after installing Ollama and completing the app's one-time
-Chandra setup.
+**Ollama** after starting Ollama and selecting one of its installed vision
+models in Okra.
 
-Auto and Chandra need at least 8 GB of unified memory, recommend 16 GB, reserve
-5 GB of free disk, and download about 3.4 GB of model data. Real Baidu
-Unlimited-OCR remains an advanced validation path. Baidu simulation is internal
-workflow QA and is not evidence of OCR quality.
+Ollama model requirements vary by the model you install; Okra makes no fixed
+memory, disk, model-name, or model-path assumption. Real Baidu Unlimited-OCR
+remains an advanced validation path. Baidu simulation is internal workflow QA
+and is not evidence of OCR quality.
 
 ### Install
 
-1. Download `Okra-1.0.0-rc.1.dmg` from the
-   [`desktop-v1.0.0-rc.1` GitHub prerelease](https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.1).
+1. Download `Okra-1.0.0-rc.2.dmg` from the
+   [`desktop-v1.0.0-rc.2` GitHub prerelease](https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.2).
 2. Optionally download the adjacent `.sha256` file and, from the Downloads
-   folder, run `shasum -a 256 -c Okra-1.0.0-rc.1.dmg.sha256`.
+   folder, run `shasum -a 256 -c Okra-1.0.0-rc.2.dmg.sha256`.
 3. Open the DMG, drag **Okra** to **Applications**, and eject the DMG.
 4. Open **Okra** from Finder's Applications folder. The app and DMG are
    Developer ID signed, hardened, notarized by Apple, and stapled for normal

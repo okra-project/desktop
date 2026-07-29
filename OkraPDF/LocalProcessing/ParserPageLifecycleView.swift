@@ -50,6 +50,7 @@ struct ParserPageLifecycleView: View {
     }
 }
 
+#if canImport(PreviewsMacros)
 #Preview("All parser lifecycle states") {
     ParserPageLifecycleView(
         parserName: "Apple Vision",
@@ -66,3 +67,4 @@ struct ParserPageLifecycleView: View {
     .frame(width: 420)
     .padding()
 }
+#endif

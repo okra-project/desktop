@@ -4,7 +4,11 @@ enum LocalProviderID: String, CaseIterable, Codable, Hashable, Sendable {
     case appleVision = "apple-vision"
     case hybridAuto = "hybrid-auto"
     case unlimitedOCR = "unlimited-ocr"
-    case chandra
+    case ollama
+
+    static func persisted(rawValue: String) -> LocalProviderID? {
+        rawValue == "chandra" ? .ollama : LocalProviderID(rawValue: rawValue)
+    }
 }
 
 struct LocalProviderDescriptor: Identifiable, Equatable {

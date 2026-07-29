@@ -11,10 +11,9 @@ enum LocalParserRuntimeID: String, Codable, CaseIterable, Sendable {
 
 enum LocalParserOutputAdapterID: String, Codable, CaseIterable, Sendable {
     case plainTextV1 = "plain-text-v1"
+    case markdownV1 = "markdown-v1"
     case hybridMarkdownV1 = "hybrid-markdown-v1"
     case unlimitedOCRTokensV1 = "unlimited-ocr-tokens-v1"
-    /// Chandra layout HTML (`<div data-bbox data-label>` with inline tables/math).
-    case chandraHTMLV1 = "chandra-html-v1"
 }
 
 enum LocalParserCapability: String, Codable, CaseIterable, Sendable {
@@ -84,27 +83,18 @@ enum ApiVlmRuntimeType: String, Codable, CaseIterable, Sendable {
     case generic
 }
 
-/// A document-VLM served over an OpenAI-compatible endpoint. Doc-parsing-shaped
-/// (mirrors Docling's `ApiVlmOptions`): the served model, the page-image render
-/// scale, and the response format are first-class. For the Ollama runtime this
-/// also carries the provisioning recipe (pull `ollamaBaseModel`, then
-/// `ollama create model` from a Modelfile that bakes `numCtx`, since /v1 ignores
-/// a per-request num_ctx and the page image would otherwise overflow the window).
+/// A document-VLM served over a local HTTP endpoint. A nil model means the
+/// runtime-selected model is stored separately from this static parser shape.
 struct ApiVlmEndpoint: Codable, Equatable, Sendable {
-    /// OpenAI-compatible base URL, e.g. `http://localhost:11434/v1`.
+    /// Runtime API base URL, e.g. `http://localhost:11434`.
     let baseURL: String
-    /// Served model id, e.g. `okra-chandra:q4`.
-    let model: String
+    let model: String?
     let runtimeType: ApiVlmRuntimeType
-    /// The worker's output adapter key, e.g. `html-databbox`.
+    /// The response adapter key, e.g. `markdown`.
     let responseFormat: String
     let timeoutSeconds: Int
     /// Render scale (DPI-ish) for page images sent to the endpoint.
     let renderScale: Double
-    // --- Ollama provisioning (runtimeType == .ollama) ---
-    let ollamaBaseModel: String?
-    let numCtx: Int?
-    let approxDownloadBytes: Int64?
 }
 
 enum LocalParserModelDelivery: Codable, Equatable, Sendable {
@@ -224,49 +214,37 @@ enum LocalParserCatalog {
         )
     )
 
-    /// Chandra OCR 2 (Datalab, 5B VLM) served over Ollama's OpenAI-compatible
-    /// endpoint via the `okra-chandra:q4` Modelfile variant. Weights are managed
-    /// by Ollama, never bundled. License: modified OpenRAIL-M (use-restrictions +
-    /// share-alike) — surface at setup; not permissive.
-    static let chandra = LocalParserDefinition(
+    /// A user-selected, vision-capable model served by Ollama. Ollama owns the
+    /// model lifecycle; Okra discovers capabilities and parses over HTTP only.
+    static let ollama = LocalParserDefinition(
         runtime: .apiVLM,
         modelDelivery: .apiVlm(ApiVlmEndpoint(
-            baseURL: "http://localhost:11434/v1",
-            model: "okra-chandra:q4",
+            baseURL: "http://localhost:11434",
+            model: nil,
             runtimeType: .ollama,
-            responseFormat: "html-databbox",
+            responseFormat: "markdown",
             timeoutSeconds: 1_800,
-            renderScale: 2.0,
-            ollamaBaseModel: "ahmgam/chandra-ocr-2:q4",
-            numCtx: 8_192,
-            approxDownloadBytes: 3_400_000_000
+            renderScale: 2.0
         )),
-        outputAdapter: .chandraHTMLV1,
+        outputAdapter: .markdownV1,
         capabilities: [
             .ocr,
-            .readingOrder,
-            .layoutBlocks,
-            .boundingBoxes,
-            .tables,
-            .formulas,
-            .code,
-            .multilingual,
             .structuredOutput,
         ],
         requirements: LocalParserResourceRequirements(
-            supportedArchitectures: [.appleSilicon],
+            supportedArchitectures: [.appleSilicon, .intel],
             minimumMacOSMajorVersion: 13,
-            minimumUnifiedMemoryGB: 8,
-            recommendedUnifiedMemoryGB: 16,
-            minimumFreeDiskBytes: 5_000_000_000
+            minimumUnifiedMemoryGB: nil,
+            recommendedUnifiedMemoryGB: nil,
+            minimumFreeDiskBytes: nil
         )
     )
 
     static let hybridAuto = LocalParserDefinition(
         runtime: .hybrid,
-        modelDelivery: chandra.modelDelivery,
+        modelDelivery: ollama.modelDelivery,
         outputAdapter: .hybridMarkdownV1,
-        capabilities: chandra.capabilities.union([.nativeText]),
-        requirements: chandra.requirements
+        capabilities: ollama.capabilities.union([.nativeText]),
+        requirements: ollama.requirements
     )
 }

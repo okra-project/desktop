@@ -4,35 +4,24 @@ final class HybridAutoProcessingProvider: LocalProcessingProvider, @unchecked Se
     let descriptor = LocalProviderDescriptor(
         id: .hybridAuto,
         name: "Auto (Hybrid)",
-        summary: "Reuses native PDF text instantly; sends scanned pages to Chandra OCR 2 via Ollama.",
-        setupNote: "Requires the same one-time Chandra OCR 2 setup as the standalone Chandra parser.",
+        summary: "Reuses native PDF text instantly; sends scanned pages to your selected Ollama vision model.",
+        setupNote: "Connect to Ollama and choose an installed vision model for scanned pages.",
         parserDefinition: LocalParserCatalog.hybridAuto
     )
 
-    private let chandra: any ChandraPageParsing
+    private let ollama: any OllamaPageParsing
     private let qualityGate: NativePDFTextQualityGate
 
     init(
-        chandra: any ChandraPageParsing = ChandraProcessingProvider(),
+        ollama: any OllamaPageParsing = OllamaProcessingProvider(),
         qualityGate: NativePDFTextQualityGate = NativePDFTextQualityGate()
     ) {
-        self.chandra = chandra
+        self.ollama = ollama
         self.qualityGate = qualityGate
     }
 
     func availability() -> LocalProviderAvailability {
-        guard chandra.availability().isReady else {
-            return .setupRequired(
-                "Set up Chandra OCR 2 via Ollama to parse scanned pages."
-            )
-        }
-        return .ready
-    }
-
-    func install(
-        progress: @escaping @Sendable (LocalProviderSetupProgress) -> Void
-    ) async throws {
-        try await chandra.install(progress: progress)
+        ollama.availability()
     }
 
     func process(
@@ -41,10 +30,10 @@ final class HybridAutoProcessingProvider: LocalProcessingProvider, @unchecked Se
     ) async throws -> LocalProcessingResult {
         guard availability().isReady else {
             throw LocalProcessingError.providerUnavailable(
-                "Set up Chandra OCR 2 before using Auto (Hybrid)."
+                "Connect to Ollama and choose a vision model before using Auto (Hybrid)."
             )
         }
-        let chandra = self.chandra
+        let ollama = self.ollama
         let qualityGate = self.qualityGate
 
         let worker = Task.detached(priority: .userInitiated) {
@@ -59,7 +48,7 @@ final class HybridAutoProcessingProvider: LocalProcessingProvider, @unchecked Se
                 "pages",
                 isDirectory: true
             )
-            var chandraIsPrepared = false
+            var ollamaIsPrepared = false
             var structuredPages: [StructuredExtractionPage] = []
 
             for index in 0..<document.pageCount {
@@ -123,13 +112,13 @@ final class HybridAutoProcessingProvider: LocalProcessingProvider, @unchecked Se
                             text: nativeText ?? ""
                         )
                     case .rejected:
-                        if chandraIsPrepared == false {
-                            try await chandra.prepareForParsing()
-                            chandraIsPrepared = true
+                        if ollamaIsPrepared == false {
+                            try await ollama.prepareForParsing()
+                            ollamaIsPrepared = true
                         }
                         progress(
                             Double(index) / Double(document.pageCount),
-                            "Sending page \(pageNumber) of \(document.pageCount) to Chandra"
+                            "Sending page \(pageNumber) of \(document.pageCount) to Ollama"
                         )
                         let imageURL = renderedPagesDirectory.appendingPathComponent(
                             String(format: "page-%04d.png", pageNumber)
@@ -140,8 +129,8 @@ final class HybridAutoProcessingProvider: LocalProcessingProvider, @unchecked Se
                             to: imageURL,
                             maxDimension: 2_048
                         )
-                        let parsed = try await chandra.parsePage(
-                            request: ChandraPageParsingRequest(
+                        let parsed = try await ollama.parsePage(
+                            request: OllamaPageParsingRequest(
                                 pageNumber: pageNumber,
                                 imageURL: imageURL
                             ),
@@ -152,7 +141,7 @@ final class HybridAutoProcessingProvider: LocalProcessingProvider, @unchecked Se
                                 )
                             }
                         )
-                        source = "chandra"
+                        source = "ollama"
                         structuredPage = parsed.structuredPage.routed(
                             to: pageNumber,
                             imageFile: imageURL.lastPathComponent,
