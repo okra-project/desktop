@@ -8,10 +8,14 @@ from pathlib import Path
 from typing import Any
 
 
+# Upstream Unlimited-OCR emits `<|det|>type [x1, y1, x2, y2]<|/det|>text` where
+# the bbox is OPTIONAL (see baidu/Unlimited-OCR's DET_RE). Accept both grounded
+# and ungrounded markers so ungrounded entities keep their own block, category,
+# and text instead of being absorbed into the previous block.
 DETECTION_PATTERN = re.compile(
-    r"<\|det\|>\s*([^\[\n<]{1,80}?)\s*"
-    r"\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*"
-    r"(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]\s*"
+    r"<\|det\|>\s*([A-Za-z][A-Za-z0-9 _-]{0,79}?)\s*"
+    r"(?:\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*"
+    r"(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\])?\s*"
     r"<\|/det\|>",
     re.IGNORECASE,
 )
@@ -36,6 +40,21 @@ SPECIAL_TOKENS = (
     "<｜end▁of▁sentence｜>",
     "<｜end of sentence｜>",
 )
+SUPPORTED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif"}
+
+
+def validate_image_paths(image_paths: list[str]) -> None:
+    # The model only accepts rendered page images. Reject anything else up
+    # front so a PDF handed straight to the worker fails with an actionable
+    # message instead of the runtime's "model does not support pdf input".
+    for image_path in image_paths:
+        suffix = Path(image_path).suffix.lower()
+        if suffix not in SUPPORTED_IMAGE_SUFFIXES:
+            raise SystemExit(
+                f"Cannot read \"{image_path}\" (this model does not support "
+                f"{suffix or 'this'} input). Render the document to page images "
+                "first, e.g. scripts/run-unlimited-ocr.sh /path/to/document.pdf"
+            )
 CATEGORY_ALIASES = {
     "section-header": "heading",
     "section_header": "heading",
@@ -208,7 +227,11 @@ def parse_model_output(
     for index, match in enumerate(matches):
         append_block(decoded[cursor : match.start()])
         content_end = matches[index + 1].start() if index + 1 < len(matches) else len(decoded)
-        source_bbox = [float(match.group(group)) for group in range(2, 6)]
+        source_bbox = (
+            [float(match.group(group)) for group in range(2, 6)]
+            if match.group(2) is not None
+            else None
+        )
         append_block(
             decoded[match.end() : content_end],
             raw_category=match.group(1),
@@ -219,8 +242,9 @@ def parse_model_output(
     if not matches:
         append_block(decoded)
 
-    orphan_open_count = max(decoded.count("<|det|>") - len(matches), 0)
-    orphan_close_count = max(decoded.count("<|/det|>") - len(matches), 0)
+    residual = DETECTION_PATTERN.sub("", decoded)
+    orphan_open_count = residual.count("<|det|>")
+    orphan_close_count = residual.count("<|/det|>")
     malformed_detection_count = orphan_open_count + orphan_close_count
     loop_detected = longest_duplicate_run >= 3 or duplicate_block_count >= 8
     warnings: list[str] = []
@@ -239,6 +263,7 @@ def parse_model_output(
     markdown_parts = [block_markdown(block) for block in blocks]
     markdown = "\n\n".join(part for part in markdown_parts if part).strip()
     plain_text = "\n".join(block["text"] for block in blocks).strip()
+    grounded_block_count = sum(1 for block in blocks if block["bbox"] is not None)
     return {
         "pageNumber": page_number,
         "imageFile": image_file,
@@ -253,6 +278,8 @@ def parse_model_output(
             "malformedDetectionCount": malformed_detection_count,
             "duplicateBlockCount": duplicate_block_count,
             "loopDetected": loop_detected,
+            "groundedBlockCount": grounded_block_count,
+            "ungroundedBlockCount": len(blocks) - grounded_block_count,
             "warnings": warnings,
         },
     }
@@ -384,6 +411,7 @@ def update_page_progress(
 
 def main() -> None:
     args = parse_args()
+    validate_image_paths(args.images)
     output = Path(args.output)
     page_output_directory = Path(args.page_output_directory)
     page_progress = Path(args.page_progress)
