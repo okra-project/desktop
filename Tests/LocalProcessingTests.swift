@@ -70,6 +70,19 @@ struct LocalProcessingProviderTests {
         )
     }
 
+    @Test("Default runs root uses the Okra application support namespace")
+    func defaultRunsRootUsesOkraApplicationSupportNamespace() {
+        let applicationSupport = URL(
+            fileURLWithPath: "/tmp/Application Support",
+            isDirectory: true
+        )
+
+        #expect(
+            LocalProviderPaths.runsRoot(applicationSupportDirectory: applicationSupport).path
+                == "/tmp/Application Support/Okra/Runs"
+        )
+    }
+
     @Test("Coordinator writes Markdown and its run manifest", .timeLimit(.minutes(1)))
     func coordinatorWritesMarkdownAndRunManifest() async throws {
         let workspace = try TestWorkspace(prefix: "okra-run")

@@ -2,8 +2,17 @@ import Foundation
 
 enum LocalProviderPaths {
     static var runsRoot: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("okraPDF", isDirectory: true)
+        runsRoot(
+            applicationSupportDirectory: FileManager.default.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            )[0]
+        )
+    }
+
+    static func runsRoot(applicationSupportDirectory: URL) -> URL {
+        applicationSupportDirectory
+            .appendingPathComponent("Okra", isDirectory: true)
             .appendingPathComponent("Runs", isDirectory: true)
     }
 
