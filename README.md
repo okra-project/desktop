@@ -1,139 +1,130 @@
-# okraPDF for macOS
+<p align="center">
+  <img src="OkraPDF/AppIcon.png" alt="okraPDF" width="96" height="96">
+</p>
 
-okraPDF is a private, local-first PDF reader and parser for macOS 13 and later.
-It has no account or document library: open a PDF in place, read it, choose a
-local parser, and explicitly click **Parse** when you want readable local output.
+<h1 align="center">okraPDF for macOS</h1>
 
-## Flow
+<h3 align="center">Read and parse PDFs privately on your Mac</h3>
 
-1. Drop a PDF into the window, or choose **Open PDF…** from the workspace sidebar.
-2. Read the original PDF in the native center preview. Opening it does not start a run.
-3. Choose a local provider in the Extract inspector and click **Parse**.
-4. Watch each parser page move through **Not started**, **In progress**, **Done**,
-   **Needs attention**, or **Error**; reopen a recent run to restore the same state.
-5. Baidu Unlimited-OCR runs draw their detected layout boxes over the source
-   PDF and offer a matching block preview, Markdown, and JSON.
-6. Cancel a long run without losing finished pages, then resume from its checkpoint.
-7. Copy, save, or reveal Markdown or JSON from the inspector.
+<p align="center">
+  Open a PDF in place, read the original, and choose exactly when to turn it
+  into structured local output. No account, document library, or cloud upload.
+</p>
 
-Nothing is uploaded. Run artifacts stay on the Mac under:
+<p align="center">
+  <a href="https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.3">
+    <img alt="Download for macOS" src="https://img.shields.io/badge/download-macOS%2013%2B-2f855a">
+  </a>
+  <a href="https://github.com/okra-project/desktop/releases">
+    <img alt="Latest release" src="https://img.shields.io/github/v/release/okra-project/desktop?include_prereleases&label=release">
+  </a>
+  <a href="LICENSE">
+    <img alt="License: FSL-1.1-ALv2" src="https://img.shields.io/badge/license-FSL--1.1--ALv2-blue">
+  </a>
+</p>
 
-```text
-~/Library/Application Support/okraPDF/Runs/{runId}/run.json
-~/Library/Application Support/okraPDF/Runs/{runId}/events.jsonl
-~/Library/Application Support/okraPDF/Runs/{runId}/result.md
-~/Library/Application Support/okraPDF/Runs/{runId}/result.json  # Baidu Unlimited-OCR
-~/Library/Application Support/okraPDF/Runs/{runId}/page-progress.json
-~/Library/Application Support/okraPDF/Runs/{runId}/page-results/page-0001.md
-~/Library/Application Support/okraPDF/Runs/{runId}/page-results/page-0001.json  # Baidu Unlimited-OCR
-```
+<p align="center">
+  <a href="https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.3">Download</a> ·
+  <a href="docs/releases/README.md">Release notes</a> ·
+  <a href="https://github.com/okra-project/desktop/issues/new">Report an issue</a>
+</p>
 
-Apple Vision and Baidu Unlimited-OCR checkpoint each completed page to disk
-atomically. `run.json` is an atomically replaced, pollable snapshot containing
-status, fraction, message, page counts, update time, event sequence, and a
-provider-neutral `pageLifecycles` matrix keyed by parser ID plus page number.
-`events.jsonl` is the append-only lifecycle stream for cursor-based inspection;
-it records start, progress, page checkpoints, cancel intent, interruption,
-resume, and terminal outcomes. If the app closes mid-run, the next launch marks
-the orphaned attempt interrupted instead of leaving it stuck in `running`.
-Resume reuses the same run directory and skips completed page records for the
-selected resumable parser. A canceled, stalled, or orphaned active page becomes
-`attention`; a parser failure becomes `error`; retry returns that page to
-`inProgress`; and only a durable page checkpoint becomes `done`. Merely viewing
-the run never changes these states. `result.md` is assembled from the page
-files in numeric order.
+![okraPDF reading a public report with Apple Vision ready for an explicit local parse](.github/assets/okra-reader-overview.png)
 
-## Local providers
+## Read first. Parse when you choose.
 
-- **Apple Vision** — built into macOS and selected by default.
-- **Auto (Hybrid)** — reuses acceptable native PDF text per page and sends
-  scanned or broken-text pages to the selected Ollama vision model. Output
-  keeps page-level source provenance.
-- **Ollama** — connects to the local service at `http://localhost:11434`, lists
-  installed models with Ollama's HTTP API, checks their declared capabilities,
-  and lets you choose any model that reports vision support. Ollama owns model
-  installation and storage: Okra does not inspect `~/.ollama`, run the Ollama
-  CLI, create a model variant, or download Ollama models.
-- **Baidu Unlimited-OCR** — optional 4-bit MLX setup for Apple silicon. The app
-  downloads the pinned checkpoint with byte progress, keeps resume data when
-  setup is canceled, and verifies every artifact with SHA-256 before marking it
-  ready. Extraction is then forced offline. The packaged checkpoint is a
-  quantization of `baidu/Unlimited-OCR`. Its output parser decodes tokenizer
-  whitespace, converts `<|det|>` spans into typed normalized layout blocks,
-  preserves HTML tables and LaTeX, and removes repeated generation tails before
-  the result is displayed. Valid boxes are rendered as screen-only PDFKit
-  annotations: click a source box or its preview card to select both views, and
-  use the toolbar toggle to hide or restore the overlay.
+Opening a document never starts extraction. okraPDF keeps the source PDF where
+it is, renders it with native PDFKit, and waits until you choose **Parse**.
+The selected local parser then produces reviewable output beside a persistent
+per-page run history on this Mac.
 
-Baidu setup may download its pinned model artifacts once. Extraction does not
-make cloud calls. Apple Vision and Baidu run in-process; Ollama extraction uses
-the loopback HTTP service on this Mac.
+- Read text, charts, forms, and scanned pages in a native three-pane workspace.
+- Parse with built-in Apple Vision, an installed Ollama vision model, or the
+  optional Baidu Unlimited-OCR setup.
+- Inspect extracted blocks against their source boxes without modifying the PDF.
+- Preview, copy, save, or reveal Markdown and JSON output.
+- Cancel and resume long runs without throwing away completed pages.
 
-## Public v1 release candidate
+<table>
+  <tr>
+    <td width="33%">
+      <img src=".github/assets/okra-structured-extraction.png" alt="Apple Vision extraction boxes aligned with the source PDF and structured block preview">
+    </td>
+    <td width="33%">
+      <img src=".github/assets/okra-markdown-export.png" alt="Locally extracted Markdown beside the source PDF">
+    </td>
+    <td width="33%">
+      <img src=".github/assets/okra-json-export.png" alt="Structured JSON output beside the source PDF">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">Source-aligned blocks you can inspect</td>
+    <td align="center">Readable Markdown, ready to copy or save</td>
+    <td align="center">Normalized JSON for downstream workflows</td>
+  </tr>
+</table>
 
-`desktop-v1.0.0-rc.2` is the current public v1 release candidate for
-Apple-silicon Macs running macOS 13 or later. Processing is local-only. Use
-**Apple Vision** for the zero-setup path; use **Auto (Hybrid)** or standalone
-**Ollama** after starting Ollama and selecting one of its installed vision
-models in Okra.
+## Private by design
 
-Ollama model requirements vary by the model you install; Okra makes no fixed
-memory, disk, model-name, or model-path assumption. Real Baidu Unlimited-OCR
-remains an advanced validation path. Baidu simulation is internal workflow QA
-and is not evidence of OCR quality.
+1. **Your PDF stays put.** okraPDF reads the file you opened instead of copying
+   it into an app-owned document library.
+2. **Parsing is explicit.** Reading or replacing a document does not create a
+   run; extraction starts only when you click **Parse**.
+3. **Processing stays local.** Apple Vision and Baidu extraction run on the
+   Mac. Ollama uses only its loopback service on this Mac.
+4. **Artifacts stay inspectable.** Run state, page checkpoints, Markdown, and
+   JSON live under `~/Library/Application Support/okraPDF/Runs/`.
 
-### Install
+Baidu Unlimited-OCR may download its pinned model once during setup. The app
+verifies every model artifact with SHA-256 and forces extraction offline after
+setup. Ollama remains responsible for installing and storing Ollama models.
 
-1. Download `Okra-1.0.0-rc.2.dmg` from the
-   [`desktop-v1.0.0-rc.2` GitHub prerelease](https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.2).
-2. Optionally download the adjacent `.sha256` file and, from the Downloads
-   folder, run `shasum -a 256 -c Okra-1.0.0-rc.2.dmg.sha256`.
+## Local parsers
+
+| Parser | Setup | Best fit |
+| --- | --- | --- |
+| **Apple Vision** | None; built into macOS | Zero-setup text and scanned PDFs |
+| **Auto (Hybrid)** | Start Ollama and choose an installed vision model | Mixed PDFs; native text with page-level vision fallback |
+| **Ollama** | Start Ollama and choose an installed vision model | Bring your own local vision model |
+| **Baidu Unlimited-OCR** | Optional pinned 4-bit MLX model, about 2.4 GB | Experimental OCR and layout extraction on Apple silicon |
+
+## Download
+
+`desktop-v1.0.0-rc.3` is the current public release candidate for Apple-silicon
+Macs running macOS 13 or later.
+
+1. Download `Okra-1.0.0-rc.3.dmg` from the
+   [v1.0.0-rc.3 release](https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.3).
+2. Optionally download the adjacent checksum and run
+   `shasum -a 256 -c Okra-1.0.0-rc.3.dmg.sha256`.
 3. Open the DMG, drag **Okra** to **Applications**, and eject the DMG.
-4. Open **Okra** from Finder's Applications folder. The app and DMG are
-   Developer ID signed, hardened, notarized by Apple, and stapled for normal
-   Gatekeeper opening.
+4. Open **Okra** from Applications. The app and DMG are Developer ID signed,
+   hardened, notarized by Apple, and stapled for normal Gatekeeper opening.
 
-### Five-minute path
+The app checks its signed update feed daily. Choose **Check for Updates…** in
+the app menu at any time, or install a newer DMG from
+[GitHub Releases](https://github.com/okra-project/desktop/releases).
 
-1. Open or drop a PDF and confirm that merely opening it does not start
-   extraction.
-2. Leave **Apple Vision** selected and click **Parse**.
-3. Copy the resulting Markdown, then use **Save As** to write a `.md` file.
+## Build from source
 
-### Update
-
-The app checks its signed update feed daily. You can also choose **Check for
-Updates…** in the app menu to download, verify, install, and relaunch into the
-newest prerelease. If in-app updating fails, download the newer DMG from the
-[GitHub Releases page](https://github.com/okra-project/desktop/releases) and
-repeat the installation steps above.
-
-### Feedback
-
-For lightweight feedback, reply directly to the maintainer who sent you the
-build. For a technical bug, [open a GitHub issue](https://github.com/okra-project/desktop/issues/new)
-and include:
-
-- macOS version and Mac model/chip;
-- PDF type and page count;
-- reproduction steps;
-- expected and actual behavior; and
-- a screenshot when it helps explain the problem.
-
-Do not attach confidential PDFs or paste sensitive extracted text into a public
-issue. Describe the document shape or use a non-sensitive substitute instead.
-
-## Build
+You need macOS 13 or later and Swift 5.9 or later.
 
 ```bash
-cd apps/desktop
+git clone https://github.com/okra-project/desktop.git
+cd desktop
 swift build
 ```
 
-The executable product is `Okra`. Package resources include the local
-`ProviderScripts/` installer and worker.
+To create a local `.app` and DMG:
 
-## Tests
+```bash
+./scripts/build-dmg.sh 1.0.0-rc.3
+```
+
+Local packages are ad-hoc signed. The release workflow supplies the Developer
+ID identity, hardened runtime, notarization, and signed Sparkle appcast.
+
+## Test
 
 ```bash
 bash scripts/verify-brand-surface.sh
@@ -141,53 +132,27 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -p '*_te
 swift test
 ```
 
-The desktop uses the same mark-only asset as the website and Storybook. App
-chrome renders the logo or the `Okra` name, never a logo-plus-wordmark lockup.
+The test suite covers the read-before-parse contract, provider integration,
+page checkpoints, cancel/resume recovery, structured output, source-box
+geometry, packaging, and signed-update metadata.
 
-The retained test surface covers the explicit read-before-parse contract, the
-explicit Parse action, run manifests and history, provider registration, setup
-progress/cancellation, pinned-model integrity metadata, Apple Vision Markdown
-output, Baidu output token/layout parsing, PDF bounding-box geometry and
-interaction, and a full Baidu Unlimited-OCR simulation through PDF page
-rendering, the bundled Python worker, offline flags,
-page-level checkpoints, persisted Markdown plus JSON, durable cancel ordering,
-orphan recovery, same-run checkpoint resume, provider-process termination, and
-all five durable parser/page lifecycle states including multi-parser isolation.
-A large-document test verifies 120 independently readable page files.
+## Project map
 
-## Simulate Baidu Unlimited-OCR end to end
-
-Simulation validates the desktop workflow without downloading or loading the
-2.4 GB weights. It is visually labeled and never claims to be real OCR.
-
-```bash
-./scripts/simulate-unlimited-ocr-e2e.sh /absolute/path/to/document.pdf
+```text
+OkraPDF/       SwiftUI app, PDFKit reader, and local parsing providers
+Tests/         Product, provider, persistence, and packaging tests
+scripts/       Verification, packaging, and release automation
+docs/releases/ Versioned user-facing release notes
 ```
 
-The script first runs the automated PDF → pages → worker → Markdown + JSON → manifest
-check against the supplied PDF. It then opens that PDF with **Baidu
-Unlimited-OCR** selected. Click **Parse with Baidu Unlimited-OCR** to exercise
-the same workflow visibly. You can also run only the built-in fixture check:
+Maintainers should start with [CLAUDE.md](CLAUDE.md),
+[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md), and
+[LAUNCH.md](LAUNCH.md). Historical changes are indexed in
+[docs/releases](docs/releases/README.md).
 
-```bash
-swift test --filter baiduUnlimitedOCREndToEndSimulationOnPDF
-```
+## License
 
-## Package a local candidate
-
-```bash
-./scripts/build-dmg.sh 1.0.0-rc.1
-```
-
-The optional second argument is the integer `CFBundleVersion` build number
-Sparkle compares (default: UTC minute). Release automation passes the same
-build number it records in `appcast.xml`.
-
-The generated app is a normal windowed macOS application. Packaging must not
-set `LSUIElement`; the PDF reader belongs in the Dock while it is open.
-
-## Remaining release checks
-
-- Dogfood the complete 2.4 GB Baidu Unlimited-OCR checkpoint download and
-  extraction with the network disconnected after setup.
-- Dogfood the signed build on a second Mac.
+okraPDF Desktop is available under the
+[Functional Source License 1.1, ALv2 Future License](LICENSE). Each release
+becomes available under Apache License 2.0 on the second anniversary of its
+publication.
