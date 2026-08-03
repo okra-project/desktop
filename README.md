@@ -19,7 +19,7 @@
     <img alt="Latest release" src="https://img.shields.io/github/v/release/okra-project/desktop?include_prereleases&label=release">
   </a>
   <a href="LICENSE">
-    <img alt="License: FSL-1.1-ALv2" src="https://img.shields.io/badge/license-FSL--1.1--ALv2-blue">
+    <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
   </a>
 </p>
 
@@ -73,7 +73,7 @@ per-page run history on this Mac.
 3. **Processing stays local.** Apple Vision and Baidu extraction run on the
    Mac. Ollama uses only its loopback service on this Mac.
 4. **Artifacts stay inspectable.** Run state, page checkpoints, Markdown, and
-   JSON live under `~/Library/Application Support/okraPDF/Runs/`.
+   JSON live under `~/Library/Application Support/Okra/Runs/`.
 
 Baidu Unlimited-OCR may download its pinned model once during setup. The app
 verifies every model artifact with SHA-256 and forces extraction offline after
@@ -152,7 +152,4 @@ Maintainers should start with [CLAUDE.md](CLAUDE.md),
 
 ## License
 
-okraPDF Desktop is available under the
-[Functional Source License 1.1, ALv2 Future License](LICENSE). Each release
-becomes available under Apache License 2.0 on the second anniversary of its
-publication.
+okraPDF Desktop is available under the [MIT License](LICENSE).
