@@ -14,9 +14,9 @@ enum PDFBoundingBoxPalette {
         case "List-item":
             return .systemGreen
         case "Text", "Caption", "Formula":
-            return .secondaryLabelColor
+            return .systemOrange
         default:
-            return .tertiaryLabelColor
+            return .systemGray
         }
     }
 }

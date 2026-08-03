@@ -1,8 +1,8 @@
 # okraPDF Desktop — Release Checklist
 
-Current train: `desktop-v1.0.0-rc.2`
+Current train: `desktop-v1.0.0-rc.3`
 
-Roadmap items: `Stable #15`, `D.6.9`, `D.6.14`
+Roadmap items: `Stable #15`, `D.6.9`, `D.6.13`, `D.6.14`
 
 ## Product contract
 
@@ -183,5 +183,8 @@ friend round on real Baidu setup/inference.
 - [ ] Public `desktop-v1.0.0-rc.2` prerelease with generic Ollama HTTP integration
 - [ ] RC.2 appcast branch passes `macos-checks` and merges to protected `main`
 - [ ] Exact RC.2 is re-downloaded, verified, installed, and dogfooded against local Ollama
+- [ ] Public `desktop-v1.0.0-rc.3` prerelease with dark-mode source-box visibility fix
+- [ ] RC.3 appcast branch passes `macos-checks` and merges to protected `main`
+- [ ] Exact RC.3 is re-downloaded, verified, installed, and dark-mode box visibility confirmed
 - [ ] Friend-equivalent clean-Mac install and Apple Vision extraction recorded on issue #47
 - [ ] Signed in-place **Install and Relaunch** update evidence recorded on issue #39
