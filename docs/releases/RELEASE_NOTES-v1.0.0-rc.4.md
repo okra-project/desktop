@@ -1,5 +1,9 @@
 # okraPDF Desktop v1.0.0-rc.4
 
+> **Shipped 2026-08-05.** The signed and notarized prerelease is available at
+> [`desktop-v1.0.0-rc.4`](https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.4),
+> and build `202608052008` is live in the signed Sparkle appcast.
+
 This release candidate gives the local PDF reader a document-first workspace.
 The source PDF stays visually central while local files, run history, and
 extraction controls remain close at hand without becoming permanent wide
@@ -93,26 +97,39 @@ explicit Parse behavior, output formats, and the macOS 13 minimum are unchanged.
 - Both packaging smoke tests passed against the rebuilt local candidate:
   resource-isolated app startup and quarantined-DMG launch through
   LaunchServices.
-- The exact tagged artifact must still pass Developer ID signing, hardened
-  runtime, notarization, stapling, Gatekeeper, DMG verification, quarantined
-  LaunchServices launch, checksum, and signed-appcast automation.
+- Release workflow
+  [`31042648891`](https://github.com/okra-project/desktop/actions/runs/31042648891)
+  passed Developer ID signing, hardened runtime, app and DMG notarization,
+  stapling, Gatekeeper, packaged launch, checksum, publication, and signed
+  appcast generation for build `202608052008`.
+- The exact GitHub-downloaded DMG independently passed its published checksum,
+  `hdiutil verify`, app and DMG staple validation, strict nested-code signature
+  verification, Gatekeeper, embedded version/build inspection, and a
+  quarantined LaunchServices launch. Its SHA-256 is
+  `825d11c883b7315aa262d7f879a82824a5cf9bed288ca36678cf9436cd7f0940`.
+- The signed app was visually inspected with the empty reader, a loaded public
+  filing, Workspace, and Extract states. The identical candidate code had
+  already passed light, dark, wide, and compact layout inspection before tag.
+- Signed appcast PR
+  [#69](https://github.com/okra-project/desktop/pull/69) passed `macos-checks`
+  and merged to protected `main` at `a09ebf2`.
 - Manual release approval requires the layout checks above plus the retained
   offline Apple Vision, invalid-input, source-box, clean-install, and signed
   in-place update regressions in `RELEASE_CHECKLIST.md`.
 
 ## Rollout
 
-Merge the tested implementation to `main`, then create the immutable annotated
-tag `desktop-v1.0.0-rc.4`. Keep the GitHub release marked as a prerelease and
-merge the generated signed-appcast branch only after its required
-`macos-checks` gate passes.
+Implementation PR [#68](https://github.com/okra-project/desktop/pull/68)
+merged to protected `main` at `cec9957`; that exact commit was tagged
+`desktop-v1.0.0-rc.4`. The GitHub prerelease is published, and its generated
+signed-appcast branch passed `macos-checks` before merging through PR #69.
 
 ## Rollback
 
-Keep RC.3 available as the last published candidate. If RC.4 regresses, direct
-testers to the RC.3 DMG, avoid moving or reusing the RC.4 tag, and fix forward
-under a new release-candidate version. RC.3 and RC.4 retain their run histories
-in their respective application-support folders.
+RC.3 remains available as the previous candidate. If RC.4 regresses, direct
+testers to the RC.3 DMG, never move or reuse the RC.4 tag, and fix forward under
+a new release-candidate version. RC.3 and RC.4 retain their run histories in
+their respective application-support folders.
 
 ## Owner
 

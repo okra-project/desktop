@@ -11,13 +11,12 @@
   into structured local output. No account, document library, or cloud upload.
 </p>
 
-The next RC.4 candidate introduces a document-first workspace: the native
-reader stays mounted in the center while compact rails and collapsible local
-Workspace and Extract panels keep context close without permanently narrowing
-the PDF.
+RC.4 introduces a document-first workspace: the native reader stays mounted in
+the center while compact rails and collapsible local Workspace and Extract
+panels keep context close without permanently narrowing the PDF.
 
 <p align="center">
-  <a href="https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.3">
+  <a href="https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.4">
     <img alt="Download for macOS" src="https://img.shields.io/badge/download-macOS%2013%2B-2f855a">
   </a>
   <a href="https://github.com/okra-project/desktop/releases">
@@ -29,12 +28,12 @@ the PDF.
 </p>
 
 <p align="center">
-  <a href="https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.3">Download</a> ·
+  <a href="https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.4">Download</a> ·
   <a href="docs/releases/README.md">Release notes</a> ·
   <a href="https://github.com/okra-project/desktop/issues/new">Report an issue</a>
 </p>
 
-![okraPDF reading a public report with Apple Vision ready for an explicit local parse](.github/assets/okra-reader-overview.png)
+![okraPDF reading a public SEC filing in the RC.4 document-first workspace](.github/assets/okra-reader-overview.png)
 
 ## Read first. Parse when you choose.
 
@@ -95,13 +94,13 @@ setup. Ollama remains responsible for installing and storing Ollama models.
 
 ## Download
 
-`desktop-v1.0.0-rc.3` is the current public release candidate for Apple-silicon
+`desktop-v1.0.0-rc.4` is the current public release candidate for Apple-silicon
 Macs running macOS 13 or later.
 
-1. Download `Okra-1.0.0-rc.3.dmg` from the
-   [v1.0.0-rc.3 release](https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.3).
+1. Download `Okra-1.0.0-rc.4.dmg` from the
+   [v1.0.0-rc.4 release](https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.4).
 2. Optionally download the adjacent checksum and run
-   `shasum -a 256 -c Okra-1.0.0-rc.3.dmg.sha256`.
+   `shasum -a 256 -c Okra-1.0.0-rc.4.dmg.sha256`.
 3. Open the DMG, drag **Okra** to **Applications**, and eject the DMG.
 4. Open **Okra** from Applications. The app and DMG are Developer ID signed,
    hardened, notarized by Apple, and stapled for normal Gatekeeper opening.
@@ -123,7 +122,7 @@ swift build
 To create a local `.app` and DMG:
 
 ```bash
-./scripts/build-dmg.sh 1.0.0-rc.3
+./scripts/build-dmg.sh 1.0.0-rc.4
 ```
 
 Local packages are ad-hoc signed. The release workflow supplies the Developer
