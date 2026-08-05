@@ -66,7 +66,8 @@ swift test
 ./scripts/build-dmg.sh 1.0.0-rc.4
 ```
 
-Treat RC.4 as a release candidate, not the stable release. Do not recommend
-its link until the exact candidate passes the document-first layout regression,
-friend-core regression, second-Mac install, and signed in-place update gates in
-`RELEASE_CHECKLIST.md`.
+RC.4 is the current public release candidate, not the stable release. It is
+appropriate for direct-download and in-app-update testing after passing the
+document-first layout and signed-artifact gates. Do not call it stable until the
+remaining friend-core, second-Mac install, and signed in-place update gates in
+`RELEASE_CHECKLIST.md` are recorded.

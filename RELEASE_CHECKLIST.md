@@ -199,8 +199,10 @@ friend round on real Baidu setup/inference.
 - [x] Public `desktop-v1.0.0-rc.3` prerelease with dark-mode source-box visibility fix (2026-08-03)
 - [x] RC.3 appcast branch passes `macos-checks` and merges to protected `main` (2026-08-03)
 - [ ] Exact RC.3 is re-downloaded, verified, installed, and dark-mode box visibility confirmed
-- [ ] Public `desktop-v1.0.0-rc.4` prerelease with the D.6.3 document-first workspace
-- [ ] RC.4 appcast branch passes `macos-checks` and merges to protected `main`
-- [ ] Exact RC.4 is re-downloaded, checksum-verified, installed, and dogfooded in light and dark appearances
+- [x] Public `desktop-v1.0.0-rc.4` prerelease with the D.6.3 document-first workspace (2026-08-05)
+- [x] RC.4 appcast branch passes `macos-checks` and merges to protected `main` (PR #69, 2026-08-05)
+- [x] Exact RC.4 is re-downloaded and passes checksum, disk-image integrity, Developer ID, hardened-runtime, notarization/stapling, Gatekeeper, embedded version/build, and quarantined LaunchServices checks (2026-08-05)
+- [x] Exact signed RC.4 empty, loaded-document, Workspace, and Extract layouts are inspected in light appearance; the identical candidate code passes light, dark, wide, and compact inspection before tag (2026-08-05)
+- [ ] Exact RC.4 is installed into Applications and dogfooded in dark appearance
 - [ ] Friend-equivalent clean-Mac install and Apple Vision extraction recorded on issue #47
 - [ ] Signed in-place **Install and Relaunch** update evidence recorded on issue #39
