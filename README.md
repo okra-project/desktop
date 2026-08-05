@@ -11,6 +11,11 @@
   into structured local output. No account, document library, or cloud upload.
 </p>
 
+The next RC.4 candidate introduces a document-first workspace: the native
+reader stays mounted in the center while compact rails and collapsible local
+Workspace and Extract panels keep context close without permanently narrowing
+the PDF.
+
 <p align="center">
   <a href="https://github.com/okra-project/desktop/releases/tag/desktop-v1.0.0-rc.3">
     <img alt="Download for macOS" src="https://img.shields.io/badge/download-macOS%2013%2B-2f855a">
@@ -38,7 +43,7 @@ it is, renders it with native PDFKit, and waits until you choose **Parse**.
 The selected local parser then produces reviewable output beside a persistent
 per-page run history on this Mac.
 
-- Read text, charts, forms, and scanned pages in a native three-pane workspace.
+- Read text, charts, forms, and scanned pages in a native document-first workspace.
 - Parse with built-in Apple Vision, an installed Ollama vision model, or the
   optional Baidu Unlimited-OCR setup.
 - Inspect extracted blocks against their source boxes without modifying the PDF.

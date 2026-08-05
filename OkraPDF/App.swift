@@ -15,15 +15,17 @@ struct okraPDFApp: App {
         WindowGroup("Okra") {
             ContentView()
                 .environmentObject(appState)
-                .frame(minWidth: 1_080, minHeight: 680)
+                .frame(minWidth: 960, minHeight: 680)
                 .onOpenURL(perform: appState.openPDF)
         }
         .defaultSize(width: 1_320, height: 820)
         .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Open PDF…", action: appState.openPDFPicker)
                     .keyboardShortcut("o", modifiers: .command)
+                    .disabled(appState.canOpenPDF == false)
             }
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…", action: updaterController.checkForUpdates)

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import PDFKit
 import UniformTypeIdentifiers
@@ -7,20 +8,28 @@ import UniformTypeIdentifiers
 final class AppState: ObservableObject {
     @Published private(set) var selectedDocument: LocalPDFDocument?
     @Published var importError: String?
+    @Published private(set) var canOpenPDF = true
 
     let localProcessing: LocalProcessingCoordinator
 
     init() {
         localProcessing = LocalProcessingCoordinator()
+        bindLocalProcessingState()
         openCommandLinePDFIfPresent()
     }
 
     init(localProcessing: LocalProcessingCoordinator) {
         self.localProcessing = localProcessing
+        bindLocalProcessingState()
     }
 
 
     func openPDFPicker() {
+        guard canOpenPDF else {
+            importError = activeOperationMessage
+            return
+        }
+
         let panel = NSOpenPanel()
         panel.title = "Open PDF"
         panel.prompt = "Open"
@@ -35,6 +44,11 @@ final class AppState: ObservableObject {
     }
 
     func openPDF(_ url: URL) {
+        guard canOpenPDF else {
+            importError = activeOperationMessage
+            return
+        }
+
         importError = nil
 
         guard url.isFileURL, url.pathExtension.lowercased() == UTType.pdf.preferredFilenameExtension else {
@@ -66,6 +80,11 @@ final class AppState: ObservableObject {
     }
 
     func openRun(_ run: LocalProcessingRun) {
+        guard canOpenPDF else {
+            importError = activeOperationMessage
+            return
+        }
+
         let sourceURL = URL(fileURLWithPath: run.sourcePath).standardizedFileURL
         if FileManager.default.fileExists(atPath: sourceURL.path) {
             openPDF(sourceURL)
@@ -82,6 +101,10 @@ final class AppState: ObservableObject {
         ])
     }
 
+    func dismissImportError() {
+        importError = nil
+    }
+
     func quit() {
         NSApplication.shared.terminate(nil)
     }
@@ -93,5 +116,19 @@ final class AppState: ObservableObject {
             return
         }
         openPDF(URL(fileURLWithPath: path))
+    }
+
+    private var activeOperationMessage: String {
+        "Finish or cancel the active local operation before opening another PDF."
+    }
+
+    private func bindLocalProcessingState() {
+        localProcessing.$isRunning
+            .combineLatest(localProcessing.$isInstalling)
+            .map { isRunning, isInstalling in
+                isRunning == false && isInstalling == false
+            }
+            .removeDuplicates()
+            .assign(to: &$canOpenPDF)
     }
 }

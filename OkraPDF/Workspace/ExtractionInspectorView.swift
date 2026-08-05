@@ -6,18 +6,28 @@ struct ExtractionInspectorView: View {
     @ObservedObject var coordinator: LocalProcessingCoordinator
     let parse: () -> Void
     let revealPDF: () -> Void
+    let dismiss: () -> Void
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: WorkspaceTheme.sectionSpacing) {
-                VStack(alignment: .leading, spacing: WorkspaceTheme.compactSpacing) {
-                    Text("Extract")
-                        .font(.title2)
-                        .bold()
-                    Text("Choose a local parser, then parse only when you are ready.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .top, spacing: WorkspaceTheme.standardSpacing) {
+                    VStack(alignment: .leading, spacing: WorkspaceTheme.compactSpacing) {
+                        Text("Extract")
+                            .font(.title2)
+                            .bold()
+                        Text("Choose a local parser. Nothing runs until you click Parse.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer()
+
+                    Button("Hide Extract", systemImage: "xmark", action: dismiss)
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.plain)
+                        .help("Hide Extract")
                 }
 
                 if let importError {
@@ -38,6 +48,5 @@ struct ExtractionInspectorView: View {
             .padding(WorkspaceTheme.panelPadding)
         }
         .background(.background)
-        .navigationTitle("Extract")
     }
 }

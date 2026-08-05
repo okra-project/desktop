@@ -19,8 +19,8 @@ if rg -n '"okraPDF' "${SURFACE_PATHS[@]}" \
   exit 1
 fi
 
-if ! rg -q 'BrandMarkView\(\)' OkraPDF/Workspace/WorkspaceSidebarView.swift; then
-  echo "The workspace must render the canonical mark." >&2
+if ! rg -q 'BrandMarkView\(' OkraPDF/Workspace/WorkspaceToolbarContent.swift; then
+  echo "The workspace toolbar must render the canonical mark." >&2
   exit 1
 fi
 

@@ -4,57 +4,136 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject private var state: AppState
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var layout = WorkspaceLayoutState()
+    @FocusState private var focusedPanelToggle: WorkspacePanel?
     @State private var isDropTargeted = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            workspaceContent
+        GeometryReader { proxy in
+            workspace(availableWidth: proxy.size.width)
         }
-    }
-
-    private var workspaceContent: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            WorkspaceSidebarView(
-                document: state.selectedDocument,
-                coordinator: state.localProcessing,
-                openPDF: state.openPDFPicker,
-                openRun: state.openRun
-            )
-            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
-        } content: {
-            DocumentWorkspaceView(
-                document: state.selectedDocument,
-                isDropTargeted: isDropTargeted,
-                coordinator: state.localProcessing,
-                openPDF: state.openPDFPicker,
-                revealPDF: state.revealSelectedPDF
-            )
-            .navigationSplitViewColumnWidth(min: 520, ideal: 720)
-        } detail: {
-            ExtractionInspectorView(
-                document: state.selectedDocument,
-                importError: state.importError,
-                coordinator: state.localProcessing,
-                parse: state.parseSelectedDocument,
-                revealPDF: state.revealSelectedPDF
-            )
-            .navigationSplitViewColumnWidth(min: 320, ideal: 370, max: 460)
-        }
-        .navigationSplitViewStyle(.balanced)
+        .background(.background)
         .tint(WorkspaceTheme.brand)
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button("Open PDF", systemImage: "folder", action: state.openPDFPicker)
-                    .keyboardShortcut("o", modifiers: .command)
-                    .disabled(state.localProcessing.isRunning || state.localProcessing.isInstalling)
-            }
-        }
         .onDrop(
             of: [UTType.fileURL.identifier],
             isTargeted: $isDropTargeted,
             perform: handleDrop
         )
+        .alert("Unable to Open PDF", isPresented: importErrorIsPresented) {
+            Button("OK", role: .cancel, action: state.dismissImportError)
+        } message: {
+            Text(state.importError ?? "The PDF could not be opened.")
+        }
+    }
+
+    private func workspace(availableWidth: Double) -> some View {
+        let presentation = layout.presentation(for: availableWidth)
+
+        return HStack(spacing: 0) {
+            WorkspaceCollapsiblePanel(
+                isPresented: presentation.isSidebarPresented,
+                width: WorkspaceTheme.sidebarWidth,
+                alignment: .trailing
+            ) {
+                WorkspaceSidebarView(
+                    document: state.selectedDocument,
+                    coordinator: state.localProcessing,
+                    openRun: state.openRun,
+                    dismiss: { toggle(.sidebar, availableWidth: availableWidth) }
+                )
+                .overlay(alignment: .trailing) {
+                    Divider()
+                }
+            }
+
+            WorkspaceLeadingRailView(
+                isSidebarPresented: presentation.isSidebarPresented,
+                coordinator: state.localProcessing,
+                focusedPanelToggle: $focusedPanelToggle,
+                toggleSidebar: { toggle(.sidebar, availableWidth: availableWidth) },
+                openPDF: state.openPDFPicker,
+                revealRuns: state.localProcessing.revealRunsFolder
+            )
+
+            Divider()
+
+            DocumentWorkspaceView(
+                document: state.selectedDocument,
+                isDropTargeted: isDropTargeted,
+                coordinator: state.localProcessing,
+                canOpenPDF: state.canOpenPDF,
+                openPDF: state.openPDFPicker
+            )
+            .frame(minWidth: WorkspaceTheme.readerMinimumWidth)
+            .layoutPriority(1)
+
+            Divider()
+
+            WorkspaceTrailingRailView(
+                documentIsOpen: state.selectedDocument != nil,
+                isInspectorPresented: presentation.isInspectorPresented,
+                coordinator: state.localProcessing,
+                focusedPanelToggle: $focusedPanelToggle,
+                toggleInspector: { toggle(.inspector, availableWidth: availableWidth) },
+                revealPDF: state.revealSelectedPDF
+            )
+
+            WorkspaceCollapsiblePanel(
+                isPresented: presentation.isInspectorPresented,
+                width: WorkspaceTheme.inspectorWidth,
+                alignment: .leading
+            ) {
+                ExtractionInspectorView(
+                    document: state.selectedDocument,
+                    importError: state.importError,
+                    coordinator: state.localProcessing,
+                    parse: state.parseSelectedDocument,
+                    revealPDF: state.revealSelectedPDF,
+                    dismiss: { toggle(.inspector, availableWidth: availableWidth) }
+                )
+                .overlay(alignment: .leading) {
+                    Divider()
+                }
+            }
+        }
+        .toolbar {
+            WorkspaceToolbarContent(
+                document: state.selectedDocument,
+                isSidebarPresented: presentation.isSidebarPresented,
+                isInspectorPresented: presentation.isInspectorPresented,
+                coordinator: state.localProcessing,
+                toggleSidebar: { toggle(.sidebar, availableWidth: availableWidth) },
+                toggleInspector: { toggle(.inspector, availableWidth: availableWidth) },
+                openPDF: state.openPDFPicker,
+                revealPDF: state.revealSelectedPDF
+            )
+        }
+        .animation(panelAnimation, value: presentation.isSidebarPresented)
+        .animation(panelAnimation, value: presentation.isInspectorPresented)
+    }
+
+    private var panelAnimation: Animation? {
+        reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)
+    }
+
+    private var importErrorIsPresented: Binding<Bool> {
+        Binding(
+            get: { state.importError != nil },
+            set: { isPresented in
+                if isPresented == false {
+                    state.dismissImportError()
+                }
+            }
+        )
+    }
+
+    private func toggle(_ panel: WorkspacePanel, availableWidth: Double) {
+        layout.toggle(panel, availableWidth: availableWidth)
+        focusedPanelToggle = nil
+        Task { @MainActor in
+            focusedPanelToggle = panel
+        }
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
