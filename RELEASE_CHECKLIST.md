@@ -1,14 +1,19 @@
 # okraPDF Desktop — Release Checklist
 
-Current train: `desktop-v1.0.0-rc.3`
+Current train: `desktop-v1.0.0-rc.4`
 
-Roadmap items: `Stable #15`, `D.6.9`, `D.6.13`, `D.6.14`
+Roadmap items: `D.6.3`, `Stable #15`, `D.6.9`, `D.6.13`, `D.6.14`
 
 ## Product contract
 
 - [x] Windowed app with native PDFKit preview
 - [x] Regular activation policy and Dock lifecycle
-- [x] Three-pane workspace with current document, recent runs, reader, and extraction inspector
+- [x] Document-first workspace with a permanent center reader, compact edge rails, and independently collapsible Workspace and Extract panels
+- [x] Native toolbar with the canonical mark, document title, panel toggles, Open, source reveal, and extraction-box controls
+- [x] Workspace visible and Extract tucked away by default; hiding either panel preserves its local state
+- [x] Panel transitions honor Reduce Motion and expose accessible labels, help, and selected state
+- [x] Hidden drawer controls are disabled and removed from accessibility; closing a drawer returns keyboard focus to its persistent rail
+- [x] Open and document replacement are disabled and centrally guarded during setup or parsing
 - [x] PDF drag-and-drop
 - [x] **Open PDF…** picker
 - [x] Explicit Parse action; opening/replacing a PDF creates no run
@@ -72,6 +77,7 @@ Roadmap items: `Stable #15`, `D.6.9`, `D.6.13`, `D.6.14`
 - [x] Apple Vision native-text and scanned-observation structured-output coverage
 - [x] Default app state constructs every bundled provider without terminating
 - [x] Ollama `/api/tags`, `/api/show`, and `/api/chat` request contracts have hermetic unit coverage
+- [x] Document-first default and independent Workspace/Extract toggles have unit coverage
 - [x] Packaged app starts with builder-only SwiftPM resources hidden
 - [x] Quarantined notarized beta.8 through beta.15 DMGs start through LaunchServices before publishing (2026-07-28)
 - [x] Remote-control, dispatch, registry, and model-catalog tests removed
@@ -80,6 +86,9 @@ Roadmap items: `Stable #15`, `D.6.9`, `D.6.13`, `D.6.14`
 - [x] Canonical website mark checksum and packaged-resource coverage
 - [x] `swift test` on an unrestricted macOS shell (93 tests passed, 2026-07-29)
 - [x] Python output-parser, resume, appcast, and protected-release tests (12/12 passed, 2026-07-29)
+- [x] RC.4 brand gate, 12 Python tests, 101 Swift tests across 20 suites, and release build pass on the candidate tree (2026-08-05)
+- [x] Local ad-hoc RC.4 package launches and passes empty, loaded-document, light, dark, and 960-point drawer interaction checks (2026-08-05)
+- [x] Packaged-app resource-isolation launch and quarantined local-DMG LaunchServices tests pass against the rebuilt RC.4 package (2/2, 2026-08-05)
 
 ### Pre-merge CI gate (stable #15)
 
@@ -124,9 +133,13 @@ job.
 
 ## Friend-core manual regression
 
-Run every line below against the exact downloadable beta.19 prerelease
-candidate. Record evidence on issue #48; do not use a local build.
+Run every line below against the exact downloadable RC.4 prerelease candidate.
+Record evidence on the RC.4 release tracking issue or pull request; do not use
+a local build.
 
+- [ ] Launch with Workspace visible and Extract hidden; confirm the center reader remains the largest surface
+- [ ] Toggle Workspace and Extract independently from both the toolbar and edge rails
+- [ ] Hide and reopen Extract during a completed run; confirm the selected provider and output remain intact
 - [ ] Open a one-page text PDF and confirm no extraction starts until **Parse** is clicked
 - [ ] Replace it with a multi-page scanned PDF and again confirm no automatic extraction
 - [ ] Parse both documents with Apple Vision
@@ -180,11 +193,14 @@ friend round on real Baidu setup/inference.
 - [x] Public `desktop-v1.0.0-rc.1` prerelease with DMG and SHA-256 assets (2026-07-29)
 - [x] Exact RC.1 passes automated signing, notarization, Gatekeeper, DMG, and quarantine-launch gates (2026-07-29)
 - [x] Exact RC.1 is re-downloaded, verified, and installed on this MacBook (2026-07-29)
-- [ ] Public `desktop-v1.0.0-rc.2` prerelease with generic Ollama HTTP integration
-- [ ] RC.2 appcast branch passes `macos-checks` and merges to protected `main`
+- [x] Public `desktop-v1.0.0-rc.2` prerelease with generic Ollama HTTP integration (2026-07-29)
+- [x] RC.2 appcast branch passes `macos-checks` and merges to protected `main` (2026-07-29)
 - [ ] Exact RC.2 is re-downloaded, verified, installed, and dogfooded against local Ollama
-- [ ] Public `desktop-v1.0.0-rc.3` prerelease with dark-mode source-box visibility fix
-- [ ] RC.3 appcast branch passes `macos-checks` and merges to protected `main`
+- [x] Public `desktop-v1.0.0-rc.3` prerelease with dark-mode source-box visibility fix (2026-08-03)
+- [x] RC.3 appcast branch passes `macos-checks` and merges to protected `main` (2026-08-03)
 - [ ] Exact RC.3 is re-downloaded, verified, installed, and dark-mode box visibility confirmed
+- [ ] Public `desktop-v1.0.0-rc.4` prerelease with the D.6.3 document-first workspace
+- [ ] RC.4 appcast branch passes `macos-checks` and merges to protected `main`
+- [ ] Exact RC.4 is re-downloaded, checksum-verified, installed, and dogfooded in light and dark appearances
 - [ ] Friend-equivalent clean-Mac install and Apple Vision extraction recorded on issue #47
 - [ ] Signed in-place **Install and Relaunch** update evidence recorded on issue #39

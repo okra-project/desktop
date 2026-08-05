@@ -2,19 +2,12 @@ import SwiftUI
 
 struct EmptyDocumentView: View {
     let isDropTargeted: Bool
+    let canOpenPDF: Bool
     let openPDF: () -> Void
 
     var body: some View {
         VStack(spacing: WorkspaceTheme.standardSpacing) {
-            Text("PDF")
-                .font(.headline)
-                .foregroundStyle(WorkspaceTheme.brand)
-                .padding(.horizontal, WorkspaceTheme.standardSpacing)
-                .padding(.vertical, WorkspaceTheme.compactSpacing)
-                .background(
-                    WorkspaceTheme.brand.opacity(0.1),
-                    in: .rect(cornerRadius: WorkspaceTheme.cardRadius)
-                )
+            BrandMarkView(size: 52)
                 .accessibilityHidden(true)
 
             Text("Open a PDF to read and parse")
@@ -27,6 +20,7 @@ struct EmptyDocumentView: View {
                 .frame(maxWidth: 430)
             Button("Open PDF…", action: openPDF)
                 .buttonStyle(.borderedProminent)
+                .disabled(canOpenPDF == false)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(WorkspaceTheme.panelPadding)

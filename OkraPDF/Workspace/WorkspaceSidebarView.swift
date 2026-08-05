@@ -3,29 +3,11 @@ import SwiftUI
 struct WorkspaceSidebarView: View {
     let document: LocalPDFDocument?
     @ObservedObject var coordinator: LocalProcessingCoordinator
-    let openPDF: () -> Void
     let openRun: (LocalProcessingRun) -> Void
+    let dismiss: () -> Void
 
     var body: some View {
         List {
-            Section {
-                Button(action: openPDF) {
-                    Label("Open PDF…", systemImage: "folder")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.bordered)
-                .disabled(coordinator.isRunning || coordinator.isInstalling)
-            } header: {
-                VStack(alignment: .leading, spacing: WorkspaceTheme.compactSpacing) {
-                    BrandMarkView()
-                    Text("Private document workspace")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .textCase(nil)
-                }
-                .padding(.bottom, WorkspaceTheme.compactSpacing)
-            }
-
             Section("Document") {
                 if let document {
                     CurrentDocumentRowView(document: document)
@@ -53,6 +35,32 @@ struct WorkspaceSidebarView: View {
                 }
             }
         }
+        .safeAreaInset(edge: .top) {
+            VStack(spacing: 0) {
+                HStack(alignment: .top, spacing: WorkspaceTheme.standardSpacing) {
+                    VStack(alignment: .leading, spacing: WorkspaceTheme.compactSpacing) {
+                        Text("Workspace")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        Text("Local files and runs")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    .textCase(nil)
+
+                    Spacer()
+
+                    Button("Hide workspace", systemImage: "xmark", action: dismiss)
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.plain)
+                        .help("Hide workspace")
+                }
+                .padding(WorkspaceTheme.panelPadding)
+
+                Divider()
+            }
+            .background(.bar)
+        }
         .safeAreaInset(edge: .bottom) {
             HStack {
                 Text("On this Mac")
@@ -66,6 +74,8 @@ struct WorkspaceSidebarView: View {
             .padding(.vertical, WorkspaceTheme.standardSpacing)
             .background(.bar)
         }
-        .navigationTitle("Workspace")
+        .listStyle(.sidebar)
+        .scrollContentBackground(.visible)
+        .background(.bar)
     }
 }

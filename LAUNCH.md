@@ -1,13 +1,15 @@
 # okraPDF Desktop — Launch Checklist
 
-The supported desktop product is the `D.6.14` windowed macOS PDF reader and
-local parser. It opens a PDF in place, waits for an explicit Parse action, and
-returns reviewable source-aligned output.
+The supported desktop product combines the `D.6.3` document-first workspace
+with the `D.6.14` windowed macOS PDF reader and local parser. It opens a PDF in
+place, waits for an explicit Parse action, and returns reviewable
+source-aligned output.
 
 ## Versioning
 
-- Tag format: `desktop-v{MAJOR}.{MINOR}.{PATCH}`.
-- Current train: `desktop-v0.5.0-beta.N`.
+- Tag format: `desktop-v{SEMVER}`, including prerelease suffixes such as
+  `desktop-v1.0.0-rc.4`.
+- Current train: `desktop-v1.0.0-rc.4`.
 - `1.0.0` means the parser flow and direct-download distribution are stable.
 - Chat, agents, cloud upload, document libraries, channels, and remote control
   are separate products and do not belong in this release train.
@@ -15,7 +17,9 @@ returns reviewable source-aligned output.
 ## Product gate
 
 - [x] Lightweight windowed SwiftUI PDF reader
-- [x] Three-pane local workspace with recent run history
+- [x] Permanent center PDF reader with compact edge rails
+- [x] Independently collapsible local Workspace and Extract panels
+- [x] Native document toolbar with clean, functional controls and no promotional surfaces
 - [x] Open and Finder drag-and-drop
 - [x] PDF selection and parsing are separate actions
 - [x] Original PDF remains in place
@@ -58,12 +62,11 @@ is required by one of the supported local parsers.
 ## Release command
 
 ```bash
-cd apps/desktop
 swift test
-./scripts/build-dmg.sh 0.5.0-beta.19
+./scripts/build-dmg.sh 1.0.0-rc.4
 ```
 
-Treat beta.19 as a selected-tester friends beta, not a stable release. Do not
-send its link until the exact candidate passes the friend-core regression,
-second-Mac install, and signed in-place update gates recorded in
+Treat RC.4 as a release candidate, not the stable release. Do not recommend
+its link until the exact candidate passes the document-first layout regression,
+friend-core regression, second-Mac install, and signed in-place update gates in
 `RELEASE_CHECKLIST.md`.

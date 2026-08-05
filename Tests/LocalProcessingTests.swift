@@ -295,6 +295,48 @@ struct LocalProcessingProviderTests {
         #expect(FileManager.default.fileExists(atPath: workspace.runsRoot.path) == false)
     }
 
+    @Test("An active local operation cannot be displaced by another PDF", .timeLimit(.minutes(1)))
+    func activeRunBlocksDocumentReplacement() async throws {
+        let workspace = try TestWorkspace(prefix: "okra-open-guard")
+        try FileManager.default.createDirectory(at: workspace.root, withIntermediateDirectories: true)
+        let sourceURL = workspace.root.appendingPathComponent("active.pdf")
+        let replacementURL = workspace.root.appendingPathComponent("replacement.pdf")
+        try makePDF(pageTexts: ["Active page 1", "Active page 2"]).write(to: sourceURL)
+        try makePDF(pageTexts: ["Replacement"]).write(to: replacementURL)
+
+        let coordinator = LocalProcessingCoordinator(
+            providers: [
+                IncrementalFixtureProcessingProvider(
+                    pageCount: 2,
+                    pauseAfterFirstPage: .seconds(2)
+                ),
+            ],
+            runsRoot: workspace.runsRoot,
+            userDefaults: workspace.defaults
+        )
+        let state = AppState(localProcessing: coordinator)
+        state.openPDF(sourceURL)
+        state.parseSelectedDocument()
+
+        #expect(coordinator.isRunning)
+        #expect(state.canOpenPDF == false)
+
+        state.openPDF(replacementURL)
+
+        #expect(state.selectedDocument?.filePath == sourceURL.path)
+        #expect(state.importError?.contains("active local operation") == true)
+
+        state.dismissImportError()
+        #expect(state.importError == nil)
+
+        coordinator.cancelRun()
+        try await waitUntil("active run cancellation") { coordinator.isRunning == false }
+        #expect(state.canOpenPDF)
+
+        state.openPDF(replacementURL)
+        #expect(state.selectedDocument?.filePath == replacementURL.path)
+    }
+
     @Test("Explicit Parse starts the selected document", .timeLimit(.minutes(1)))
     func explicitParseActionStartsSelectedDocument() async throws {
         let workspace = try TestWorkspace(prefix: "okra-explicit-parse")
