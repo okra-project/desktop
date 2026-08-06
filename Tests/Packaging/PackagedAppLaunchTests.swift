@@ -158,6 +158,16 @@ struct PackagedAppLaunchTests {
 
         try #require(fileManager.isExecutableFile(atPath: executableURL.path))
         try #require(fileManager.fileExists(atPath: providerScriptsURL.path))
+        try #require(
+            fileManager.fileExists(
+                atPath: providerScriptsURL.appendingPathComponent("dots-ocr-worker.py").path
+            )
+        )
+        try #require(
+            fileManager.fileExists(
+                atPath: providerScriptsURL.appendingPathComponent("install-dots-ocr.sh").path
+            )
+        )
         try #require(fileManager.fileExists(atPath: brandMarkURL.path))
         #expect(bundle.bundleIdentifier == "com.okrapdf.desktop")
         #expect(bundle.object(forInfoDictionaryKey: "LSUIElement") == nil)
